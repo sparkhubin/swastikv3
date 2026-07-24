@@ -472,9 +472,16 @@ export default function PaymentReports() {
                   <tr key={o.id} className="hover:bg-white/5 transition-colors group">
                     {/* Order / Txn identifiers */}
                     <td className="p-4 font-mono font-black text-cyan-400 select-all tracking-tight space-y-1">
-                      <div className="text-white">{o.id}</div>
+                      <div className="text-white flex items-center gap-1.5">
+                        <span>{o.id}</span>
+                        {o.id.startsWith('PRIME_') && (
+                          <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-400/30 text-[8px] font-black rounded uppercase font-sans">
+                            👑 Prime Pass
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[8px] text-slate-500 font-bold tracking-widest">
-                        CF_TXN_{o.id.replace('SW-', '')}
+                        CF_TXN_{o.id.replace('SW-', '').replace('PRIME_', 'PR_')}
                       </div>
                     </td>
 

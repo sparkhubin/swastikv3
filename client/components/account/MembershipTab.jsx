@@ -5,6 +5,7 @@ export default function MembershipTab({
   profile,
   setProfile,
   setShowPrimePayment,
+  onOfflinePurchase,
   isHindi
 }) {
   return (
@@ -87,7 +88,11 @@ export default function MembershipTab({
                     if (window.confirm(isHindi 
                       ? "क्या आप स्टोर काउंटर / कैश ऑन डिलीवरी द्वारा ऑफलाइन भुगतान चुनकर स्वास्तिक प्राइम सक्रिय करना चाहते हैं?" 
                       : "Activate Swastik Prime with Offline / Cash at Store or COD payment option?")) {
-                      setProfile(prev => ({ ...prev, isPrimeActive: true }));
+                      if (onOfflinePurchase) {
+                        onOfflinePurchase();
+                      } else {
+                        setProfile(prev => ({ ...prev, isPrimeActive: true }));
+                      }
                     }
                   }}
                   className="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-400/40 font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"

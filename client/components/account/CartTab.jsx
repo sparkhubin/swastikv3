@@ -2,10 +2,22 @@ import React from 'react';
 import { ShoppingCart, ShoppingBag, Trash2, Plus, Minus, ArrowRight } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 
-export default function CartTab({ isHindi }) {
+export default function CartTab({ isHindi, onViewChange }) {
   const { cartItems, removeFromCart, updateQuantity, subtotal, deliveryFee, grandTotal } = useCart();
 
   const totalItemCount = (cartItems || []).reduce((acc, item) => acc + item.quantity, 0);
+
+  const handleGoToShop = () => {
+    if (onViewChange) {
+      onViewChange('shop');
+    }
+  };
+
+  const handleGoToCart = () => {
+    if (onViewChange) {
+      onViewChange('cart');
+    }
+  };
 
   return (
     <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-xl text-white space-y-6">
@@ -26,7 +38,7 @@ export default function CartTab({ isHindi }) {
         {cartItems.length > 0 && (
           <button
             type="button"
-            onClick={() => { window.location.href = '/cart'; }}
+            onClick={handleGoToCart}
             className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg active:scale-95 flex items-center gap-1.5 cursor-pointer"
           >
             <span>{isHindi ? "चेकआउट पर जाएँ" : "Checkout Now"}</span>
@@ -48,7 +60,7 @@ export default function CartTab({ isHindi }) {
           </div>
           <button
             type="button"
-            onClick={() => { window.location.href = '/'; }}
+            onClick={handleGoToShop}
             className="px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg cursor-pointer"
           >
             🛒 {isHindi ? "उत्पाद ब्राउज़ करें" : "Explore Supermarket"}
@@ -140,7 +152,7 @@ export default function CartTab({ isHindi }) {
 
             <button
               type="button"
-              onClick={() => { window.location.href = '/cart'; }}
+              onClick={handleGoToCart}
               className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-98 cursor-pointer flex items-center justify-center gap-2"
             >
               <span>{isHindi ? "चेकआउट पेज पर जाएँ" : "Proceed to Checkout Page"}</span>

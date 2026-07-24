@@ -140,8 +140,8 @@ router.post("/cashfree/webhook", async (req, res) => {
     const isSuccess = paymentStatus === "SUCCESS" || paymentStatus === "PAID" || paymentStatus === "COMPLETED";
     try {
       await db.execute(
-        "UPDATE \"order\" SET status_label = ?, step_level = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-        [isSuccess ? "Paid" : "Payment Failed", isSuccess ? 1 : 0, orderId]
+        "UPDATE \"order\" SET status_label = ?, step_level = ?, payment_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        [isSuccess ? "Paid" : "Payment Failed", isSuccess ? 1 : 0, isSuccess ? "PAID" : "FAILED", orderId]
       );
       console.log(`[CASHFREE WEBHOOK] Synced Order ID ${orderId} on payment state: ${paymentStatus}`);
     } catch (err) {
@@ -195,8 +195,8 @@ router.post("/cashfree/verify-payment", async (req, res) => {
             const isSuccess = verifiedStatus === "PAID" || verifiedStatus === "SUCCESS";
             
             await db.execute(
-              "UPDATE \"order\" SET status_label = ?, step_level = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-              [isSuccess ? "Paid" : (ordersRows.length > 0 ? ordersRows[0].status_label : "Pending"), isSuccess ? 1 : (ordersRows.length > 0 ? ordersRows[0].step_level : 0), orderId]
+              "UPDATE \"order\" SET status_label = ?, step_level = ?, payment_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+              [isSuccess ? "Paid" : (ordersRows.length > 0 ? ordersRows[0].status_label : "Pending"), isSuccess ? 1 : (ordersRows.length > 0 ? ordersRows[0].step_level : 0), isSuccess ? "PAID" : "FAILED", orderId]
             );
 
             return res.json({
@@ -218,8 +218,8 @@ router.post("/cashfree/verify-payment", async (req, res) => {
   // Graceful simulated payment processing if credentials aren't active yet
   try {
     await db.execute(
-      "UPDATE \"order\" SET status_label = ?, step_level = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-      ["Paid", 1, orderId]
+      "UPDATE \"order\" SET status_label = ?, step_level = ?, payment_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      ["Paid", 1, "PAID", orderId]
     );
   } catch (err) {
     console.error("Database simulated verification failure:", err.message);

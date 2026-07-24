@@ -338,7 +338,7 @@ function AppContent() {
           <CartCheckout onViewChange={setCurrentView} />
         )}
         {currentView === 'account' && (
-          <Account />
+          <Account onViewChange={setCurrentView} />
         )}
         {currentView === 'partners' && (
           <Partners />
