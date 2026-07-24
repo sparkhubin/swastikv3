@@ -1,0 +1,554 @@
+[
+  {
+    "code": "1988",
+    "name": "AMUL LASSI 200ML",
+    "originalPrice": 20,
+    "price": 20
+  },
+  {
+    "code": "1989",
+    "name": "AMUL MASTI BUTTERMILK 200ML",
+    "originalPrice": 15,
+    "price": 15
+  },
+  {
+    "code": "1992",
+    "name": "AMUL MILK POWDER RS10",
+    "originalPrice": 10,
+    "price": 10
+  },
+  {
+    "code": "1991",
+    "name": "AMULYA MILK POWDER 200G",
+    "originalPrice": 99,
+    "price": 95
+  },
+  {
+    "code": "1317",
+    "name": "APPY FIZZ RS10",
+    "originalPrice": 10,
+    "price": 10
+  },
+  {
+    "code": "1316",
+    "name": "APPY FIZZ RS20",
+    "originalPrice": 20,
+    "price": 20
+  },
+  {
+    "code": "1319",
+    "name": "APPY FIZZ RS40",
+    "originalPrice": 40,
+    "price": 40
+  },
+  {
+    "code": "2577",
+    "name": "BOURNVITA 1KG JAR",
+    "originalPrice": 485,
+    "price": 450
+  },
+  {
+    "code": "2745",
+    "name": "CM COCONUT WATER 200ML",
+    "originalPrice": 30,
+    "price": 30
+  },
+  {
+    "code": "1887",
+    "name": "COCA-COLA 250ML",
+    "originalPrice": 20,
+    "price": 20
+  },
+  {
+    "code": "1881",
+    "name": "COCA-COLA 740ML",
+    "originalPrice": 35,
+    "price": 35
+  },
+  {
+    "code": "3877",
+    "name": "COMPLAN CHOCOLATE 200G",
+    "originalPrice": 146,
+    "price": 142
+  },
+  {
+    "code": "3876",
+    "name": "COMPLAN CHOCOLATE 500G",
+    "originalPrice": 315,
+    "price": 305
+  },
+  {
+    "code": "3879",
+    "name": "COMPLAN CHOCOLATE RS26",
+    "originalPrice": 26,
+    "price": 26
+  },
+  {
+    "code": "3878",
+    "name": "COMPLAN KESAR BADAM 200G",
+    "originalPrice": 150,
+    "price": 145
+  },
+  {
+    "code": "1546",
+    "name": "DABUR GLUCOPLUS-C 75G",
+    "originalPrice": 55,
+    "price": 53
+  },
+  {
+    "code": "1315",
+    "name": "FROOTI JUICE 600ML",
+    "originalPrice": 35,
+    "price": 35
+  },
+  {
+    "code": "1318",
+    "name": "FROOTI JUICE RS10",
+    "originalPrice": 10,
+    "price": 10
+  },
+  {
+    "code": "3351",
+    "name": "FROOTI MANGO 1.8L",
+    "originalPrice": 100,
+    "price": 95
+  },
+  {
+    "code": "3057",
+    "name": "GIRNAR MASALA CHAI RS135",
+    "originalPrice": 135,
+    "price": 130
+  },
+  {
+    "code": "3238",
+    "name": "GURUJI KESAR SHARBAT 400ML",
+    "originalPrice": 225,
+    "price": 210
+  },
+  {
+    "code": "1749",
+    "name": "HONEY GOLD TEA 1KG",
+    "originalPrice": 480,
+    "price": 410
+  },
+  {
+    "code": "1743",
+    "name": "HONEY GOLD TEA 500GM",
+    "originalPrice": 240,
+    "price": 210
+  },
+  {
+    "code": "3770",
+    "name": "KASHMIRI GOLD TEA 500GM",
+    "originalPrice": 250,
+    "price": 210
+  },
+  {
+    "code": "1133",
+    "name": "KINLEY WATER 1LT.",
+    "originalPrice": 18,
+    "price": 15
+  },
+  {
+    "code": "2430",
+    "name": "KINLEY WATER 2LT.",
+    "originalPrice": 30,
+    "price": 30
+  },
+  {
+    "code": "1585",
+    "name": "KINLEY WATER 500ML",
+    "originalPrice": 10,
+    "price": 10
+  },
+  {
+    "code": "0510",
+    "name": "LIMCA 740ml",
+    "originalPrice": 35,
+    "price": 35
+  },
+  {
+    "code": "1924",
+    "name": "LIMCA LIME & LEMON 250ML",
+    "originalPrice": 20,
+    "price": 20
+  },
+  {
+    "code": "2647",
+    "name": "LION GRAPE SQUASH 700ML",
+    "originalPrice": 156,
+    "price": 145
+  },
+  {
+    "code": "2643",
+    "name": "LION MANGO SQUASH 700ML",
+    "originalPrice": 155,
+    "price": 145
+  },
+  {
+    "code": "2644",
+    "name": "LION MIXED FRUIT SQUASH 700ML",
+    "originalPrice": 160,
+    "price": 150
+  },
+  {
+    "code": "2646",
+    "name": "LION ORANGE SQUASH 700ML",
+    "originalPrice": 180,
+    "price": 170
+  },
+  {
+    "code": "2642",
+    "name": "LION PINEAPPLE SQUASH 700ML",
+    "originalPrice": 139,
+    "price": 130
+  },
+  {
+    "code": "2645",
+    "name": "LION ROSE SHARBAT 700ML",
+    "originalPrice": 109,
+    "price": 100
+  },
+  {
+    "code": "2099",
+    "name": "LIPTON GT HONEY LEMON 25N",
+    "originalPrice": 200,
+    "price": 195
+  },
+  {
+    "code": "1889",
+    "name": "MAAZA 1.75L",
+    "originalPrice": 95,
+    "price": 90
+  },
+  {
+    "code": "1034",
+    "name": "MAAZA 850 ML",
+    "originalPrice": 50,
+    "price": 50
+  },
+  {
+    "code": "2641",
+    "name": "MALA'S BLUE CURACAO SYRUP 750ML",
+    "originalPrice": 280,
+    "price": 270
+  },
+  {
+    "code": "2640",
+    "name": "MALA'S GM MOJITO SYRUP 750ML",
+    "originalPrice": 280,
+    "price": 270
+  },
+  {
+    "code": "2633",
+    "name": "MALA'S JEERA MASALA SYRUP 750ML",
+    "originalPrice": 170,
+    "price": 160
+  },
+  {
+    "code": "2632",
+    "name": "MALA'S KACHA AAM 750ML",
+    "originalPrice": 170,
+    "price": 160
+  },
+  {
+    "code": "2631",
+    "name": "MALA'S KHUS SYRUP 750ML",
+    "originalPrice": 160,
+    "price": 150
+  },
+  {
+    "code": "2638",
+    "name": "MALA'S LEMON SQUASH  750ML",
+    "originalPrice": 150,
+    "price": 140
+  },
+  {
+    "code": "2635",
+    "name": "MALA'S LIME SYRUP 750ML",
+    "originalPrice": 170,
+    "price": 160
+  },
+  {
+    "code": "2637",
+    "name": "MALA'S MANGO SYRUP 750ML",
+    "originalPrice": 170,
+    "price": 160
+  },
+  {
+    "code": "2627",
+    "name": "MALA'S ORANGE CRUSH 750ML",
+    "originalPrice": 185,
+    "price": 175
+  },
+  {
+    "code": "2639",
+    "name": "MALA'S ORANGE SQUASH 750ML",
+    "originalPrice": 150,
+    "price": 140
+  },
+  {
+    "code": "2636",
+    "name": "MALA'S ORANGE SYRUP 750ML",
+    "originalPrice": 170,
+    "price": 160
+  },
+  {
+    "code": "2626",
+    "name": "MALA'S ROSE SYRUP 250ML",
+    "originalPrice": 53,
+    "price": 50
+  },
+  {
+    "code": "2630",
+    "name": "MALA'S ROSE SYRUP 750ML",
+    "originalPrice": 160,
+    "price": 150
+  },
+  {
+    "code": "2629",
+    "name": "MALA'S STRAWBERRY CRUSH",
+    "originalPrice": 185,
+    "price": 175
+  },
+  {
+    "code": "1891",
+    "name": "MANGO MAAZA 150ML",
+    "originalPrice": 10,
+    "price": 10
+  },
+  {
+    "code": "1890",
+    "name": "MANGO MAAZA 600ML",
+    "originalPrice": 35,
+    "price": 35
+  },
+  {
+    "code": "2975",
+    "name": "MOGU MOGU JUICE 220ML",
+    "originalPrice": 40,
+    "price": 38
+  },
+  {
+    "code": "2355",
+    "name": "MOGU MOGU JUICE 320ML",
+    "originalPrice": 70,
+    "price": 68
+  },
+  {
+    "code": "1926",
+    "name": "MONSTER ENERGY 350ML",
+    "originalPrice": 125,
+    "price": 120
+  },
+  {
+    "code": "2043",
+    "name": "NEACAFE CLASSIC 90GM",
+    "originalPrice": 445,
+    "price": 435
+  },
+  {
+    "code": "2045",
+    "name": "NESCAFE CLASSIC 24GM",
+    "originalPrice": 124,
+    "price": 120
+  },
+  {
+    "code": "2044",
+    "name": "NESCAFE CLASSIC 45GM",
+    "originalPrice": 235,
+    "price": 230
+  },
+  {
+    "code": "3752",
+    "name": "NESCAFE COLD COFFE 170ML",
+    "originalPrice": 50,
+    "price": 50
+  },
+  {
+    "code": "3153",
+    "name": "NIMBU PANI 2.50RS",
+    "originalPrice": 2.5,
+    "price": 2.5
+  },
+  {
+    "code": "3121",
+    "name": "PAPER BOAT SWING 140ML",
+    "originalPrice": 10,
+    "price": 10
+  },
+  {
+    "code": "2529",
+    "name": "RASNA MANGO 20G",
+    "originalPrice": 50,
+    "price": 48
+  },
+  {
+    "code": "1917",
+    "name": "RASNA NIMBU 20g",
+    "originalPrice": 50,
+    "price": 48
+  },
+  {
+    "code": "3186",
+    "name": "RASNA ROSE 12G",
+    "originalPrice": 45,
+    "price": 43
+  },
+  {
+    "code": "3124",
+    "name": "REAL JUICE LITCHI 1LT.",
+    "originalPrice": 117,
+    "price": 112
+  },
+  {
+    "code": "3125",
+    "name": "REAL JUICE MIXED FRUIT 1LT.",
+    "originalPrice": 122,
+    "price": 117
+  },
+  {
+    "code": "3127",
+    "name": "REAL JUICE PINEAPPLE 1LT.",
+    "originalPrice": 122,
+    "price": 117
+  },
+  {
+    "code": "3586",
+    "name": "REAL KOOLERZ MANGO RS10",
+    "originalPrice": 10,
+    "price": 10
+  },
+  {
+    "code": "1893",
+    "name": "RIMJIM JEERA 250 ML",
+    "originalPrice": 10,
+    "price": 10
+  },
+  {
+    "code": "2918",
+    "name": "ROOHAFZA SHARBAT 750ML",
+    "originalPrice": 165,
+    "price": 160
+  },
+  {
+    "code": "1320",
+    "name": "SMOODH MILK RS20",
+    "originalPrice": 20,
+    "price": 20
+  },
+  {
+    "code": "1862",
+    "name": "SPRITE LEMON 2.25 L",
+    "originalPrice": 100,
+    "price": 95
+  },
+  {
+    "code": "1878",
+    "name": "SPRITE LEMON 250ML",
+    "originalPrice": 25,
+    "price": 25
+  },
+  {
+    "code": "1874",
+    "name": "SPRITE LEMON 740ML",
+    "originalPrice": 35,
+    "price": 35
+  },
+  {
+    "code": "1877",
+    "name": "SPRITE LEMON-LIME 1L",
+    "originalPrice": 50,
+    "price": 50
+  },
+  {
+    "code": "1876",
+    "name": "SPRITE LEMON-LIME 250ML",
+    "originalPrice": 20,
+    "price": 20
+  },
+  {
+    "code": "1823",
+    "name": "TAAZA TEA 100G",
+    "originalPrice": 25,
+    "price": 24
+  },
+  {
+    "code": "1144",
+    "name": "TAAZA TEA 250G",
+    "originalPrice": 50,
+    "price": 48
+  },
+  {
+    "code": "1824",
+    "name": "TAAZA TEA 500G",
+    "originalPrice": 100,
+    "price": 95
+  },
+  {
+    "code": "2316",
+    "name": "TANG LEMON 500G",
+    "originalPrice": 150,
+    "price": 145
+  },
+  {
+    "code": "3101",
+    "name": "TANG LEMON 75GM",
+    "originalPrice": 26,
+    "price": 25
+  },
+  {
+    "code": "1596",
+    "name": "TANG MANGO 500GM",
+    "originalPrice": 145,
+    "price": 145
+  },
+  {
+    "code": "1306",
+    "name": "TANG MANGO 75G",
+    "originalPrice": 26,
+    "price": 25
+  },
+  {
+    "code": "3100",
+    "name": "TANG ORANGE 75GM",
+    "originalPrice": 26,
+    "price": 25
+  },
+  {
+    "code": "1982",
+    "name": "TATA AGNI TEA 500G",
+    "originalPrice": 100,
+    "price": 95
+  },
+  {
+    "code": "3940",
+    "name": "TATA ALL-IN-1 COFFEE RS10",
+    "originalPrice": 10,
+    "price": 10
+  },
+  {
+    "code": "2585",
+    "name": "TETLEY GT LEMON HONEY 25N",
+    "originalPrice": 190,
+    "price": 180
+  },
+  {
+    "code": "1882",
+    "name": "THUMS UP 2.25L",
+    "originalPrice": 100,
+    "price": 95
+  },
+  {
+    "code": "1884",
+    "name": "THUMS UP 250ML",
+    "originalPrice": 20,
+    "price": 20
+  },
+  {
+    "code": "1883",
+    "name": "THUMS UP 740ML",
+    "originalPrice": 35,
+    "price": 35
+  }
+]

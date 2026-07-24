@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Swastik Supermarket</title>
+    <script>
+      // Global helper to report errors back to Express backend for analysis
+      function reportErrorToBackend(error, extra) {
+        try {
+          const errMsg = error && error.message ? error.message : String(error || '');
+          const errStack = error && error.stack ? error.stack : '';
+          if (
+            errMsg.includes('websocket') || 
+            errMsg.includes('WebSocket') || 
+            errStack.includes('websocket') || 
+            errStack.includes('WebSocket') || 
+            errStack.includes('@vite/client')
+          ) {
+            return;
+          }
+          fetch('/api/log-error', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message: error ? error.message : 'Unknown error',
+              stack: error ? error.stack : '',
+              extra: extra || ''
+            })
+          }).catch(function() {});
+        } catch (e) {}
+      }
+
+      // Global error listener to display any Javascript errors on screen
+      window.addEventListener('error', function(event) {
+        const err = event.error || new Error(event.message);
+        reportErrorToBackend(err, 'Global window.onerror: ' + event.filename + ':' + event.lineno);
+        showErrorOverlay(err, event.filename, event.lineno, event.colno);
+      });
+      window.addEventListener('unhandledrejection', function(event) {
+        const err = event.reason || new Error('Promise rejected');
+        reportErrorToBackend(err, 'Global window.unhandledrejection');
+        showErrorOverlay(err);
+      });
+
+      function showErrorOverlay(error, filename, lineno, colno) {
+        // Prevent benign Vite / HMR / WebSocket connection errors from triggering the overlay
+        const errMsg = error && error.message ? error.message : '';
+        const errStack = error && error.stack ? error.stack : '';
+        const file = filename || '';
+        if (
+          errMsg.includes('websocket') || 
+          errMsg.includes('WebSocket') || 
+          errStack.includes('websocket') || 
+          errStack.includes('WebSocket') || 
+          errStack.includes('@vite/client') ||
+          file.includes('@vite/client')
+        ) {
+          return;
+        }
+
+        if (document.getElementById('debug-error-overlay')) return;
+
+        const overlay = document.createElement('div');
+        overlay.id = 'debug-error-overlay';
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100vw';
+        overlay.style.height = '100vh';
+        overlay.style.backgroundColor = '#1e1e2e';
+        overlay.style.color = '#cdd6f4';
+        overlay.style.fontFamily = 'monospace';
+        overlay.style.padding = '24px';
+        overlay.style.boxSizing = 'border-box';
+        overlay.style.zIndex = '999999';
+        overlay.style.overflowY = 'auto';
+
+        const title = document.createElement('h1');
+        title.innerText = '⚠️ Application Error Caught';
+        title.style.color = '#f38ba8';
+        title.style.margin = '0 0 16px 0';
+        title.style.fontSize = '24px';
+        overlay.appendChild(title);
+
+        const desc = document.createElement('p');
+        desc.innerText = 'A critical error occurred while starting or running the application. Check the details below to identify the issue:';
+        desc.style.color = '#a6adc8';
+        desc.style.fontSize = '14px';
+        desc.style.lineHeight = '1.5';
+        overlay.appendChild(desc);
+
+        const errorDetails = document.createElement('div');
+        errorDetails.style.backgroundColor = '#11111b';
+        errorDetails.style.border = '1px solid #313244';
+        errorDetails.style.borderRadius = '8px';
+        errorDetails.style.padding = '16px';
+        errorDetails.style.margin = '20px 0';
+        errorDetails.style.overflowX = 'auto';
+
+        let message = error ? error.message : 'Unknown error';
+        let stack = error ? error.stack : '';
+        let loc = filename ? `${filename}:${lineno}:${colno}` : '';
+
+        let content = `<strong>Error:</strong> <span style="color:#f38ba8">${message}</span>\n`;
+        if (loc) content += `<strong>Location:</strong> <span style="color:#f9e2af">${loc}</span>\n`;
+        if (stack) content += `\n<strong>Stack Trace:</strong>\n<span style="color:#bac2de; font-size:12px;">${stack}</span>`;
+        
+        errorDetails.innerHTML = content.replace(/\n/g, '<br/>');
+        overlay.appendChild(errorDetails);
+
+        const btns = document.createElement('div');
+        btns.style.display = 'flex';
+        btns.style.gap = '12px';
+        btns.style.marginTop = '24px';
+
+        const clearBtn = document.createElement('button');
+        clearBtn.innerText = 'Clear Cache & Local Storage';
+        clearBtn.style.backgroundColor = '#f38ba8';
+        clearBtn.style.color = '#11111b';
+        clearBtn.style.border = 'none';
+        clearBtn.style.padding = '12px 20px';
+        clearBtn.style.borderRadius = '6px';
+        clearBtn.style.cursor = 'pointer';
+        clearBtn.style.fontWeight = 'bold';
+        clearBtn.onclick = function() {
+          if (confirm('Clear local storage? This will reset custom app settings to default and resolve any data parsing issues.')) {
+            localStorage.clear();
+            alert('Cleared! Reloading...');
+            window.location.reload();
+          }
+        };
+        btns.appendChild(clearBtn);
+
+        const reloadBtn = document.createElement('button');
+        reloadBtn.innerText = 'Reload Page';
+        reloadBtn.style.backgroundColor = '#89b4fa';
+        reloadBtn.style.color = '#11111b';
+        reloadBtn.style.border = 'none';
+        reloadBtn.style.padding = '12px 20px';
+        reloadBtn.style.borderRadius = '6px';
+        reloadBtn.style.cursor = 'pointer';
+        reloadBtn.style.fontWeight = 'bold';
+        reloadBtn.onclick = function() {
+          window.location.reload();
+        };
+        btns.appendChild(reloadBtn);
+
+        overlay.appendChild(btns);
+        
+        if (document.body) {
+          document.body.appendChild(overlay);
+        } else {
+          window.addEventListener('DOMContentLoaded', function() {
+            document.body.appendChild(overlay);
+          });
+        }
+      }
+
+      window.gm_authFailure = function() {
+        console.warn("Google Maps SDK failed to load or authenticate. Switching to local offline/iframe fallbacks.");
+        window.googleMapsAuthFailed = true;
+        window.dispatchEvent(new Event('google-maps-auth-failed'));
+      };
+
+      // Intercept console.error to catch BillingNotEnabledMapError, InvalidKeyMapError, or ApiNotActivatedMapError
+      // and automatically trigger our graceful fallback listeners.
+      (function() {
+        const originalError = console.error;
+        console.error = function(...args) {
+          originalError.apply(console, args);
+          try {
+            const errorText = args.map(arg => {
+              if (!arg) return '';
+              if (typeof arg === 'string') return arg;
+              if (arg instanceof Error) return arg.message + ' ' + arg.stack;
+              return String(arg);
+            }).join(' ');
+
+            // Send all browser console errors to Express for centralized diagnostics
+            reportErrorToBackend(new Error(errorText), 'Captured console.error');
+
+            if (
+              errorText.includes('BillingNotEnabledMapError') ||
+              errorText.includes('InvalidKeyMapError') ||
+              errorText.includes('ApiNotActivatedMapError') ||
+              (errorText.includes('google.maps') && (errorText.includes('Billing') || errorText.includes('billing') || errorText.includes('Error')))
+            ) {
+              console.warn("[Interception] Google Maps SDK Warning/Error detected: ", errorText);
+              window.googleMapsAuthFailed = true;
+              window.dispatchEvent(new Event('google-maps-auth-failed'));
+            }
+          } catch (e) {
+            // Ensure interception never breaks main application execution
+          }
+        };
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/client/main.jsx"></script>
+  </body>
+</html>
+

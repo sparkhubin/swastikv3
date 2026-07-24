@@ -1,0 +1,226 @@
+[
+  {
+    "code": "3899",
+    "name": "CLASSIC TB JUNIOR RS20",
+    "unit": "PCS",
+    "originalPrice": 20,
+    "price": 18
+  },
+  {
+    "code": "1555",
+    "name": "DABUR LAL TAIL 100ML",
+    "unit": "PCS",
+    "originalPrice": 150,
+    "price": 145
+  },
+  {
+    "code": "1554",
+    "name": "DABUR LAL TAIL 50ML",
+    "unit": "PCS",
+    "originalPrice": 70,
+    "price": 65
+  },
+  {
+    "code": "2027",
+    "name": "HIMALAYA BABY CREAM 100ML",
+    "unit": "PCS",
+    "originalPrice": 200,
+    "price": 185
+  },
+  {
+    "code": "2024",
+    "name": "HIMALAYA BABY LOTION 100ML",
+    "unit": "PCS",
+    "originalPrice": 125,
+    "price": 120
+  },
+  {
+    "code": "2023",
+    "name": "HIMALAYA BABY LOTION 200ML",
+    "unit": "PCS",
+    "originalPrice": 230,
+    "price": 199
+  },
+  {
+    "code": "2026",
+    "name": "HIMALAYA BABY MASSAGE OIL 100ML",
+    "unit": "PCS",
+    "originalPrice": 150,
+    "price": 140
+  },
+  {
+    "code": "2019",
+    "name": "HIMALAYA BABY MASSAGE OIL 200ML",
+    "unit": "PCS",
+    "originalPrice": 260,
+    "price": 230
+  },
+  {
+    "code": "2025",
+    "name": "HIMALAYA BABY POWDER 100GM",
+    "unit": "PCS",
+    "originalPrice": 111,
+    "price": 105
+  },
+  {
+    "code": "2022",
+    "name": "HIMALAYA BABY POWDER 200GM",
+    "unit": "PCS",
+    "originalPrice": 204,
+    "price": 180
+  },
+  {
+    "code": "2502",
+    "name": "HIMALAYA BABY SHAMPOO 100ML",
+    "unit": "PCS",
+    "originalPrice": 115,
+    "price": 110
+  },
+  {
+    "code": "2500",
+    "name": "HIMALAYA BABY SHAMPOO 200ML",
+    "unit": "PCS",
+    "originalPrice": 213,
+    "price": 190
+  },
+  {
+    "code": "2030",
+    "name": "HIMALAYA BABY SOAP 75GM",
+    "unit": "PCS",
+    "originalPrice": 65,
+    "price": 58
+  },
+  {
+    "unit": "PCS",
+    "code": "2035",
+    "name": "HIMALAYA BABY WIPES 24N",
+    "originalPrice": 85,
+    "price": 80
+  },
+  {
+    "code": "2028",
+    "name": "HIMALAYA BABY CREAM 50ML",
+    "unit": "PCS",
+    "originalPrice": 105,
+    "price": 100
+  },
+  {
+    "code": "1846",
+    "name": "HUGGIES COMFY PANTS L 46",
+    "unit": "PCS",
+    "originalPrice": 560,
+    "price": 399
+  },
+  {
+    "code": "1847",
+    "name": "HUGGIES COMFY PANTS XL 24",
+    "unit": "PCS",
+    "originalPrice": 399,
+    "price": 349
+  },
+  {
+    "code": "1858",
+    "name": "HUGGIES PANTS L 2",
+    "unit": "PCS",
+    "originalPrice": 28,
+    "price": 27
+  },
+  {
+    "code": "1848",
+    "name": "HUGGIES PANTS L 28",
+    "unit": "PCS",
+    "originalPrice": 374,
+    "price": 349
+  },
+  {
+    "code": "1856",
+    "name": "HUGGIES PANTS L 5",
+    "unit": "PCS",
+    "originalPrice": 70,
+    "price": 65
+  },
+  {
+    "code": "1957",
+    "name": "HUGGIES PANTS L 7N",
+    "unit": "PCS",
+    "originalPrice": 92,
+    "price": 88
+  },
+  {
+    "code": "1859",
+    "name": "HUGGIES PANTS M 1",
+    "unit": "PCS",
+    "originalPrice": 10,
+    "price": 10
+  },
+  {
+    "code": "1849",
+    "name": "HUGGIES PANTS M 30",
+    "unit": "PCS",
+    "originalPrice": 374,
+    "price": 349
+  },
+  {
+    "code": "1857",
+    "name": "HUGGIES PANTS M 5",
+    "unit": "PCS",
+    "originalPrice": 56,
+    "price": 54
+  },
+  {
+    "code": "1956",
+    "name": "HUGGIES PANTS M 8N",
+    "unit": "PCS",
+    "originalPrice": 92,
+    "price": 88
+  },
+  {
+    "code": "1861",
+    "name": "HUGGIES PANTS S 1",
+    "unit": "PCS",
+    "originalPrice": 9,
+    "price": 9
+  },
+  {
+    "code": "1852",
+    "name": "HUGGIES PANTS S 10",
+    "unit": "PCS",
+    "originalPrice": 92,
+    "price": 88
+  },
+  {
+    "code": "1958",
+    "name": "HUGGIES PANTS S 38N",
+    "unit": "PCS",
+    "originalPrice": 399,
+    "price": 349
+  },
+  {
+    "code": "1855",
+    "name": "HUGGIES PANTS S 5",
+    "unit": "PCS",
+    "originalPrice": 46,
+    "price": 44
+  },
+  {
+    "code": "1860",
+    "name": "HUGGIES PANTS XL 5",
+    "unit": "PCS",
+    "originalPrice": 84,
+    "price": 82
+  },
+  {
+    "code": "3373",
+    "name": "JOHNSONS BABY SOAP 100G",
+    "unit": "PCS",
+    "originalPrice": 92,
+    "price": 80
+  },
+  {
+    "code": "2484",
+    "name": "MAMY POKO WIPES 72",
+    "unit": "PCS",
+    "originalPrice": 99,
+    "price": 75
+  }
+]
