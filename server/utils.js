@@ -442,11 +442,13 @@ export async function sendWhatsappMessageUnified(
   to,
   body,
   isOtp = false,
-  otpCode = undefined
+  otpCode = undefined,
+  templateName = undefined,
+  templateParams = []
 ) {
   const metaPhoneId = process.env.META_WHATSAPP_PHONE_NUMBER_ID;
   const metaToken = process.env.META_WHATSAPP_ACCESS_TOKEN;
-  const metaTemplate = process.env.META_WHATSAPP_TEMPLATE_NAME || "reference_no";
+  const defaultMetaTemplate = process.env.META_WHATSAPP_TEMPLATE_NAME || "reference_no";
 
   if (metaPhoneId && metaToken) {
     let cleanTo = to.replace(/[^\d]/g, "");
@@ -457,28 +459,30 @@ export async function sendWhatsappMessageUnified(
     const url = `https://graph.facebook.com/v18.0/${metaPhoneId}/messages`;
 
     let payload;
-    if (isOtp && otpCode) {
+    if (templateName || (isOtp && otpCode)) {
+      const activeTpl = templateName || defaultMetaTemplate;
+      const paramsList = templateParams && templateParams.length > 0 
+        ? templateParams.map(p => ({ type: "text", text: String(p) }))
+        : (otpCode ? [{ type: "text", text: String(otpCode) }] : []);
+
       payload = {
         messaging_product: "whatsapp",
         recipient_type: "individual",
         to: cleanTo,
         type: "template",
         template: {
-          name: metaTemplate,
+          name: activeTpl,
           language: {
             code: "en"
           },
-          components: [
-            {
-              type: "body",
-              parameters: [
-                {
-                  type: "text",
-                  text: otpCode
-                }
-              ]
-            }
-          ]
+          ...(paramsList.length > 0 ? {
+            components: [
+              {
+                type: "body",
+                parameters: paramsList
+              }
+            ]
+          } : {})
         }
       };
     } else {

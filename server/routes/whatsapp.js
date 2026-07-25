@@ -4,17 +4,25 @@ import { sendWhatsappMessageUnified } from "../utils.js";
 const router = express.Router();
 
 router.post("/whatsapp/send", async (req, res) => {
-  const { to, message } = req.body;
+  const { to, message, templateName, templateParams, isOtp, otpCode } = req.body;
   if (!to || !message) {
     return res.status(400).json({ error: "Parameters 'to' and 'message' are required." });
   }
 
-  const waRes = await sendWhatsappMessageUnified(to, message);
+  const waRes = await sendWhatsappMessageUnified(
+    to, 
+    message, 
+    isOtp || false, 
+    otpCode, 
+    templateName, 
+    templateParams
+  );
 
   res.json({
     status: waRes.success ? "dispatched" : "failed",
     to,
     message,
+    template_name: templateName || (isOtp ? "reference_no" : null),
     whatsapp_response: waRes
   });
 });

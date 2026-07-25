@@ -8,9 +8,9 @@ router.post("/auth/otp/send", async (req, res) => {
   const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
   fallbackOtps[phoneNumber] = otpCode;
 
-  const renderedMessage = `Hello\nNote ${otpCode} is Your Reference.`;
+  const renderedMessage = `Hello\nNote ${otpCode} is Your Reference`;
 
-  const waRes = await sendWhatsappMessageUnified(phoneNumber, renderedMessage, true, otpCode);
+  const waRes = await sendWhatsappMessageUnified(phoneNumber, renderedMessage, true, otpCode, "reference_no", [otpCode]);
 
   res.json({
     status: waRes.success ? "queued" : "failed",

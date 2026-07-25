@@ -456,6 +456,38 @@ export default function OrdersManager({ userRole }) {
         handleSendWhatsappInvoice(orderToNotify);
         alert(`Status updated to DELIVERED successfully!\nSimulated WhatsApp Notification & signed PDF Bill invoice auto-dispatched to the customer!`);
       }, 300);
+    } else if (step === 1 || statusKey === "Dispatched" || statusKey === "Out for Delivery") {
+      setTimeout(() => {
+        const orderToNotify = targetOrd || { id, step, status: statusKey, isActive };
+        handleSendWhatsappDispatchAlert(orderToNotify);
+        alert(`Status updated to DISPATCHED!\nAutomated 'order_dispatch_alert' WhatsApp notification sent to ${orderToNotify.customerName || 'customer'}!`);
+      }, 300);
+    }
+  };
+
+  const handleSendWhatsappDispatchAlert = async (specificOrder = null) => {
+    const targetOrder = specificOrder || selectedOrder;
+    if (!targetOrder) return;
+    const orderId = targetOrder.id;
+    const phoneNum = targetOrder.customerPhone || targetOrder.deliveryPartnerPhone || "+91 95400 12099";
+    const clientName = targetOrder.customerName || targetOrder.deliveryPartnerName || "Valued Customer";
+    const grandTotal = targetOrder.total || targetOrder.grand_total || targetOrder.subtotal || 1200;
+
+    const bodyMsg = `Hello ${clientName}, your Swastik order ${orderId} has been handed over to our delivery partner! Total bill amount is ${grandTotal}. You can track or contact your rider directly from the Swastik app.`;
+
+    try {
+      await fetch('/api/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          to: phoneNum, 
+          message: bodyMsg,
+          templateName: 'order_dispatch_alert',
+          templateParams: [clientName, orderId, String(grandTotal)]
+        })
+      });
+    } catch (e) {
+      console.error("Dispatch alert trigger error:", e);
     }
   };
 

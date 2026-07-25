@@ -1,6 +1,6 @@
 import express from "express";
 import { db } from "../../database/db.js";
-import { mapOrder } from "../utils.js";
+import { mapOrder, sendWhatsappMessageUnified } from "../utils.js";
 
 const router = express.Router();
 
@@ -83,6 +83,19 @@ router.post("/orders", async (req, res) => {
     }
 
     const rows = await db.query('SELECT * FROM "order" WHERE id = ?', [o.id]);
+
+    // Trigger WhatsApp notification with thank_you_template on order placement
+    if (o.customerPhone) {
+      sendWhatsappMessageUnified(
+        o.customerPhone,
+        "Thank you for shopping at Swastik Supermarket 😊\n\nWe appreciate your visit.",
+        false,
+        undefined,
+        "thank_you_template",
+        []
+      ).catch(err => console.error("[Auto WhatsApp] thank_you_template dispatch error:", err.message));
+    }
+
     res.status(201).json(await mapOrder(rows[0]));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -186,6 +199,25 @@ router.put("/orders/:id/transit", async (req, res) => {
     }
     
     const rows = await db.query('SELECT * FROM "order" WHERE id = ?', [id]);
+
+    // Trigger order_dispatch_alert if step is updated to 1 or status indicates dispatch
+    if (updateData.step === 1 || (updateData.status && (updateData.status.toLowerCase().includes("dispatch") || updateData.status.toLowerCase().includes("transit") || updateData.status.toLowerCase().includes("out for delivery")))) {
+      const targetPhone = updateData.customerPhone || updateData.customerMobile || (rows[0] ? rows[0].customer_phone : null);
+      const targetName = updateData.customerName || (rows[0] ? rows[0].customer_name : "Valued Customer");
+      const totalAmount = updateData.total || updateData.grandTotal || (rows[0] ? rows[0].grand_total : 1200);
+      
+      if (targetPhone) {
+        sendWhatsappMessageUnified(
+          targetPhone,
+          `Hello ${targetName}, your Swastik order ${id} has been handed over to our delivery partner! Total bill amount is ${totalAmount}. You can track or contact your rider directly from the Swastik app.`,
+          false,
+          undefined,
+          "order_dispatch_alert",
+          [targetName, id, String(totalAmount)]
+        ).catch(err => console.error("[Auto WhatsApp] order_dispatch_alert dispatch error:", err.message));
+      }
+    }
+
     if (rows.length > 0) {
       res.json(await mapOrder(rows[0]));
     } else {

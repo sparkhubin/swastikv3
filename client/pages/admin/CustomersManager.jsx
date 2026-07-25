@@ -33,6 +33,69 @@ import R2ImageUploader from './R2ImageUploader';
 
 const metaApprovalTemplates = [
   {
+    id: 'reference_no',
+    name: 'OTP Login Reference Code',
+    category: 'AUTHENTICATION',
+    categoryColor: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+    description: 'High-speed authentication code template for phone number verification & login.',
+    languages: {
+      en_US: {
+        header: 'None',
+        body: 'Hello\nNote {{1}} is Your Reference',
+        samples: ['1234'],
+        buttons: ['Copy Code']
+      },
+      hi_IN: {
+        header: 'None',
+        body: 'नमस्ते\nनोट {{1}} आपका संदर्भ नंबर है',
+        samples: ['1234'],
+        buttons: ['कोड कॉपी करें']
+      }
+    }
+  },
+  {
+    id: 'order_dispatch_alert',
+    name: 'Order Dispatch & Delivery Alert',
+    category: 'UTILITY',
+    categoryColor: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+    description: 'Automated notification dispatched immediately when order leaves the warehouse with our delivery partner.',
+    languages: {
+      en_US: {
+        header: 'None',
+        body: 'Hello {{1}}, your Swastik order {{2}} has been handed over to our delivery partner! Total bill amount is {{3}}. You can track or contact your rider directly from the Swastik app.',
+        samples: ['Balram', '1234', '1200'],
+        buttons: ['Track Order', 'Contact Rider']
+      },
+      hi_IN: {
+        header: 'None',
+        body: 'नमस्ते {{1}}, आपका स्वस्तिक ऑर्डर {{2}} हमारे डिलीवरी पार्टनर को सौंप दिया गया है! कुल बिल राशि {{3}} है। आप सीधे स्वस्तिक ऐप से राइडर को कॉल या ट्रैक कर सकते हैं।',
+        samples: ['बलराम', '1234', '1200'],
+        buttons: ['ऑर्डर ट्रैक करें', 'राइडर को कॉल करें']
+      }
+    }
+  },
+  {
+    id: 'thank_you_template',
+    name: 'Order Confirmation & Thank You',
+    category: 'UTILITY',
+    categoryColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+    description: 'Sent automatically to customer upon successfully placing a new order at Swastik Supermarket.',
+    languages: {
+      en_US: {
+        header: 'None',
+        body: 'Thank you for shopping at Swastik Supermarket 😊\n\nWe appreciate your visit.',
+        samples: [],
+        buttons: ['View Orders']
+      },
+      hi_IN: {
+        header: 'None',
+        body: 'स्वस्तिक सुपरमार्केट में खरीदारी के लिए धन्यवाद 😊\n\nआपकी यात्रा की हम सराहना करते हैं।',
+        samples: [],
+        buttons: ['ऑर्डर देखें']
+      }
+    }
+  },
+  {
     id: 'welcome_onboard_v1',
     name: 'Welcome Onboard Greetings',
     category: 'MARKETING',
@@ -666,15 +729,25 @@ export default function CustomersManager() {
 
   // Meta business template specs
   const templates = {
+    reference_no: {
+      name: 'reference_no (OTP Login Reference)',
+      text: 'Hello\nNote {{1}} is Your Reference',
+      inputs: ['OTP Code (e.g. 1234)']
+    },
+    order_dispatch_alert: {
+      name: 'order_dispatch_alert (Order Dispatched Handover)',
+      text: 'Hello {{1}}, your Swastik order {{2}} has been handed over to our delivery partner! Total bill amount is {{3}}. You can track or contact your rider directly from the Swastik app.',
+      inputs: ['Customer Name (e.g. Balram)', 'Order ID (e.g. 1234)', 'Total Bill Amount (e.g. 1200)']
+    },
+    thank_you_template: {
+      name: 'thank_you_template (Order Placed Appreciation)',
+      text: 'Thank you for shopping at Swastik Supermarket 😊\n\nWe appreciate your visit.',
+      inputs: []
+    },
     welcome_onboard: {
       name: 'Welcome Onboard Greetings',
       text: 'Namaste {{1}}, welcome to Swastik Supermarket! Your flat ₹{{2}} promo points are active. Valid for {{3}}.',
       inputs: ['Customer Name', 'Reward Points Amount', 'Validity (e.g. 30 days)']
-    },
-    order_dispatch: {
-      name: 'Order Dispatch & SLA',
-      text: 'Hello {{1}}, your Swastik order {{2}} has been handed over to rider! Total invoice is {{3}}.',
-      inputs: ['Customer Name', 'Order Number ID', 'Total Bill Amount (e.g. ₹530)']
     },
     promotional_offer: {
       name: 'Flash Sale & Campaigns',
