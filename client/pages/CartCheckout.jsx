@@ -155,6 +155,46 @@ export default function CartCheckout({ onViewChange }) {
 
   const [customerEmail, setCustomerEmail] = useState('bilspatidar@gmail.com');
 
+  // --- DYNAMIC PAYMENT GATEWAY CONFIGURATION & RAZORPAY STATES ---
+  const [gatewaySettings, setGatewaySettings] = useState({
+    activeGateway: 'RAZORPAY',
+    razorpayEnabled: true,
+    razorpayKeyId: '',
+    cashfreeEnabled: true,
+    environment: 'TEST'
+  });
+  const [showRazorpaySDKSimulator, setShowRazorpaySDKSimulator] = useState(false);
+  const [razorpayOrderSession, setRazorpayOrderSession] = useState(null);
+  const [rzpSimulating, setRzpSimulating] = useState(false);
+
+  // Fetch backend gateway configurations dynamically & inject Razorpay JS SDK
+  useEffect(() => {
+    fetch('/api/payment/settings')
+      .then(res => res.json())
+      .then(data => {
+        setGatewaySettings({
+          activeGateway: data.activeGateway || 'RAZORPAY',
+          razorpayEnabled: data.razorpayEnabled !== false,
+          razorpayKeyId: data.razorpayKeyId || '',
+          cashfreeEnabled: data.enabled !== false,
+          environment: data.environment || 'TEST'
+        });
+        if (data.activeGateway === 'RAZORPAY' && data.razorpayEnabled !== false) {
+          setPaymentMethod('razorpay');
+        } else if (data.activeGateway === 'CASHFREE' && data.enabled !== false) {
+          setPaymentMethod('cashfree');
+        }
+      })
+      .catch(e => console.warn("Could not load dynamic gateway settings:", e));
+
+    if (typeof window !== 'undefined' && !window.Razorpay) {
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      document.body.appendChild(script);
+    }
+  }, []);
+
   // --- LOYALTY SAVINGS HOOKS & CALCULATIONS ---
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     return localStorage.getItem('swastik_is_logged_in') === 'true';
@@ -186,6 +226,65 @@ export default function CartCheckout({ onViewChange }) {
       window.removeEventListener('swastik_auth_change', syncAuth);
     };
   }, []);
+
+  // --- FREE LIVE GPS GEOLOCATION & FREE OPENSTREETMAP REVERSE GEOCODING ---
+  const [isDetectingGps, setIsDetectingGps] = useState(false);
+  const [liveGpsCoords, setLiveGpsCoords] = useState(null);
+
+  const handleDetectLiveGpsLocation = () => {
+    if (!navigator.geolocation) {
+      alert(language === 'hi' 
+        ? "आपके डिवाइस या ब्राउज़र में GPS सपोर्ट उपलब्ध नहीं है। कृपया अपना पता मैन्युअल दर्ज करें।" 
+        : "GPS location detection is not supported in your browser. Please type your address manually.");
+      return;
+    }
+
+    setIsDetectingGps(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        setLiveGpsCoords({ lat, lng });
+
+        try {
+          // Free reverse geocoding via OpenStreetMap (Nominatim API - 100% Free, No Key Needed)
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`);
+          const data = await res.json();
+          if (data && data.display_name) {
+            setShippingInfo(prev => ({
+              ...prev,
+              address: data.display_name,
+              latitude: lat,
+              longitude: lng
+            }));
+          } else {
+            setShippingInfo(prev => ({
+              ...prev,
+              address: `GPS Pin: ${lat.toFixed(5)}° N, ${lng.toFixed(5)}° E (Detected via GPS)`,
+              latitude: lat,
+              longitude: lng
+            }));
+          }
+        } catch (err) {
+          setShippingInfo(prev => ({
+            ...prev,
+            address: `GPS Pin: ${lat.toFixed(5)}° N, ${lng.toFixed(5)}° E`,
+            latitude: lat,
+            longitude: lng
+          }));
+        } finally {
+          setIsDetectingGps(false);
+        }
+      },
+      (err) => {
+        setIsDetectingGps(false);
+        alert(language === 'hi'
+          ? "GPS लोकेशन प्राप्त नहीं हो सकी। कृपया ब्राउज़र में लोकेशन की अनुमति (Allow Location) दें या अपना पता नीचे टाइप करें।"
+          : "Could not retrieve GPS location. Please allow browser location access or enter address manually below.");
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+    );
+  };
 
   // Pre-fill shipping information automatically when user logs in
   useEffect(() => {
@@ -785,8 +884,10 @@ export default function CartCheckout({ onViewChange }) {
       }
     }
 
-    // Cashfree Online Payment check
-    const isOnlineCF = paymentMethod === 'cashfree' || paymentMethod === 'card' || paymentMethod === 'upi';
+    // Payment method checks
+    const isOnlineRzp = paymentMethod === 'razorpay';
+    const isOnlineCF = paymentMethod === 'cashfree';
+    const isOnline = isOnlineRzp || isOnlineCF;
 
     setIsPlacing(true);
     setCheckoutError('');
@@ -796,9 +897,9 @@ export default function CartCheckout({ onViewChange }) {
       id: orderId,
       orderDate: new Date().toISOString(),
       date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-      status: isOnlineCF ? "Pending Payment" : "Confirmed",
-      paymentStatus: isOnlineCF ? "PENDING" : "UNPAID",
-      paymentMethod: isOnlineCF ? "CASHFREE_ONLINE" : "COD",
+      status: isOnline ? "Pending Payment" : "Confirmed",
+      paymentStatus: isOnline ? "PENDING" : "UNPAID",
+      paymentMethod: isOnlineRzp ? "RAZORPAY_ONLINE" : (isOnlineCF ? "CASHFREE_ONLINE" : "COD"),
       isActive: true,
       step: 0,
       subtotal: Number(subtotal),
@@ -829,7 +930,7 @@ export default function CartCheckout({ onViewChange }) {
       }))
     };
 
-    if (!isOnlineCF) {
+    if (paymentMethod === 'cod') {
       // 🥇 Process Cash on Delivery order directly
       const res = await addOrder(newOrder);
       setIsPlacing(false);
@@ -849,8 +950,102 @@ export default function CartCheckout({ onViewChange }) {
           ? `शानदार! आपका नगद भुगतान ऑर्डर तैयार है। ₹${finalGrandTotal} का भुगतान डिलीवरी के समय नगद/UPI द्वारा करें। स्वास्तिक डिलीवरी प्रतिनिधि शीघ्र ही पहुंचेगा!`
           : `Success! Your Cash on Delivery order of ₹${finalGrandTotal} is confirmed. Please pay at your doorstep. Safe delivery team dispatched!`
       );
+    } else if (isOnlineRzp) {
+      // 🥈 Process Razorpay Online Order Sequence
+      try {
+        const dbRes = await addOrder(newOrder);
+        if (dbRes && dbRes.success === false) {
+          setIsPlacing(false);
+          const errText = language === 'hi' ? (dbRes.errorHi || dbRes.error) : dbRes.error;
+          setCheckoutError(errText);
+          return;
+        }
+
+        const response = await fetch('/api/razorpay/create-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: orderId,
+            amount: finalGrandTotal,
+            customerName: shippingInfo.fullName || "Swastik Customer",
+            customerPhone: shippingInfo.phoneNumber || "+91 99999 88888",
+            customerEmail: customerEmail
+          })
+        });
+
+        const data = await response.json();
+        setIsPlacing(false);
+
+        if (response.ok && data.status === 'success') {
+          // If Razorpay SDK is loaded and we have real credentials
+          if (typeof window !== 'undefined' && window.Razorpay && data.api_called && !data.simulated) {
+            const options = {
+              key: data.key_id,
+              amount: data.amount,
+              currency: data.currency || "INR",
+              name: "Swastik Supermarket",
+              description: `Grocery Order #${orderId}`,
+              image: "/pwa-192x192.png",
+              order_id: data.razorpay_order_id,
+              handler: async function (rzpResponse) {
+                try {
+                  await fetch('/api/razorpay/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      orderId: orderId,
+                      razorpay_order_id: rzpResponse.razorpay_order_id,
+                      razorpay_payment_id: rzpResponse.razorpay_payment_id,
+                      razorpay_signature: rzpResponse.razorpay_signature
+                    })
+                  });
+
+                  handleSuccessfulCheckout();
+                  setShowOrderSuccess(true);
+                  setSuccessInfo(
+                    language === 'hi' 
+                      ? `शानदार! आपका रेज़रपे द्वारा ऑनलाइन भुगतान सफल रहा (Payment ID: ${rzpResponse.razorpay_payment_id})। स्वास्तिक डिलीवरी टीम शीघ्र ही पहुंचेगी!`
+                      : `Success! Online payment of ₹${finalGrandTotal} verified via Razorpay! Payment ID: ${rzpResponse.razorpay_payment_id}`
+                  );
+                } catch (err) {
+                  console.error("Razorpay verification error:", err);
+                  setCheckoutError("Payment verification error. Please contact store support.");
+                }
+              },
+              prefill: {
+                name: shippingInfo.fullName || "Swastik Customer",
+                contact: (shippingInfo.phoneNumber || "").replace(/\D/g, "").slice(-10) || "9999988888",
+                email: customerEmail || "customer@swastik.com"
+              },
+              theme: {
+                color: "#06b6d4"
+              }
+            };
+
+            const rzpObj = new window.Razorpay(options);
+            rzpObj.on('payment.failed', function (resp) {
+              setCheckoutError(
+                language === 'hi'
+                  ? `भुगतान विफल: ${resp.error.description || 'लेनदेन रद्द कर दिया गया।'}`
+                  : `Payment Failed: ${resp.error.description || 'Transaction cancelled.'}`
+              );
+            });
+            rzpObj.open();
+          } else {
+            // Fallback simulator for sandbox / test environment
+            setRazorpayOrderSession(data);
+            setShowRazorpaySDKSimulator(true);
+          }
+        } else {
+          setCheckoutError(data.error || (language === 'hi' ? "रेज़रपे गेटवे प्रारंभ करने में विफलता।" : "Failed to initialize Razorpay Session."));
+        }
+      } catch (err) {
+        setIsPlacing(false);
+        console.error("Razorpay order handler error:", err);
+        setCheckoutError("Online connection error. Please try again or select Cash On Delivery.");
+      }
     } else {
-      // 🥈 Process Cashfree Online Order Sequence
+      // 🥉 Process Cashfree Online Order Sequence
       try {
         // Add pending order to global context state / DB first
         const dbRes = await addOrder(newOrder);
@@ -1415,29 +1610,72 @@ export default function CartCheckout({ onViewChange }) {
                 )}
               </div>
 
-              <div className="md:col-span-2 space-y-1">
-                <div className="flex justify-between items-center">
+              <div className="md:col-span-2 space-y-2">
+                <div className="flex flex-wrap justify-between items-center gap-2">
                   <label className="text-[10px] font-black text-amber-400 uppercase tracking-wider block">
                     {t('deliveryAddress')} * ({language === 'hi' ? 'अनिवार्य' : 'Required'})
                   </label>
-                  {!shippingInfo.address?.trim() && (
-                    <span className="text-[9px] text-rose-400 font-bold uppercase tracking-wider animate-pulse">
-                      * {language === 'hi' ? 'पता भरना आवश्यक है' : 'Address Required'}
+                  
+                  {/* FREE Live GPS Location Button */}
+                  <button
+                    type="button"
+                    onClick={handleDetectLiveGpsLocation}
+                    disabled={isDetectingGps}
+                    className="px-3 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-lg border border-emerald-400/30 flex items-center gap-1.5 shadow-md active:scale-95 cursor-pointer disabled:opacity-50"
+                  >
+                    <Compass className={`h-3.5 w-3.5 ${isDetectingGps ? 'animate-spin text-amber-300' : 'animate-pulse text-emerald-200'}`} />
+                    <span>
+                      {isDetectingGps 
+                        ? (language === 'hi' ? 'GPS लाइव लोकेशन खोजी जा रही है...' : 'Detecting Live GPS...') 
+                        : (language === 'hi' ? '📍 मेरी लाइव GPS लोकेशन चुनें (100% फ्री)' : '📍 Use Live GPS Location (100% Free)')
+                      }
                     </span>
-                  )}
+                  </button>
                 </div>
+
                 <textarea 
                   rows="2"
                   required
                   value={shippingInfo.address}
                   onChange={(e) => setShippingInfo({...shippingInfo, address: e.target.value})}
-                  placeholder={language === 'hi' ? "मकान नंबर, स्ट्रीट/गली, लैंडमार्क दर्ज करें *" : "Enter House No, Street/Locality, Landmark *"}
+                  placeholder={language === 'hi' ? "मकान नंबर, स्ट्रीट/गली, लैंडमार्क या लाइव जीपीएस पता दर्ज करें *" : "Enter House No, Street/Locality, Landmark, or Live GPS Address *"}
                   className={`w-full bg-white/5 border rounded-lg p-3 text-xs text-white font-semibold outline-none transition-all font-sans ${
                     !shippingInfo.address?.trim() 
                       ? 'border-rose-500/50 focus:border-rose-400 bg-rose-500/5' 
                       : 'border-white/15 focus:border-cyan-400/50 focus:bg-white/10'
                   }`}
                 />
+
+                {/* GPS Pin Badge & Free Google Maps Navigation Link */}
+                {liveGpsCoords && (
+                  <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex flex-wrap items-center justify-between gap-2 text-[10px] text-emerald-300 font-sans">
+                    <div className="flex items-center gap-1.5 font-bold">
+                      <MapPin className="h-4 w-4 text-emerald-400 shrink-0 animate-bounce" />
+                      <span>
+                        {language === 'hi'
+                          ? `GPS निर्देशांक दर्ज: ${liveGpsCoords.lat.toFixed(5)}° N, ${liveGpsCoords.lng.toFixed(5)}° E`
+                          : `Captured GPS Pin: ${liveGpsCoords.lat.toFixed(5)}° N, ${liveGpsCoords.lng.toFixed(5)}° E`
+                        }
+                      </span>
+                    </div>
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${liveGpsCoords.lat},${liveGpsCoords.lng}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 rounded-lg text-emerald-200 font-extrabold flex items-center gap-1 transition"
+                    >
+                      <MapIcon className="h-3 w-3" />
+                      <span>{language === 'hi' ? 'मैप नेविगेशन खोलें' : 'Open Navigation Map'}</span>
+                    </a>
+                  </div>
+                )}
+
+                <p className="text-[9.5px] text-slate-400 italic font-medium leading-tight">
+                  💡 {language === 'hi' 
+                    ? "नोट: आप किसी भी समय ऊपर दिए गए पते के टेक्स्ट को बदल सकते हैं यदि आप किसी अन्य स्थान (जैसे ऑफिस, रिश्तेदार के घर) पर डिलीवरी चाहते हैं।" 
+                    : "Note: You can edit or change the address text above at any time if you want delivery at another location (e.g. office, friend's home)."
+                  }
+                </p>
               </div>
             </div>
 
@@ -1801,12 +2039,50 @@ export default function CartCheckout({ onViewChange }) {
                   </div>
                 </label>
 
-                {/* Mode 2: Online Payment via Cashfree Gateway */}
-                {paymentEnabled !== false && (
+                {/* Mode 2: Online Payment via Razorpay Gateway */}
+                {gatewaySettings.razorpayEnabled && (
+                  <label 
+                    className={`flex items-center gap-3 p-3.5 border rounded-xl cursor-pointer transition-all duration-200 ${
+                      paymentMethod === 'razorpay' 
+                        ? 'border-cyan-400/50 bg-cyan-500/10 shadow-[0_0_15px_rgba(34,211,238,0.15)]' 
+                        : 'border-white/10 hover:bg-white/5'
+                    }`}
+                  >
+                    <input 
+                      type="radio" 
+                      name="payment"
+                      checked={paymentMethod === 'razorpay'}
+                      onChange={() => setPaymentMethod('razorpay')}
+                      className="hidden"
+                    />
+                    <div className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-400/30 flex items-center justify-center text-cyan-300 shrink-0">
+                      <CreditCard className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <span>{language === 'hi' ? 'ऑनलाइन भुगतान (रेज़रपे - Razorpay)' : 'Online Payment (Razorpay)'}</span>
+                        <span className="text-[8px] px-1 bg-cyan-500/20 text-cyan-300 font-extrabold uppercase rounded border border-cyan-500/30">
+                          ⚡ Fast & Safe
+                        </span>
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-medium truncate">
+                        {language === 'hi' ? 'UPI (PhonePe, GPay, Paytm), डेबिट/क्रेडिट कार्ड, नेटबैंकिंग' : 'UPI (PhonePe, GPay), Cards, Netbanking & Wallets'}
+                      </p>
+                    </div>
+                    <div className={`ml-auto w-4 h-4 rounded-full border flex items-center justify-center ${
+                      paymentMethod === 'razorpay' ? 'border-cyan-400' : 'border-white/30'
+                    }`}>
+                      {paymentMethod === 'razorpay' && <div className="w-2.5 h-2.5 bg-cyan-400 rounded-full" />}
+                    </div>
+                  </label>
+                )}
+
+                {/* Mode 3: Online Payment via Cashfree Gateway */}
+                {gatewaySettings.cashfreeEnabled && (
                   <label 
                     className={`flex items-center gap-3 p-3.5 border rounded-xl cursor-pointer transition-all duration-200 ${
                       paymentMethod === 'cashfree' 
-                        ? 'border-cyan-400/50 bg-white/10 shadow-[0_0_15px_rgba(34,211,238,0.1)]' 
+                        ? 'border-emerald-400/50 bg-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.15)]' 
                         : 'border-white/10 hover:bg-white/5'
                     }`}
                   >
@@ -1817,24 +2093,21 @@ export default function CartCheckout({ onViewChange }) {
                       onChange={() => setPaymentMethod('cashfree')}
                       className="hidden"
                     />
-                    <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 shrink-0">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
                       <CreditCard className="h-4 w-4" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold text-white flex items-center gap-1.5">
-                        <span>{language === 'hi' ? 'ऑनलाइन भुगतान (कैशफ्री गेटवे)' : 'Online Payment (Cashfree Gateway)'}</span>
-                        <span className="text-[8px] px-1 bg-yellow-500/20 text-yellow-300 font-extrabold uppercase rounded">
-                          {paymentEnvironment === 'PRODUCTION' ? 'LIVE' : 'Sandbox'}
-                        </span>
+                        <span>{language === 'hi' ? 'ऑनलाइन भुगतान (कैशफ्री गेटवे)' : 'Online Payment (Cashfree)'}</span>
                       </p>
                       <p className="text-[10px] text-slate-400 font-medium truncate">
                         {language === 'hi' ? 'UPI, रुपे, कार्ड एवं नेटबैंकिंग द्वारा सुरक्षित भुगतान।' : 'UPI, RuPay, All Cards & Netbanking'}
                       </p>
                     </div>
                     <div className={`ml-auto w-4 h-4 rounded-full border flex items-center justify-center ${
-                      paymentMethod === 'cashfree' ? 'border-cyan-400' : 'border-white/30'
+                      paymentMethod === 'cashfree' ? 'border-emerald-400' : 'border-white/30'
                     }`}>
-                      {paymentMethod === 'cashfree' && <div className="w-2.5 h-2.5 bg-cyan-400 rounded-full" />}
+                      {paymentMethod === 'cashfree' && <div className="w-2.5 h-2.5 bg-emerald-400 rounded-full" />}
                     </div>
                   </label>
                 )}
@@ -2222,6 +2495,120 @@ export default function CartCheckout({ onViewChange }) {
           </div>
         </div>
       )}
+
+      {/* RAZORPAY SANDBOX SIMULATOR MODAL */}
+      {showRazorpaySDKSimulator && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-slate-900 border border-cyan-500/30 w-full max-w-md rounded-3xl overflow-hidden shadow-2xl text-white">
+            
+            {/* Header */}
+            <div className="bg-gradient-to-r from-cyan-600 to-blue-600 p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center text-white font-black">
+                  R
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-sm text-white">Razorpay Checkout Sandbox</h4>
+                  <p className="text-[10px] text-cyan-100 font-medium">Order ID: {razorpayOrderSession?.receipt || 'SW-ORDER'}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowRazorpaySDKSimulator(false)}
+                className="w-7 h-7 rounded-full bg-black/20 hover:bg-black/40 text-white flex items-center justify-center text-xs font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-4">
+              <div className="bg-slate-950 p-3.5 rounded-2xl border border-white/10 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">{isHindi ? "कुल देय राशि" : "Amount Payable"}</span>
+                  <span className="text-xl font-black text-cyan-300">₹{finalGrandTotal}</span>
+                </div>
+                <span className="text-[10px] font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 px-2 py-1 rounded-lg font-bold">
+                  TEST MODE
+                </span>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-extrabold text-slate-300">
+                  {isHindi ? "सिम्यूलेटेड भुगतान का तरीका चुनें:" : "Select Test Payment Method:"}
+                </p>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-3 bg-slate-950 border border-cyan-500/30 rounded-xl text-cyan-300 font-bold flex items-center gap-2">
+                    <Smartphone className="h-4 w-4 text-cyan-400" />
+                    <span>UPI / GPay / PhonePe</span>
+                  </div>
+                  <div className="p-3 bg-slate-950 border border-white/10 rounded-xl text-slate-300 font-bold flex items-center gap-2">
+                    <CreditCard className="h-4 w-4 text-emerald-400" />
+                    <span>Cards & Netbanking</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-white/10 space-y-2">
+                <button
+                  disabled={rzpSimulating}
+                  onClick={() => {
+                    const mockPaymentId = `pay_rzp_mock_${Date.now()}`;
+                    const mockSignature = `sig_rzp_mock_${Math.floor(100000 + Math.random() * 900000)}`;
+                    const orderRec = razorpayOrderSession?.receipt || 'SW-TEST';
+                    
+                    setRzpSimulating(true);
+                    setTimeout(async () => {
+                      try {
+                        await fetch('/api/razorpay/verify', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            orderId: orderRec,
+                            razorpay_order_id: razorpayOrderSession?.razorpay_order_id || 'order_mock',
+                            razorpay_payment_id: mockPaymentId,
+                            razorpay_signature: mockSignature
+                          })
+                        });
+
+                        handleSuccessfulCheckout();
+                        setShowRazorpaySDKSimulator(false);
+                        setShowOrderSuccess(true);
+                        setSuccessInfo(
+                          language === 'hi' 
+                            ? `शानदार! रेज़रपे टेस्ट भुगतान सफल (Payment ID: ${mockPaymentId})। ऑर्डर आईडी: ${orderRec}`
+                            : `Success! Test Razorpay payment of ₹${finalGrandTotal} completed! Payment ID: ${mockPaymentId}`
+                        );
+                      } catch (err) {
+                        console.error("Razorpay mock verify error:", err);
+                      } finally {
+                        setRzpSimulating(false);
+                      }
+                    }, 800);
+                  }}
+                  className="w-full py-3.5 bg-gradient-to-r from-cyan-400 to-emerald-400 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-cyan-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <CheckCircle className="h-4 w-4" />
+                  <span>{rzpSimulating ? "Processing Razorpay Payment..." : (isHindi ? "सिम्यूलेटेड भुगतान स्वीकृत करें (सफलता)" : "Complete Test Razorpay Payment (Success)")}</span>
+                </button>
+
+                <button
+                  onClick={() => setShowRazorpaySDKSimulator(false)}
+                  className="w-full py-2 bg-white/5 hover:bg-white/10 text-red-400 border border-white/10 text-[10px] font-extrabold uppercase rounded-xl transition-all"
+                >
+                  {isHindi ? "भुगतान रद्द करें" : "Cancel Razorpay Transaction"}
+                </button>
+              </div>
+
+            </div>
+
+            <div className="bg-slate-950 p-3 text-center text-[9px] text-slate-400 font-mono border-t border-white/10">
+              Razorpay 256-bit SSL Encrypted Sandbox Session
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

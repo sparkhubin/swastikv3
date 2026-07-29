@@ -296,7 +296,7 @@ export let fallbackOrders = [
     deliveryFee: 0,
     gst: 81,
     total: 530,
-    deliveryPartnerName: "Mohit Verma",
+    deliveryPartnerName: "Pradeep Kumar (Swastik Rider)",
     deliveryPartnerPhone: "+91 95400 12099",
     hubName: "Alpha Hub, Sector 12",
     eta: "15 Mins",
@@ -444,7 +444,8 @@ export async function sendWhatsappMessageUnified(
   isOtp = false,
   otpCode = undefined,
   templateName = undefined,
-  templateParams = []
+  templateParams = [],
+  mediaUrl = undefined
 ) {
   const metaPhoneId = process.env.META_WHATSAPP_PHONE_NUMBER_ID;
   const metaToken = process.env.META_WHATSAPP_ACCESS_TOKEN;
@@ -465,6 +466,30 @@ export async function sendWhatsappMessageUnified(
         ? templateParams.map(p => ({ type: "text", text: String(p) }))
         : (otpCode ? [{ type: "text", text: String(otpCode) }] : []);
 
+      const components = [];
+
+      if (mediaUrl) {
+        components.push({
+          type: "header",
+          parameters: [
+            {
+              type: "document",
+              document: {
+                link: mediaUrl,
+                filename: "Swastik_Invoice.pdf"
+              }
+            }
+          ]
+        });
+      }
+
+      if (paramsList.length > 0) {
+        components.push({
+          type: "body",
+          parameters: paramsList
+        });
+      }
+
       payload = {
         messaging_product: "whatsapp",
         recipient_type: "individual",
@@ -475,14 +500,7 @@ export async function sendWhatsappMessageUnified(
           language: {
             code: "en"
           },
-          ...(paramsList.length > 0 ? {
-            components: [
-              {
-                type: "body",
-                parameters: paramsList
-              }
-            ]
-          } : {})
+          ...(components.length > 0 ? { components } : {})
         }
       };
     } else {

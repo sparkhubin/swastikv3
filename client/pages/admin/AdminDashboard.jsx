@@ -58,6 +58,7 @@ import PaymentReports from './PaymentReports';
 import LocationGroupsManager from './LocationGroupsManager';
 import MargIntegration from './MargIntegration';
 import PaymentSettings from './PaymentSettings';
+import NotificationCenter from '../../components/NotificationCenter';
 
 export default function AdminDashboard({ onViewChange }) {
   const { isHindi } = useLanguage();
@@ -872,6 +873,9 @@ export default function AdminDashboard({ onViewChange }) {
           {/* C. Right Actions controllers & User profile */}
           <div className="flex flex-wrap items-center gap-2 text-[10px]">
             
+            {/* Real-time Admin Notification Bell */}
+            <NotificationCenter role="admin" />
+
             {/* Go to Client Storefront */}
             {onViewChange && (
               <button 
@@ -1037,25 +1041,40 @@ export default function AdminDashboard({ onViewChange }) {
                   {/* Chart 1: Sales Delivery Trends */}
                   <div className="bg-slate-900 border border-white/10 p-4 rounded-2xl space-y-4">
                     <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest block">Operational Dispatch SLA Split (Transit Status split)</span>
-                    <div className="relative h-44 flex items-end justify-between px-6 border-b border-white/10 pb-2">
+                    <div className="relative h-44 flex items-end justify-around px-4 border-b border-white/10 pb-2 overflow-hidden">
                       
-                      {/* Bar 1: Confirmed */}
-                      <div className="flex flex-col items-center gap-1.5 w-12">
-                        <div className="w-full bg-cyan-400/40 border border-cyan-400 rounded-t-lg transition-all hover:brightness-110" style={{ height: `${orders.filter(o => o.status === 'Confirmed' || !o.status).length * 40 || 25}px` }}></div>
-                        <span className="text-[8px] font-black uppercase text-slate-400">Confirmed ({orders.filter(o => o.status === 'Confirmed' || !o.status).length})</span>
-                      </div>
+                      {(() => {
+                        const confCount = orders.filter(o => o.status === 'Confirmed' || !o.status).length;
+                        const transCount = orders.filter(o => o.status === 'In Transit' || o.status === 'Dispatched').length;
+                        const delivCount = orders.filter(o => o.status === 'Delivered').length;
 
-                      {/* Bar 2: In transit */}
-                      <div className="flex flex-col items-center gap-1.5 w-12">
-                        <div className="w-full bg-amber-400/40 border border-amber-400 rounded-t-lg transition-all hover:brightness-110 animate-pulse" style={{ height: `${orders.filter(o => o.status === 'In Transit' || o.status === 'Dispatched').length * 45 || 15}px`, minHeight: '10px' }}></div>
-                        <span className="text-[8px] font-black uppercase text-slate-400">Transit ({orders.filter(o => o.status === 'In Transit' || o.status === 'Dispatched').length})</span>
-                      </div>
+                        const maxVal = Math.max(confCount, transCount, delivCount, 1);
+                        const confPct = Math.min(100, Math.max(12, Math.round((confCount / maxVal) * 100)));
+                        const transPct = Math.min(100, Math.max(12, Math.round((transCount / maxVal) * 100)));
+                        const delivPct = Math.min(100, Math.max(12, Math.round((delivCount / maxVal) * 100)));
 
-                      {/* Bar 3: Delivered SUCCESS */}
-                      <div className="flex flex-col items-center gap-1.5 w-12">
-                        <div className="w-full bg-emerald-400/40 border border-emerald-400 rounded-t-lg transition-all hover:brightness-110" style={{ height: `${orders.filter(o => o.status === 'Delivered').length * 40 || 45}px` }}></div>
-                        <span className="text-[8px] font-black uppercase text-emerald-400">Delivered ({orders.filter(o => o.status === 'Delivered').length})</span>
-                      </div>
+                        return (
+                          <>
+                            {/* Bar 1: Confirmed */}
+                            <div className="flex flex-col items-center gap-1.5 w-20 h-full justify-end">
+                              <div className="w-full bg-cyan-400/40 border border-cyan-400 rounded-t-lg transition-all hover:brightness-110" style={{ height: `${confPct}%` }}></div>
+                              <span className="text-[8.5px] font-black uppercase text-slate-400 whitespace-nowrap">Confirmed ({confCount})</span>
+                            </div>
+
+                            {/* Bar 2: In transit */}
+                            <div className="flex flex-col items-center gap-1.5 w-20 h-full justify-end">
+                              <div className="w-full bg-amber-400/40 border border-amber-400 rounded-t-lg transition-all hover:brightness-110 animate-pulse" style={{ height: `${transPct}%` }}></div>
+                              <span className="text-[8.5px] font-black uppercase text-slate-400 whitespace-nowrap">Transit ({transCount})</span>
+                            </div>
+
+                            {/* Bar 3: Delivered SUCCESS */}
+                            <div className="flex flex-col items-center gap-1.5 w-20 h-full justify-end">
+                              <div className="w-full bg-emerald-400/40 border border-emerald-400 rounded-t-lg transition-all hover:brightness-110" style={{ height: `${delivPct}%` }}></div>
+                              <span className="text-[8.5px] font-black uppercase text-emerald-400 whitespace-nowrap">Delivered ({delivCount})</span>
+                            </div>
+                          </>
+                        );
+                      })()}
 
                     </div>
                   </div>
@@ -1063,7 +1082,7 @@ export default function AdminDashboard({ onViewChange }) {
                   {/* Chart 2: Category volume split */}
                   <div className="bg-slate-900 border border-white/10 p-4 rounded-2xl space-y-3">
                     <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest block">In-Stock Store departments count split</span>
-                    <div className="space-y-2.5 pt-2">
+                    <div className="space-y-2.5 pt-2 max-h-36 overflow-y-auto pr-1">
                       {categories.map((c, index) => {
                         const count = products.filter(p => p.category === c.id).length;
                         const pct = Math.min(100, Math.round((count / (products.length || 1)) * 100));

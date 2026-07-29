@@ -1,12 +1,123 @@
 import React, { useState } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useData } from '../../context/DataContext';
-import { ShieldAlert, Smartphone, Database, RefreshCw, User } from 'lucide-react';
+import { 
+  ShieldAlert, 
+  Smartphone, 
+  Database, 
+  RefreshCw, 
+  User, 
+  Download, 
+  Upload, 
+  HardDrive, 
+  CheckCircle2, 
+  AlertTriangle, 
+  FileJson, 
+  Lock 
+} from 'lucide-react';
 import R2ImageUploader from './R2ImageUploader';
 
 export default function SecurityManager({ userRole, setUserRole }) {
   const { isHindi } = useLanguage();
-  const { userRole: glbRole, setUserRole: setGlbRole, changeStaffPassword } = useData();
+  const { userRole: glbRole, setUserRole: setGlbRole, changeStaffPassword, products = [], orders = [], partners = [], reviews = [], staff = [] } = useData();
+
+  // Database Backup & Restore States
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [restorePassword, setRestorePassword] = useState('');
+  const [restoreJsonFile, setRestoreJsonFile] = useState(null);
+  const [restoreStatus, setRestoreStatus] = useState({ success: null, message: '' });
+  const [isRestoring, setIsRestoring] = useState(false);
+
+  const handleDownloadDatabaseBackup = async () => {
+    setIsDownloading(true);
+    try {
+      const res = await fetch('/api/database/backup');
+      if (!res.ok) {
+        throw new Error(`Server returned HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(data, null, 2))}`;
+      const downloadAnchor = document.createElement('a');
+      const filename = `swastik_db_backup_${new Date().toISOString().split('T')[0]}.json`;
+      downloadAnchor.setAttribute("href", jsonString);
+      downloadAnchor.setAttribute("download", filename);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    } catch (e) {
+      console.error("Backup download error:", e);
+      alert(`❌ Failed to export database backup: ${e.message}`);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setRestoreJsonFile(file);
+      setRestoreStatus({ success: null, message: '' });
+    }
+  };
+
+  const handleRestoreSubmit = async (e) => {
+    e.preventDefault();
+    setRestoreStatus({ success: null, message: '' });
+
+    if (!restoreJsonFile) {
+      setRestoreStatus({ success: false, message: isHindi ? "कृपया बैकअप JSON फ़ाइल चुनें!" : "Please select a backup JSON file to restore." });
+      return;
+    }
+
+    if (!restorePassword) {
+      setRestoreStatus({ success: false, message: isHindi ? "सुरक्षा के लिए एडमिन पासवर्ड दर्ज करें!" : "Admin password required for restore authorization." });
+      return;
+    }
+
+    setIsRestoring(true);
+    try {
+      const fileText = await restoreJsonFile.text();
+      let backupData;
+      try {
+        backupData = JSON.parse(fileText);
+      } catch (err) {
+        setRestoreStatus({ success: false, message: isHindi ? "अमान्य JSON फ़ाइल स्वरूप!" : "Invalid JSON file format. Restoration cancelled." });
+        setIsRestoring(false);
+        return;
+      }
+
+      const res = await fetch('/api/database/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: restorePassword.trim(),
+          backupData
+        })
+      });
+
+      const responseData = await res.json();
+
+      if (res.ok) {
+        setRestoreStatus({
+          success: true,
+          message: `✓ ${responseData.message || 'Database restored successfully!'} Refreshing data...`
+        });
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      } else {
+        setRestoreStatus({
+          success: false,
+          message: `❌ ${responseData.error || 'Restore failed due to authorization or schema error.'}`
+        });
+      }
+    } catch (e) {
+      console.error("Restore error:", e);
+      setRestoreStatus({ success: false, message: `❌ Connection Error: ${e.message}` });
+    } finally {
+      setIsRestoring(false);
+    }
+  };
 
   const [staffData, setStaffData] = useState(() => {
     const savedStr = localStorage.getItem('swastik_logged_in_staff');
@@ -345,6 +456,119 @@ export default function SecurityManager({ userRole, setUserRole }) {
           </div>
 
         </form>
+      </div>
+
+      {/* Database Backup & Disaster Recovery Console */}
+      <div className="bg-slate-900 border border-cyan-500/30 rounded-3xl p-6 space-y-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+          <div className="space-y-1">
+            <h3 className="text-sm font-black uppercase text-cyan-300 tracking-wider flex items-center gap-2">
+              <Database className="h-5 w-5 text-cyan-400" />
+              <span>{isHindi ? "डेटाबेस बैकअप एवं रिकवरी केंद्र" : "Database Backup & Disaster Recovery Center"}</span>
+            </h3>
+            <p className="text-[11px] text-slate-400 font-semibold">
+              {isHindi ? "अपने पूरे SQLite / SQL डेटाबेस का संपूर्ण लाइव JSON बैकअप लें या बैकअप फ़ाइल से डेटा पुनर्स्थापित करें।" : "Export complete SQLite database tables into timestamped JSON backup files or restore state securely."}
+            </p>
+          </div>
+          
+          <button
+            type="button"
+            onClick={handleDownloadDatabaseBackup}
+            disabled={isDownloading}
+            className="px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-cyan-500/20 active:scale-95 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 shrink-0"
+          >
+            <Download className="h-4 w-4" />
+            <span>{isDownloading ? (isHindi ? "एक्सपोर्ट हो रहा है..." : "Exporting...") : (isHindi ? "लाइव बैकअप डाउनलोड करें" : "Download Live Backup (.JSON)")}</span>
+          </button>
+        </div>
+
+        {/* Database Live Stats Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-slate-950/80 border border-white/10 rounded-2xl p-3.5 space-y-1 text-center">
+            <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Total Products</span>
+            <span className="text-lg font-black font-mono text-cyan-300">{products.length}</span>
+          </div>
+          <div className="bg-slate-950/80 border border-white/10 rounded-2xl p-3.5 space-y-1 text-center">
+            <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Total Orders</span>
+            <span className="text-lg font-black font-mono text-emerald-300">{orders.length}</span>
+          </div>
+          <div className="bg-slate-950/80 border border-white/10 rounded-2xl p-3.5 space-y-1 text-center">
+            <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Active Partners</span>
+            <span className="text-lg font-black font-mono text-amber-300">{partners.length}</span>
+          </div>
+          <div className="bg-slate-950/80 border border-white/10 rounded-2xl p-3.5 space-y-1 text-center">
+            <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Database Path</span>
+            <span className="text-[10px] font-bold font-mono text-slate-300 truncate block" title="/app/applet/swastik_local.db">swastik_local.db</span>
+          </div>
+        </div>
+
+        {/* Restore Section */}
+        <div className="bg-slate-950 border border-white/10 rounded-2xl p-5 space-y-4">
+          <div className="space-y-1">
+            <h4 className="text-xs font-black uppercase text-amber-300 tracking-wider flex items-center gap-1.5">
+              <Upload className="h-4 w-4 text-amber-400" />
+              <span>{isHindi ? "फ़ाइल से डेटाबेस रीस्टोर करें" : "Restore Database from Backup File"}</span>
+            </h4>
+            <p className="text-[10px] text-slate-400">
+              {isHindi ? "पहले से डाउनलोड किए गए बैकअप JSON फ़ाइल को चुनकर डेटाबेस रीस्टोर करें। एडमिन सुरक्षा पासवर्ड अनिवार्य है।" : "Select a previously downloaded .json backup file. Authorize with admin security password to replace or restore data."}
+            </p>
+          </div>
+
+          <form onSubmit={handleRestoreSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[9px] uppercase tracking-widest text-slate-400 block font-black">
+                  {isHindi ? "बैकअप JSON फ़ाइल *" : "Select Backup JSON File *"}
+                </label>
+                <div className="flex items-center gap-2 bg-slate-900 border border-white/15 rounded-xl p-2">
+                  <FileJson className="h-4 w-4 text-cyan-400 shrink-0 ml-1" />
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleFileChange}
+                    className="text-xs text-slate-300 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-cyan-500/20 file:text-cyan-300 hover:file:bg-cyan-500/30 cursor-pointer w-full"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[9px] uppercase tracking-widest text-slate-400 block font-black">
+                  {isHindi ? "एडमिन सुरक्षा पासवर्ड *" : "Admin Security Password *"}
+                </label>
+                <div className="relative">
+                  <input
+                    type="password"
+                    required
+                    placeholder={isHindi ? "पासवर्ड दर्ज करें (उदा. admin123)..." : "Enter admin password (e.g. admin123)..."}
+                    value={restorePassword}
+                    onChange={(e) => setRestorePassword(e.target.value)}
+                    className="w-full bg-slate-900 border border-white/15 px-3.5 py-2.5 rounded-xl outline-none text-white text-xs font-mono placeholder:text-slate-600"
+                  />
+                  <Lock className="h-3.5 w-3.5 text-slate-500 absolute right-3 top-3" />
+                </div>
+              </div>
+            </div>
+
+            {restoreStatus.message && (
+              <div className={`p-3 rounded-xl border text-xs font-bold ${
+                restoreStatus.success ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-red-500/10 border-red-500/30 text-red-300'
+              }`}>
+                {restoreStatus.message}
+              </div>
+            )}
+
+            <div className="flex justify-end pt-1">
+              <button
+                type="submit"
+                disabled={isRestoring || !restoreJsonFile}
+                className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isRestoring ? 'animate-spin' : ''}`} />
+                <span>{isRestoring ? (isHindi ? "रीस्टोर हो रहा है..." : "Restoring Database...") : (isHindi ? "डेटाबेस रीस्टोर शुरू करें" : "Authorize & Restore Database")}</span>
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
 
     </div>

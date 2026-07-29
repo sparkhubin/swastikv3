@@ -74,6 +74,13 @@ function AppContent() {
     }
   }, [currentView]);
 
+  // Quick navigation handlers from Flyout Menu
+  const handleSidebarNav = (view, catId = 'all') => {
+    setCurrentView(view);
+    setActiveCategory(catId);
+    setSearchQuery('');
+    setIsSidebarOpen(false);
+  };
 
   const handleSearchClick = () => {
     setCurrentView('shop');
@@ -85,14 +92,6 @@ function AppContent() {
         searchInput.focus();
       }
     }, 150);
-  };
-
-  // Quick navigation handlers from Flyout Menu
-  const handleSidebarNav = (view, catId = 'all') => {
-    setCurrentView(view);
-    setActiveCategory(catId);
-    setSearchQuery('');
-    setIsSidebarOpen(false);
   };
 
   const handleSlideClick = (linkType, linkValue) => {

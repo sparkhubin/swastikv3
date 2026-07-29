@@ -121,24 +121,11 @@ router.post("/marg/bill", upload.any(), async (req, res) => {
   }
 
   // Extract variables with flexible aliases to support various billing configurations
-  const billNumber = req.body.billNumber || req.body.billNo || req.body.invoiceNo || req.body.bill_no || req.body.invoice_no;
   const customerMobile = req.body.customerMobile || req.body.mobile || req.body.phone;
-  const customerName = req.body.customerName || req.body.name || "In-Store Customer";
-  const billAmount = req.body.billAmount || req.body.amount || req.body.total;
-  
-  // Parse items safely
-  let items = req.body.items;
-  if (typeof items === "string") {
-    try {
-      items = JSON.parse(items);
-    } catch (e) {
-      // Treat as comma separated names if parsing fails
-      items = items.split(",").map((name) => ({ name: name.trim() }));
-    }
-  }
+  const billNumber = req.body.billNumber || req.body.billNo || req.body.invoiceNo || req.body.bill_no || req.body.invoice_no || "BILL";
 
-  if (!billNumber || !customerMobile || !billAmount) {
-    const errorMsg = "Bad Request: Missing required parameters. Please provide billNumber, customerMobile, and billAmount.";
+  if (!customerMobile) {
+    const errorMsg = "Bad Request: Missing customer mobile number. Please provide 'customerMobile', 'mobile', or 'phone'.";
     try {
       await db.execute(
         "INSERT INTO marg_log (type, message) VALUES (?, ?)",
@@ -210,110 +197,47 @@ router.post("/marg/bill", upload.any(), async (req, res) => {
   // Final PDF URL
   const pdfUrl = uploadedPdfUrl || req.body.pdfUrl || req.body.billUrl || req.body.pdf || req.body.fileUrl;
 
-  const pointsRatio = margSettings.pointsRatio || 10;
-  const pointsEarned = Math.floor(Number(billAmount) / pointsRatio);
-  const orderId = `MARG-${billNumber}`;
-  const parsedItems = Array.isArray(items) ? items : [];
-
-  try {
-    await db.execute(
-      `INSERT INTO "order" (
-        id, user_id, order_date, is_active, step_level, status_label, 
-        subtotal, delivery_fee, gst_amount, grand_total, 
-        delivery_partner_name, delivery_partner_phone, dispatch_hub, 
-        eta_status, shipping_address, customer_name, customer_phone, 
-        is_marg_bill, points_earned, pdf_url
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        orderId,
-        null,
-        new Date().toISOString(),
-        0, // inactive
-        2, // delivered
-        "Delivered",
-        Number(billAmount),
-        0,
-        Math.round(Number(billAmount) * 0.18),
-        Number(billAmount),
-        "In-Store Billing (MARG ERP)",
-        "N/A",
-        "Swastik Supermarket Counter",
-        "Completed",
-        "Physical Counter Purchase",
-        String(customerName),
-        String(customerMobile),
-        1, // true (is_marg_bill)
-        pointsEarned,
-        pdfUrl || ""
-      ]
-    );
-
-    const finalItems = parsedItems.length > 0 ? parsedItems : [{ name: "Supermarket Invoice Bundle", price: billAmount, qty: 1, weight: "N/A" }];
-    for (let index = 0; index < finalItems.length; index++) {
-      const it = finalItems[index];
-      await db.execute(
-        `INSERT INTO order_item (
-          order_id, product_id, name_en, name_hi, price, qty, weight_label
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [
-          orderId,
-          0,
-          String(it.name || "Supermarket Item"),
-          String(it.name || "सुपरमार्केट सामग्री"),
-          Number(it.price || 0),
-          Number(it.qty || 1),
-          String(it.weight || "N/A")
-        ]
-      );
-    }
-  } catch (err) {
-    console.error("Failed to insert MARG order to SQL DB:", err.message);
-  }
-
-  const successMsg = `MARG invoice #${billNumber} of ₹${billAmount} for customer +91 ${customerMobile} successfully processed! Awarded ${pointsEarned} loyalty PTS.${pdfUrl ? " [Receipt Attached]" : ""}`;
+  const successMsg = `MARG PDF bill received for customer +91 ${customerMobile}.${pdfUrl ? " [PDF Attached]" : ""}`;
   try {
     await db.execute(
       "INSERT INTO marg_log (type, message, payload) VALUES (?, ?, ?)",
-      ["SUCCESS", successMsg, JSON.stringify({ billNumber, customerMobile, customerName, billAmount, pointsEarned, pdfUrl })]
+      ["SUCCESS", successMsg, JSON.stringify({ billNumber, customerMobile, pdfUrl })]
     );
   } catch (e) {}
 
   let whatsappStatus = "SKIPPED_BY_CONFIG";
+  let whatsappError = undefined;
   if (margSettings.autoNotifyWhatsApp) {
-    const host = req.get("x-forwarded-host") || req.get("host") || "swastiksupermarket.com";
-    const protocol = req.secure || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
-    const baseUrl = `${protocol}://${host}`;
+    const waText = "Thank you for shopping at Swastik Supermarket 😊\n\nWe appreciate your visit.";
+    const reqTemplateName = req.body.templateName || req.body.template_name || "thank_you_template";
+    const reqTemplateParams = req.body.templateParams || req.body.template_params || [];
 
-    let waMessage = `*Swastik Supermarket - Digital Bill Generated* 🧾\n\n`;
-    waMessage += `Dear *${customerName}*,\n`;
-    waMessage += `Thank you for shopping at Swastik Supermarket! Your invoice *#${billNumber}* has been generated.\n\n`;
-    waMessage += `💰 *Bill Amount:* ₹${billAmount}\n`;
-    waMessage += `🎁 *Loyalty Points Earned:* *${pointsEarned} PTS*\n\n`;
-    
-    if (pdfUrl) {
-      waMessage += `📂 *Download PDF Receipt:* ${pdfUrl}\n\n`;
-    }
-    
-    waMessage += `Track your wallet & view past digital invoices anytime:\n🔗 ${baseUrl}/account\n\n`;
-    waMessage += `We look forward to serving you again! 😊`;
-
-    const waRes = await sendWhatsappMessageUnified(customerMobile, waMessage);
+    const waRes = await sendWhatsappMessageUnified(
+      customerMobile, 
+      waText, 
+      false, 
+      undefined, 
+      reqTemplateName, 
+      reqTemplateParams,
+      pdfUrl || undefined
+    );
     whatsappStatus = waRes.success ? `SUCCESS_${waRes.provider.toUpperCase()}` : `ERROR_${waRes.provider.toUpperCase()}`;
+    whatsappError = waRes.error || undefined;
 
     try {
       await db.execute(
         "INSERT INTO marg_log (type, message) VALUES (?, ?)",
-        ["WHATSAPP", `[WhatsApp Outbox Engine] Dispatched via ${waRes.provider} billing receipt to +91 ${customerMobile}: "${waMessage.substring(0, 100)}..."`]
+        ["WHATSAPP", `[WhatsApp Outbox Engine] Dispatched template '${reqTemplateName}' with PDF to +91 ${customerMobile}. Status: ${whatsappStatus}${whatsappError ? ' Error: ' + whatsappError : ''}`]
       );
     } catch (e) {}
   }
 
   res.json({
     status: "success",
-    message: "MARG bill processed and saved successfully",
-    billNumber,
-    pointsAwarded: pointsEarned,
+    message: "MARG PDF bill received and dispatched to WhatsApp",
+    customerMobile,
     whatsappStatus,
+    whatsappError,
     pdfUrl: pdfUrl || undefined,
     timestamp: new Date().toISOString()
   });

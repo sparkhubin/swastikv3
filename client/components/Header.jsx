@@ -3,6 +3,7 @@ import { Menu, Search, Languages, Home, Store, ShoppingCart, Users, ShieldAlert,
 import { useLanguage } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
 import { useData } from '../context/DataContext';
+import NotificationCenter from './NotificationCenter';
 
 export default function Header({ onMenuClick, onSearchClick, currentView, onViewChange }) {
   const { language, setLanguage, t } = useLanguage();
@@ -95,6 +96,9 @@ export default function Header({ onMenuClick, onSearchClick, currentView, onView
 
         {/* Right Section */}
         <div className="flex items-center gap-3">
+          {/* Real-time Customer Notification Bell */}
+          <NotificationCenter role="customer" />
+
           {/* Custom Language Selector Toggle with real active indicator */}
           <button
             onClick={toggleLanguage}

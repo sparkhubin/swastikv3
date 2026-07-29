@@ -56,7 +56,174 @@ import PreferencesTab from '../components/account/PreferencesTab';
 export default function Account({ onViewChange }) {
   const { language, setLanguage, t } = useLanguage();
   const isHindi = language === 'hi';
-  const { orders, referralSettings, customers, primeSettings, updateCustomer, addCustomer, addOrder, paymentEnabled, paymentEnvironment } = useData();
+  const { orders, referralSettings, customers, primeSettings, updateCustomer, addCustomer, addOrder, deleteOrder, paymentEnabled, paymentEnvironment, contactSettings } = useData();
+
+  // Print Official Tax Invoice PDF
+  const handlePrintInvoice = (order) => {
+    if (!order) return;
+    const storeName = contactSettings?.brandName || "Swastik Supermarket";
+    const storeAddress = contactSettings?.address || "Plot No 46, Block-B, Sector 18, Noida, UP 201301";
+    const storePhone = contactSettings?.phone || "+91 11 2345 6789";
+    const storeEmail = contactSettings?.email || "support@swastik.com";
+    const storeGst = contactSettings?.gst || contactSettings?.gstin || "09AAAAA0000A1Z5";
+    const storeFssai = contactSettings?.fssai || "12721001000123";
+    const storeLogo = contactSettings?.logo || "";
+
+    const custName = order.customerName || order.name || profile?.fullName || "Valued Customer";
+    const custPhone = order.customerPhone || order.customerMobile || order.phone || profile?.phone || "N/A";
+    const custAddress = order.shippingAddress || order.address || "Store Pickup";
+    const custEmail = order.customerEmail || order.email || profile?.email || "N/A";
+
+    const items = order.items || [];
+    const subtotal = Number(order.subtotal || order.total || 0);
+    const gst = Number(order.gst || Math.round(subtotal * 0.05));
+    const deliveryFee = Number(order.deliveryFee || 0);
+    const referralDiscount = Number(order.referralDiscount || 0);
+    const couponDiscount = Number(order.couponDiscount || 0);
+    const celebrationDiscount = Number(order.celebrationDiscount || 0);
+    const grandTotal = Number(order.total || order.grand_total || (subtotal + gst + deliveryFee - referralDiscount - couponDiscount - celebrationDiscount));
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Tax Invoice - #${order.id} - ${storeName}</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { font-family: 'Segoe UI', Arial, sans-serif; background: #ffffff; color: #0f172a; margin: 0; padding: 24px; font-size: 12px; line-height: 1.4; }
+            .invoice-box { max-width: 800px; margin: 0 auto; border: 2px solid #cbd5e1; padding: 28px; border-radius: 16px; background: #ffffff; }
+            .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0284c7; padding-bottom: 18px; margin-bottom: 18px; }
+            .brand-logo-title { display: flex; align-items: center; gap: 14px; }
+            .brand-logo-title img { max-height: 55px; max-width: 120px; object-fit: contain; border-radius: 8px; border: 1px solid #e2e8f0; }
+            .brand-name { font-size: 22px; font-weight: 900; color: #0284c7; text-transform: uppercase; margin: 0; letter-spacing: 0.5px; }
+            .store-contact { font-size: 11px; color: #475569; margin-top: 4px; font-weight: 500; }
+            .invoice-heading { text-align: right; }
+            .tax-badge { font-size: 20px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 1px; }
+            .inv-no { font-size: 12px; font-weight: 800; color: #0284c7; margin-top: 4px; font-family: monospace; }
+            .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+            .meta-card { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px; }
+            .card-head { font-size: 11px; font-weight: 800; text-transform: uppercase; color: #0284c7; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 8px; letter-spacing: 0.5px; }
+            .row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 11px; }
+            .row-label { color: #64748b; font-weight: 600; }
+            .row-val { color: #0f172a; font-weight: 700; word-break: break-word; text-align: right; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 20px; }
+            th { background: #0f172a; color: #ffffff; text-transform: uppercase; font-size: 10px; font-weight: 800; padding: 10px 12px; text-align: left; letter-spacing: 0.5px; }
+            td { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 11px; font-weight: 600; }
+            .summary-container { display: flex; justify-content: flex-end; }
+            .summary-box { width: 320px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 16px; }
+            .summary-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 11px; }
+            .total-row { border-top: 2px solid #0f172a; padding-top: 8px; margin-top: 8px; font-size: 15px; font-weight: 900; color: #0284c7; }
+            .footer { margin-top: 26px; text-align: center; border-top: 1px dashed #cbd5e1; padding-top: 16px; font-size: 10px; color: #64748b; }
+            @media print {
+              body { padding: 0; background: #fff; }
+              .invoice-box { border: none; padding: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="invoice-box">
+            <div class="header">
+              <div class="brand-logo-title">
+                ${storeLogo ? `<img src="${storeLogo}" alt="Logo" />` : ''}
+                <div>
+                  <h1 class="brand-name">${storeName}</h1>
+                  <div class="store-contact">
+                    <div><b>Address:</b> ${storeAddress}</div>
+                    <div><b>Helpline:</b> ${storePhone} | <b>Email:</b> ${storeEmail}</div>
+                    ${storeGst ? `<div><b>GSTIN:</b> ${storeGst} | <b>FSSAI Lic:</b> ${storeFssai}</div>` : ''}
+                  </div>
+                </div>
+              </div>
+              <div class="invoice-heading">
+                <div class="tax-badge">TAX INVOICE</div>
+                <div class="inv-no">ORDER #${order.id}</div>
+                <div style="font-size: 10px; color: #64748b; margin-top: 2px;">
+                  Date: ${order.orderDate ? new Date(order.orderDate).toLocaleDateString() : new Date().toLocaleDateString()}
+                </div>
+              </div>
+            </div>
+
+            <div class="meta-grid">
+              <div class="meta-card">
+                <div class="card-head">CUSTOMER DETAILS (ग्राहक जानकारी)</div>
+                <div class="row"><span class="row-label">Customer Name:</span> <span class="row-val">${custName}</span></div>
+                <div class="row"><span class="row-label">Mobile Number:</span> <span class="row-val">${custPhone}</span></div>
+                <div class="row"><span class="row-label">Delivery Address:</span> <span class="row-val">${custAddress}</span></div>
+                <div class="row"><span class="row-label">Email ID:</span> <span class="row-val">${custEmail}</span></div>
+              </div>
+
+              <div class="meta-card">
+                <div class="card-head">ORDER & PAYMENT SUMMARY</div>
+                <div class="row"><span class="row-label">Payment Method:</span> <span class="row-val">${order.paymentMethod || 'COD'}</span></div>
+                <div class="row"><span class="row-label">Payment Status:</span> <span class="row-val" style="color:${(order.paymentStatus||'').toUpperCase()==='PAID' ? '#16a34a' : '#d97706'}">${order.paymentStatus || 'PENDING'}</span></div>
+                <div class="row"><span class="row-label">Order Status:</span> <span class="row-val">${order.status || 'CONFIRMED'}</span></div>
+                <div class="row"><span class="row-label">Assigned Rider:</span> <span class="row-val">${order.deliveryPartnerName || 'Swastik Rider'} (${order.deliveryPartnerPhone || '+91 95400 12099'})</span></div>
+              </div>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Item Name</th>
+                  <th>Weight/Size</th>
+                  <th style="text-align:center;">Qty</th>
+                  <th style="text-align:right;">Unit Price</th>
+                  <th style="text-align:right;">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${items.map((it, idx) => `
+                  <tr>
+                    <td>${idx + 1}</td>
+                    <td><b>${it.nameEn || it.nameHi || it.name || 'Grocery Item'}</b></td>
+                    <td>${it.weight || it.unit || '1 Unit'}</td>
+                    <td style="text-align:center;"><b>${it.qty || it.quantity || 1}</b></td>
+                    <td style="text-align:right;">₹${it.price || 0}</td>
+                    <td style="text-align:right; font-weight:800;">₹${(it.price || 0) * (it.qty || it.quantity || 1)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+
+            <div class="summary-container">
+              <div class="summary-box">
+                <div class="summary-row"><span class="row-label">Subtotal:</span> <span class="row-val">₹${subtotal}</span></div>
+                <div class="summary-row"><span class="row-label">GST Tax:</span> <span class="row-val">₹${gst}</span></div>
+                <div class="summary-row"><span class="row-label">Delivery Fee:</span> <span class="row-val">${deliveryFee === 0 ? 'FREE' : `₹${deliveryFee}`}</span></div>
+                ${referralDiscount > 0 ? `<div class="summary-row" style="color:#d97706;"><span class="row-label">Referral Discount:</span> <span class="row-val">-₹${referralDiscount}</span></div>` : ''}
+                ${couponDiscount > 0 ? `<div class="summary-row" style="color:#16a34a;"><span class="row-label">Coupon Discount:</span> <span class="row-val">-₹${couponDiscount}</span></div>` : ''}
+                ${celebrationDiscount > 0 ? `<div class="summary-row" style="color:#9333ea;"><span class="row-label">Celebration Discount:</span> <span class="row-val">-₹${celebrationDiscount}</span></div>` : ''}
+                
+                <div class="summary-row total-row">
+                  <span>Grand Total:</span>
+                  <span>₹${grandTotal}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="footer">
+              <p style="font-weight: 800; color: #0284c7; margin-bottom: 4px;">THANK YOU FOR SHOPPING AT ${storeName.toUpperCase()}!</p>
+              <p>This is an official computer-generated tax invoice. Goods once sold are backed by our 100% Quality & Freshness Guarantee.</p>
+              <p style="font-size: 9px; font-family: monospace; color: #94a3b8; margin-top: 6px;">STORE HELPLINE: ${storePhone} | WEBSITE: SWASTIKSUPERMARKET.COM</p>
+            </div>
+          </div>
+
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 600);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
 
   const [cashfreeOrderSession, setCashfreeOrderSession] = useState(null);
   const [cfSimulatingProgress, setCfSimulatingProgress] = useState('');
@@ -587,8 +754,8 @@ export default function Account({ onViewChange }) {
     }
     setSimulatedOtp(realWaCode);
     alert(isHindi 
-      ? `🔑 [स्वास्तिक सुरक्षा ओटीपी]: व्हाट्सएप पर भेजा गया कोड` 
-      : `🔑 [Swastik Security OTP]: WhatsApp Code Sent`
+      ? `🔑 [स्वास्तिक सुरक्षा ओटीपी]: व्हाट्सएप पर भेजा गया कोड: ${realWaCode}` 
+      : `🔑 [Swastik Security OTP]: WhatsApp Code Sent: ${realWaCode}`
     );
   };
 
@@ -2469,6 +2636,32 @@ export default function Account({ onViewChange }) {
               </div>
             </div>
 
+            {/* Customer & Store Details Section */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 bg-white/5 p-3 rounded-2xl border border-white/10 text-xs">
+              {/* Customer Details */}
+              <div className="space-y-1">
+                <span className="text-[9px] font-extrabold uppercase tracking-widest text-cyan-400 block mb-1">
+                  {isHindi ? "ग्राहक विवरण" : "Customer Details"}
+                </span>
+                <p className="text-white font-bold">{selectedOrder.customerName || selectedOrder.name || profile?.fullName || "Valued Customer"}</p>
+                <p className="text-slate-300 text-[11px] font-mono">📱 {selectedOrder.customerPhone || selectedOrder.customerMobile || selectedOrder.phone || profile?.phone || "N/A"}</p>
+                <p className="text-slate-400 text-[10px] line-clamp-2">📍 {selectedOrder.shippingAddress || selectedOrder.address || "Store Pickup"}</p>
+              </div>
+
+              {/* Store / Office Details */}
+              <div className="space-y-1 sm:border-l sm:border-white/10 sm:pl-3">
+                <span className="text-[9px] font-extrabold uppercase tracking-widest text-cyan-400 block mb-1">
+                  {isHindi ? "दुकान/कार्यालय विवरण" : "Store/Office Details"}
+                </span>
+                <p className="text-white font-bold">{contactSettings?.brandName || "Swastik Supermarket"}</p>
+                <p className="text-slate-300 text-[11px] font-mono">☎️ {contactSettings?.phone || "+91 11 2345 6789"}</p>
+                <p className="text-slate-400 text-[10px] line-clamp-2">🏢 {contactSettings?.address || "Sector 18, Noida, UP"}</p>
+                {contactSettings?.gst && (
+                  <p className="text-slate-500 text-[9px] font-mono">GSTIN: {contactSettings.gst}</p>
+                )}
+              </div>
+            </div>
+
             {/* List of Ordered items */}
             <div className="space-y-3 mb-5">
               <span className="text-[9px] font-extrabold uppercase tracking-widest text-slate-400 block">
@@ -2503,11 +2696,11 @@ export default function Account({ onViewChange }) {
                 
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-full bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-300 font-extrabold text-xs shrink-0 uppercase">
-                    {(selectedOrder.deliveryPartnerName || 'Mohit Verma').split(' ')[0][0]}
+                    {(selectedOrder.deliveryPartnerName || 'Swastik Rider').split(' ')[0][0]}
                   </div>
                   <div>
-                    <h5 className="font-bold text-white leading-none">{selectedOrder.deliveryPartnerName || 'Mohit Verma (Assigned)'}</h5>
-                    <p className="text-[9px] text-slate-500 mt-0.5">{selectedOrder.hubName || 'Alpha Hub, Sector 12'}</p>
+                    <h5 className="font-bold text-white leading-none">{selectedOrder.deliveryPartnerName || (isHindi ? 'स्वास्तिक राइडर (असाइन किया गया)' : 'Swastik Delivery Executive')}</h5>
+                    <p className="text-[9px] text-slate-500 mt-0.5">{selectedOrder.hubName || 'Dispatch Hub, Sector 12'}</p>
                   </div>
                 </div>
 
@@ -2592,13 +2785,24 @@ export default function Account({ onViewChange }) {
               </div>
             </div>
 
-            {/* Back buttons action */}
-            <button
-              onClick={() => setSelectedOrder(null)}
-              className="mt-6 w-full py-3 bg-white/10 hover:bg-white/15 border border-white/10 rounded-xl font-bold text-xs uppercase tracking-wider text-center transition-all text-white active:scale-95"
-            >
-              {isHindi ? "वापस खाता डैशबोर्ड पर" : "Close & Leave Details"}
-            </button>
+            {/* Action buttons */}
+            <div className="mt-6 flex flex-col sm:flex-row gap-3">
+              <button
+                type="button"
+                onClick={() => handlePrintInvoice(selectedOrder)}
+                className="flex-1 py-3 bg-sky-600 hover:bg-sky-500 border border-sky-400/30 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+              >
+                <Printer className="h-4 w-4" />
+                <span>{isHindi ? "टैक्स बिल / चालान प्रिंट करें" : "Print Official Tax Invoice"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedOrder(null)}
+                className="py-3 px-6 bg-white/10 hover:bg-white/15 border border-white/10 rounded-xl font-bold text-xs uppercase tracking-wider text-center transition-all text-white active:scale-95 cursor-pointer"
+              >
+                {isHindi ? "बंद करें" : "Close"}
+              </button>
+            </div>
 
           </div>
         </div>

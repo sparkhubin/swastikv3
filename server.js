@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 dotenv.config();
 import { createServer } from "./server/app.js";
 
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
 
 async function bootstrap() {
   const app = await createServer();

@@ -22,6 +22,8 @@ import whatsappRouter from "./routes/whatsapp.js";
 import margRouter from "./routes/marg.js";
 import configRouter from "./routes/config.js";
 import settingsRouter from "./routes/settings.js";
+import backupRouter from "./routes/backup.js";
+import notificationsRouter from "./routes/notifications.js";
 
 export async function createServer() {
   const app = express();
@@ -72,6 +74,8 @@ export async function createServer() {
   app.use("/api", margRouter);
   app.use("/api", configRouter);
   app.use("/api", settingsRouter);
+  app.use("/api", backupRouter);
+  app.use("/api", notificationsRouter);
 
   // --- Vite Dev or Production Static Hosting ---
   if (process.env.NODE_ENV !== "production") {

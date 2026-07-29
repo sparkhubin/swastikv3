@@ -130,7 +130,7 @@ const initialOrders = [
     deliveryFee: 0,
     gst: 81,
     total: 530,
-    deliveryPartnerName: "Mohit Verma",
+    deliveryPartnerName: "Pradeep Kumar (Swastik Rider)",
     deliveryPartnerPhone: "+91 95400 12099",
     hubName: "Alpha Hub, Sector 12",
     eta: "15 Mins",
@@ -516,7 +516,10 @@ export function DataProvider({ children }) {
         settingsLoaded.current = false;
 
         if (settingsData) {
-          if (settingsData.swastik_location_groups) setLocationGroups(settingsData.swastik_location_groups);
+          if (settingsData.swastik_location_groups && Array.isArray(settingsData.swastik_location_groups) && settingsData.swastik_location_groups.length > 0) {
+            setLocationGroups(settingsData.swastik_location_groups);
+            try { localStorage.setItem('swastik_location_groups', JSON.stringify(settingsData.swastik_location_groups)); } catch (_) {}
+          }
           if (settingsData.swastik_referral_settings) setReferralSettings(settingsData.swastik_referral_settings);
           if (settingsData.swastik_celebration_settings) setCelebrationSettings(settingsData.swastik_celebration_settings);
           if (settingsData.swastik_prime_settings) setPrimeSettings(settingsData.swastik_prime_settings);
@@ -532,8 +535,10 @@ export function DataProvider({ children }) {
     } catch (e) {
       console.warn("Failed to fetch dynamic settings from DB:", e);
     } finally {
-      // Mark as loaded so any subsequent user-driven state changes sync with DB
-      settingsLoaded.current = true;
+      // Delay marking as loaded so React state updates settle completely without triggering accidental DB overwrites
+      setTimeout(() => {
+        settingsLoaded.current = true;
+      }, 800);
     }
 
     try {
@@ -905,6 +910,31 @@ export function DataProvider({ children }) {
     }
   };
 
+  const deleteOrder = async (id) => {
+    try {
+      const target = orders.find(o => o.id === id || String(o.id) === String(id));
+      if (target) {
+        // Restore redeemed loyalty points to customer profile if applicable
+        const redeemedPts = Number(target.appliedPoints || target.pointsRedeemed || 0);
+        const custPhone = target.customerPhone || target.userMobile || target.phone;
+        if (redeemedPts > 0 && custPhone) {
+          setCustomers(prev => prev.map(c => {
+            if (c.mobile === custPhone || c.phone === custPhone) {
+              return { ...c, points: (c.points || 0) + redeemedPts };
+            }
+            return c;
+          }));
+        }
+      }
+
+      await fetch(`/api/orders/${id}`, { method: 'DELETE' });
+      setOrders(prev => prev.filter(o => o.id !== id && String(o.id) !== String(id)));
+    } catch (e) {
+      console.error("Order deletion error:", e);
+      setOrders(prev => prev.filter(o => o.id !== id && String(o.id) !== String(id)));
+    }
+  };
+
   // Dynamic categories CRUD
   const addCategory = (cat) => {
     setCategories(prev => [...prev, cat]);
@@ -1113,6 +1143,7 @@ export function DataProvider({ children }) {
       orders,
       addOrder,
       updateOrder,
+      deleteOrder,
       userRole,
       setUserRole,
       categories,

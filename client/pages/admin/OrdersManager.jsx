@@ -23,16 +23,217 @@ import {
   Edit,
   Plus,
   Trash2,
-  Save
+  Save,
+  Lock
 } from 'lucide-react';
 import R2ImageUploader from './R2ImageUploader';
+import NotificationCenter from '../../components/NotificationCenter';
 
 export default function OrdersManager({ userRole }) {
   const { isHindi } = useLanguage();
-  const { orders, updateOrder, addOrder, products, offers } = useData();
+  const { orders, updateOrder, deleteOrder, addOrder, products, offers, staff, contactSettings } = useData();
+
+  // Print Official Tax Invoice PDF
+  const handlePrintInvoice = (order) => {
+    if (!order) return;
+    const storeName = contactSettings?.brandName || "Swastik Supermarket";
+    const storeAddress = contactSettings?.address || "Plot No 46, Block-B, Sector 18, Noida, UP 201301";
+    const storePhone = contactSettings?.phone || "+91 11 2345 6789";
+    const storeEmail = contactSettings?.email || "support@swastik.com";
+    const storeGst = contactSettings?.gst || contactSettings?.gstin || "09AAAAA0000A1Z5";
+    const storeFssai = contactSettings?.fssai || "12721001000123";
+    const storeLogo = contactSettings?.logo || "";
+
+    const custName = order.customerName || order.name || "Valued Customer";
+    const custPhone = order.customerPhone || order.customerMobile || order.phone || "N/A";
+    const custAddress = order.shippingAddress || order.address || "Store Pickup";
+    const custEmail = order.customerEmail || order.email || "N/A";
+
+    const items = order.items || [];
+    const subtotal = Number(order.subtotal || order.total || 0);
+    const gst = Number(order.gst || Math.round(subtotal * 0.05));
+    const deliveryFee = Number(order.deliveryFee || 0);
+    const referralDiscount = Number(order.referralDiscount || 0);
+    const couponDiscount = Number(order.couponDiscount || 0);
+    const celebrationDiscount = Number(order.celebrationDiscount || 0);
+    const grandTotal = Number(order.total || order.grand_total || (subtotal + gst + deliveryFee - referralDiscount - couponDiscount - celebrationDiscount));
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Tax Invoice - #${order.id} - ${storeName}</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { font-family: 'Segoe UI', Arial, sans-serif; background: #ffffff; color: #0f172a; margin: 0; padding: 24px; font-size: 12px; line-height: 1.4; }
+            .invoice-box { max-width: 800px; margin: 0 auto; border: 2px solid #cbd5e1; padding: 28px; border-radius: 16px; background: #ffffff; }
+            .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0284c7; padding-bottom: 18px; margin-bottom: 18px; }
+            .brand-logo-title { display: flex; align-items: center; gap: 14px; }
+            .brand-logo-title img { max-height: 55px; max-width: 120px; object-fit: contain; border-radius: 8px; border: 1px solid #e2e8f0; }
+            .brand-name { font-size: 22px; font-weight: 900; color: #0284c7; text-transform: uppercase; margin: 0; letter-spacing: 0.5px; }
+            .store-contact { font-size: 11px; color: #475569; margin-top: 4px; font-weight: 500; }
+            .invoice-heading { text-align: right; }
+            .tax-badge { font-size: 20px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 1px; }
+            .inv-no { font-size: 12px; font-weight: 800; color: #0284c7; margin-top: 4px; font-family: monospace; }
+            .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+            .meta-card { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px; }
+            .card-head { font-size: 11px; font-weight: 800; text-transform: uppercase; color: #0284c7; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 8px; letter-spacing: 0.5px; }
+            .row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 11px; }
+            .row-label { color: #64748b; font-weight: 600; }
+            .row-val { color: #0f172a; font-weight: 700; word-break: break-word; text-align: right; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 20px; }
+            th { background: #0f172a; color: #ffffff; text-transform: uppercase; font-size: 10px; font-weight: 800; padding: 10px 12px; text-align: left; letter-spacing: 0.5px; }
+            td { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 11px; font-weight: 600; }
+            .summary-container { display: flex; justify-content: flex-end; }
+            .summary-box { width: 320px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 16px; }
+            .summary-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 11px; }
+            .total-row { border-top: 2px solid #0f172a; padding-top: 8px; margin-top: 8px; font-size: 15px; font-weight: 900; color: #0284c7; }
+            .footer { margin-top: 26px; text-align: center; border-top: 1px dashed #cbd5e1; padding-top: 16px; font-size: 10px; color: #64748b; }
+            @media print {
+              body { padding: 0; background: #fff; }
+              .invoice-box { border: none; padding: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="invoice-box">
+            <div class="header">
+              <div class="brand-logo-title">
+                ${storeLogo ? `<img src="${storeLogo}" alt="Logo" />` : ''}
+                <div>
+                  <h1 class="brand-name">${storeName}</h1>
+                  <div class="store-contact">
+                    <div><b>Address:</b> ${storeAddress}</div>
+                    <div><b>Helpline:</b> ${storePhone} | <b>Email:</b> ${storeEmail}</div>
+                    ${storeGst ? `<div><b>GSTIN:</b> ${storeGst} | <b>FSSAI Lic:</b> ${storeFssai}</div>` : ''}
+                  </div>
+                </div>
+              </div>
+              <div class="invoice-heading">
+                <div class="tax-badge">TAX INVOICE</div>
+                <div class="inv-no">ORDER #${order.id}</div>
+                <div style="font-size: 10px; color: #64748b; margin-top: 2px;">
+                  Date: ${order.orderDate ? new Date(order.orderDate).toLocaleDateString() : new Date().toLocaleDateString()}
+                </div>
+              </div>
+            </div>
+
+            <div class="meta-grid">
+              <div class="meta-card">
+                <div class="card-head">CUSTOMER DETAILS (ग्राहक जानकारी)</div>
+                <div class="row"><span class="row-label">Customer Name:</span> <span class="row-val">${custName}</span></div>
+                <div class="row"><span class="row-label">Mobile Number:</span> <span class="row-val">${custPhone}</span></div>
+                <div class="row"><span class="row-label">Delivery Address:</span> <span class="row-val">${custAddress}</span></div>
+                <div class="row"><span class="row-label">Email ID:</span> <span class="row-val">${custEmail}</span></div>
+              </div>
+
+              <div class="meta-card">
+                <div class="card-head">ORDER & PAYMENT SUMMARY</div>
+                <div class="row"><span class="row-label">Payment Method:</span> <span class="row-val">${order.paymentMethod || 'COD'}</span></div>
+                <div class="row"><span class="row-label">Payment Status:</span> <span class="row-val" style="color:${(order.paymentStatus||'').toUpperCase()==='PAID' ? '#16a34a' : '#d97706'}">${order.paymentStatus || 'PENDING'}</span></div>
+                <div class="row"><span class="row-label">Order Status:</span> <span class="row-val">${order.status || 'CONFIRMED'}</span></div>
+                <div class="row"><span class="row-label">Assigned Rider:</span> <span class="row-val">${order.deliveryPartnerName || 'Swastik Rider'} (${order.deliveryPartnerPhone || '+91 95400 12099'})</span></div>
+              </div>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Item Name</th>
+                  <th>Weight/Size</th>
+                  <th style="text-align:center;">Qty</th>
+                  <th style="text-align:right;">Unit Price</th>
+                  <th style="text-align:right;">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${items.map((it, idx) => `
+                  <tr>
+                    <td>${idx + 1}</td>
+                    <td><b>${it.nameEn || it.nameHi || it.name || 'Grocery Item'}</b></td>
+                    <td>${it.weight || it.unit || '1 Unit'}</td>
+                    <td style="text-align:center;"><b>${it.qty || it.quantity || 1}</b></td>
+                    <td style="text-align:right;">₹${it.price || 0}</td>
+                    <td style="text-align:right; font-weight:800;">₹${(it.price || 0) * (it.qty || it.quantity || 1)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+
+            <div class="summary-container">
+              <div class="summary-box">
+                <div class="summary-row"><span class="row-label">Subtotal:</span> <span class="row-val">₹${subtotal}</span></div>
+                <div class="summary-row"><span class="row-label">GST Tax:</span> <span class="row-val">₹${gst}</span></div>
+                <div class="summary-row"><span class="row-label">Delivery Fee:</span> <span class="row-val">${deliveryFee === 0 ? 'FREE' : `₹${deliveryFee}`}</span></div>
+                ${referralDiscount > 0 ? `<div class="summary-row" style="color:#d97706;"><span class="row-label">Referral Discount:</span> <span class="row-val">-₹${referralDiscount}</span></div>` : ''}
+                ${couponDiscount > 0 ? `<div class="summary-row" style="color:#16a34a;"><span class="row-label">Coupon Discount:</span> <span class="row-val">-₹${couponDiscount}</span></div>` : ''}
+                ${celebrationDiscount > 0 ? `<div class="summary-row" style="color:#9333ea;"><span class="row-label">Celebration Discount:</span> <span class="row-val">-₹${celebrationDiscount}</span></div>` : ''}
+                
+                <div class="summary-row total-row">
+                  <span>Grand Total:</span>
+                  <span>₹${grandTotal}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="footer">
+              <p style="font-weight: 800; color: #0284c7; margin-bottom: 4px;">THANK YOU FOR SHOPPING AT ${storeName.toUpperCase()}!</p>
+              <p>This is an official computer-generated tax invoice. Goods once sold are backed by our 100% Quality & Freshness Guarantee.</p>
+              <p style="font-size: 9px; font-family: monospace; color: #94a3b8; margin-top: 6px;">STORE HELPLINE: ${storePhone} | WEBSITE: SWASTIKSUPERMARKET.COM</p>
+            </div>
+          </div>
+
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 600);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
 
   // Modal State for selected order details popup
   const [selectedOrder, setSelectedOrder] = useState(null);
+
+  // Security Password Modal State for Order Deletion
+  const [orderToDelete, setOrderToDelete] = useState(null);
+  const [deleteAdminPassword, setDeleteAdminPassword] = useState('');
+  const [deletePasswordError, setDeletePasswordError] = useState('');
+
+  const handleConfirmDeleteOrder = () => {
+    if (!orderToDelete) return;
+    const pwd = deleteAdminPassword.trim();
+    if (!pwd) {
+      setDeletePasswordError(isHindi ? "कृपया एडमिन पासवर्ड दर्ज करें!" : "Please enter admin password!");
+      return;
+    }
+
+    const isMasterAdmin = pwd === 'admin123';
+    const isStaffValid = (staff || []).some(s => s.password === pwd);
+
+    if (!isMasterAdmin && !isStaffValid) {
+      setDeletePasswordError(isHindi ? "❌ अमान्य एडमिन पासवर्ड! आदेश नहीं हटाया जा सका।" : "❌ Incorrect Admin Password! Access Denied.");
+      return;
+    }
+
+    deleteOrder(orderToDelete.id);
+
+    if (selectedOrder && (selectedOrder.id === orderToDelete.id || String(selectedOrder.id) === String(orderToDelete.id))) {
+      setSelectedOrder(null);
+    }
+
+    setOrderToDelete(null);
+    setDeleteAdminPassword('');
+    setDeletePasswordError('');
+  };
 
   // Edit existing order state
   const [isEditingOrder, setIsEditingOrder] = useState(false);
@@ -268,8 +469,8 @@ export default function OrdersManager({ userRole }) {
   const handleStartEditOrder = (order) => {
     setIsEditingOrder(true);
     setEditOrderItems(order.items ? [...order.items] : []);
-    setEditOrderName(order.customerName || order.deliveryPartnerName || '');
-    setEditOrderPhone(order.customerPhone || order.customerMobile || order.deliveryPartnerPhone || '');
+    setEditOrderName(order.customerName || order.name || '');
+    setEditOrderPhone(order.customerPhone || order.customerMobile || order.phone || '');
     setEditOrderAddress(order.shippingAddress || '');
     setEditOrderPaymentMethod(order.paymentMethod || 'card');
     setEditOrderPaymentStatus(order.paymentStatus || 'PAID');
@@ -293,8 +494,8 @@ export default function OrdersManager({ userRole }) {
       ...selectedOrder,
       customerName: editOrderName,
       customerPhone: editOrderPhone,
-      deliveryPartnerName: selectedOrder.deliveryPartnerName || editOrderName,
-      deliveryPartnerPhone: selectedOrder.deliveryPartnerPhone || editOrderPhone,
+      deliveryPartnerName: selectedOrder.deliveryPartnerName || 'Swastik Rider',
+      deliveryPartnerPhone: selectedOrder.deliveryPartnerPhone || '+91 95400 12099',
       shippingAddress: editOrderAddress,
       paymentMethod: editOrderPaymentMethod,
       paymentStatus: editOrderPaymentStatus,
@@ -366,10 +567,10 @@ export default function OrdersManager({ userRole }) {
 
     const orderPayload = {
       id: newId,
-      deliveryPartnerName: newOrderName,
       customerName: newOrderName,
-      deliveryPartnerPhone: newOrderPhone,
       customerPhone: newOrderPhone,
+      deliveryPartnerName: newOrderPilotName || "Pradeep Kumar",
+      deliveryPartnerPhone: newOrderPilotPhone || "+91 98101 20299",
       shippingAddress: newOrderAddress,
       orderDate: new Date().toISOString().split('T')[0],
       items: newOrderItems,
@@ -469,8 +670,8 @@ export default function OrdersManager({ userRole }) {
     const targetOrder = specificOrder || selectedOrder;
     if (!targetOrder) return;
     const orderId = targetOrder.id;
-    const phoneNum = targetOrder.customerPhone || targetOrder.deliveryPartnerPhone || "+91 95400 12099";
-    const clientName = targetOrder.customerName || targetOrder.deliveryPartnerName || "Valued Customer";
+    const phoneNum = targetOrder.customerPhone || targetOrder.customerMobile || targetOrder.phone || "+91 95400 12099";
+    const clientName = targetOrder.customerName || targetOrder.name || "Valued Customer";
     const grandTotal = targetOrder.total || targetOrder.grand_total || targetOrder.subtotal || 1200;
 
     const bodyMsg = `Hello ${clientName}, your Swastik order ${orderId} has been handed over to our delivery partner! Total bill amount is ${grandTotal}. You can track or contact your rider directly from the Swastik app.`;
@@ -507,8 +708,8 @@ export default function OrdersManager({ userRole }) {
 
     const orderId = targetOrder.id;
     // Default fallback phone values if not provided
-    const phoneNum = targetOrder.customerPhone || targetOrder.deliveryPartnerPhone || "+91 98450 12099";
-    const clientName = targetOrder.customerName || targetOrder.deliveryPartnerName || "Valued Customer";
+    const phoneNum = targetOrder.customerPhone || targetOrder.customerMobile || targetOrder.phone || "+91 98450 12099";
+    const clientName = targetOrder.customerName || targetOrder.name || "Valued Customer";
     const grandTotal = targetOrder.total || targetOrder.subtotal || 350;
     const itemsLabel = targetOrder.items && targetOrder.items.length > 0 
       ? targetOrder.items.map(it => `${it.qty}x ${it.nameEn || it.nameHi}`).join(', ') 
@@ -604,6 +805,8 @@ export default function OrdersManager({ userRole }) {
         </div>
 
         <div className="flex flex-wrap gap-2 items-center">
+          <NotificationCenter role="delivery" />
+
           {userRole !== 'customer' && (
             <button
               onClick={() => setIsCreatingNewOrder(true)}
@@ -767,8 +970,8 @@ export default function OrdersManager({ userRole }) {
               paginatedOrders.map((o) => {
                 const totalAmount = o.total || o.subtotal || 350;
                 const itemsCount = o.items ? o.items.reduce((acc, it) => acc + it.qty, 0) : 0;
-                const clientName = o.deliveryPartnerName || "Amit K (Noida Sec 15)";
-                const clientPhone = o.deliveryPartnerPhone || "+91 98110 43242";
+                const clientName = o.customerName || o.name || "Valued Customer";
+                const clientPhone = o.customerPhone || o.customerMobile || o.phone || "N/A";
                 
                 return (
                   <tr key={o.id} className="hover:bg-white/5 transition-colors group">
@@ -822,13 +1025,26 @@ export default function OrdersManager({ userRole }) {
                     </td>
 
                     <td className="p-4 text-center">
-                      <button
-                        onClick={() => handleOpenDetailModal(o)}
-                        className="p-1.5 px-3 bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 border border-cyan-400/30 rounded-lg font-black text-[9px] uppercase tracking-wider inline-flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
-                      >
-                        <Eye className="h-3 w-3" />
-                        <span>Manage Bill</span>
-                      </button>
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          onClick={() => handleOpenDetailModal(o)}
+                          className="p-1.5 px-2.5 bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 border border-cyan-400/30 rounded-lg font-black text-[9px] uppercase tracking-wider inline-flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+                        >
+                          <Eye className="h-3 w-3" />
+                          <span>Manage</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setOrderToDelete(o);
+                            setDeleteAdminPassword('');
+                            setDeletePasswordError('');
+                          }}
+                          className="p-1.5 px-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 rounded-lg font-black text-[9px] uppercase tracking-wider inline-flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+                          title="Delete Order (Admin Password Required)"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -1276,33 +1492,83 @@ export default function OrdersManager({ userRole }) {
             ) : (
               <div className="md:col-span-6 bg-white text-slate-950 p-6 rounded-2xl font-mono text-xs shadow-2xl relative border-4 border-slate-300">
                 
+                {/* Print Trigger Header Bar */}
+                <div className="flex justify-between items-center pb-3 border-b border-slate-200 mb-3 font-sans">
+                  <div className="flex items-center gap-1.5 text-xs font-black text-slate-800">
+                    <Printer className="h-4 w-4 text-cyan-600" />
+                    <span>TAX BILL RECEIPT</span>
+                  </div>
+                  <button
+                    onClick={() => handlePrintInvoice(selectedOrder)}
+                    className="px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white font-extrabold rounded-lg text-[10px] uppercase tracking-wider flex items-center gap-1 shadow-sm transition active:scale-95 cursor-pointer"
+                  >
+                    <Printer className="h-3 w-3" />
+                    <span>Print Invoice</span>
+                  </button>
+                </div>
+
                 {/* Receipt Dotted borders top and bottom */}
                 <div className="absolute top-0 left-0 right-0 h-1 bg-[radial-gradient(circle,bg-slate-300_1px,transparent_1px)] bg-[size:8px_8px] opacity-10"></div>
                 
-                {/* Thermal paper header styling */}
-                <div className="text-center space-y-1 pb-4 border-b border-dashed border-slate-400">
-                  <Printer className="h-6 w-6 text-slate-600 mx-auto" />
-                  <h3 className="font-extrabold text-base uppercase tracking-tight text-slate-950">SWASTIK SUPERMARKET</h3>
-                  <p className="text-[10px] text-slate-600 font-bold">ALPHA ROAD BRANCH, NOIDA UP</p>
-                  <p className="text-[9px] text-slate-500">TEL: +91 99999-99999 EX 2</p>
+                {/* Thermal paper header styling with dynamic settings */}
+                <div className="text-center space-y-1 pb-4 border-b border-dashed border-slate-400 font-sans">
+                  {contactSettings?.logo && (
+                    <img src={contactSettings.logo} alt="Company Logo" className="h-10 mx-auto object-contain mb-1 rounded border border-slate-200" />
+                  )}
+                  <h3 className="font-extrabold text-base uppercase tracking-tight text-slate-950">
+                    {contactSettings?.brandName || "SWASTIK SUPERMARKET"}
+                  </h3>
+                  <p className="text-[10px] text-slate-600 font-bold">
+                    {contactSettings?.address || "PLOT NO 46, SECTOR 18, NOIDA UP"}
+                  </p>
+                  <p className="text-[9px] text-slate-600 font-semibold">
+                    TEL: {contactSettings?.phone || "+91 11 2345 6789"} | EMAIL: {contactSettings?.email || "support@swastik.com"}
+                  </p>
+                  {(contactSettings?.gst || contactSettings?.gstin) && (
+                    <p className="text-[8.5px] text-slate-500 font-mono font-bold">
+                      GSTIN: {contactSettings.gst || contactSettings.gstin} | FSSAI: {contactSettings?.fssai || '12721001000123'}
+                    </p>
+                  )}
                 </div>
 
-                {/* Bill Meta Details */}
+                {/* Bill Meta Details & Customer Info */}
                 <div className="py-3 text-[10px] space-y-1.5 border-b border-dashed border-slate-400">
-                  <div className="flex justify-between">
-                    <span>BILL ID: {selectedOrder.id}</span>
+                  <div className="flex justify-between font-bold">
+                    <span>BILL ID: #{selectedOrder.id}</span>
                     <span>CASHIER: #STAFF-{userRole === 'admin' ? 'ADMIN' : 'MGR'}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>DATE: {selectedOrder.orderDate || selectedOrder.date || "TODAY"}</span>
+                    <span>DATE: {selectedOrder.orderDate ? new Date(selectedOrder.orderDate).toLocaleDateString() : (selectedOrder.date || "TODAY")}</span>
                     <span>TIME: {new Date().toLocaleTimeString()}</span>
                   </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>CLIENT: {selectedOrder.deliveryPartnerName || "Valued Customer"}</span>
+
+                  {/* Customer Details Container */}
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-1 mt-2 text-[9.5px] font-sans">
+                    <div className="font-extrabold text-sky-800 border-b border-slate-200 pb-1 flex justify-between uppercase">
+                      <span>CUSTOMER DETAILS (खरीदार)</span>
+                      <span className="font-mono text-slate-900">{selectedOrder.customerName || selectedOrder.name || "Valued Customer"}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-700 font-semibold">
+                      <span>MOBILE / PHONE:</span>
+                      <span className="font-mono font-bold text-slate-900">{selectedOrder.customerPhone || selectedOrder.customerMobile || selectedOrder.phone || "N/A"}</span>
+                    </div>
+                    <div className="text-slate-700">
+                      <span className="font-bold text-slate-900">DELIVERY ADDRESS:</span> {selectedOrder.shippingAddress || selectedOrder.address || "Store Pickup"}
+                    </div>
+                    {selectedOrder.customerEmail && (
+                      <div className="flex justify-between text-slate-600">
+                        <span>EMAIL:</span>
+                        <span>{selectedOrder.customerEmail}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-between text-slate-600 pt-1">
+                    <span>ASSIGNED RIDER: {selectedOrder.deliveryPartnerName || "Swastik Rider"} ({selectedOrder.deliveryPartnerPhone || "+91 95400 12099"})</span>
                     <span>STATUS: {selectedOrder.status || "CONFIRMED"}</span>
                   </div>
-                  <div className="flex justify-between text-slate-500 font-bold text-[9px] pt-1.5 border-t border-dashed border-slate-300 mt-1 uppercase">
-                    <span>PAY METHOD: {selectedOrder.paymentMethod || "CARD"}</span>
+                  <div className="flex justify-between text-slate-500 font-bold text-[9px] pt-1 border-t border-dashed border-slate-300 uppercase">
+                    <span>PAY METHOD: {selectedOrder.paymentMethod || "COD"}</span>
                     <span>PAY STATUS: {selectedOrder.paymentStatus || "PAID"}</span>
                   </div>
                 </div>
@@ -1320,12 +1586,12 @@ export default function OrdersManager({ userRole }) {
                     {selectedOrder.items && selectedOrder.items.map((it, idx) => (
                       <div key={idx} className="grid grid-cols-12 py-1.5 text-slate-950 font-semibold">
                         <div className="col-span-6 pr-1">
-                          <p className="truncate text-[11px] font-black">{it.nameEn}</p>
+                          <p className="truncate text-[11px] font-black">{it.nameEn || it.nameHi || it.name}</p>
                           <p className="text-[8px] text-slate-500 font-bold whitespace-nowrap">Size: {it.weight || "1 Unit"}</p>
                         </div>
-                        <span className="col-span-2 text-center font-bold">{it.qty}</span>
+                        <span className="col-span-2 text-center font-bold">{it.qty || it.quantity || 1}</span>
                         <span className="col-span-2 text-right font-mono">₹{it.price}</span>
-                        <span className="col-span-2 text-right font-mono font-black">₹{it.price * it.qty}</span>
+                        <span className="col-span-2 text-right font-mono font-black">₹{it.price * (it.qty || it.quantity || 1)}</span>
                       </div>
                     ))}
                   </div>
@@ -1335,15 +1601,15 @@ export default function OrdersManager({ userRole }) {
                 <div className="border-t border-slate-300 pt-3.5 space-y-1.5 text-[10px]">
                   <div className="flex justify-between font-medium">
                     <span>GROCERY SUB-TOTAL</span>
-                    <span>₹{selectedOrder.subtotal || selectedOrder.total || 350}</span>
+                    <span>₹{selectedOrder.subtotal || selectedOrder.total || 0}</span>
                   </div>
                   <div className="flex justify-between font-medium text-slate-600">
-                    <span>CGST 9%</span>
-                    <span>₹{Math.round((selectedOrder.subtotal || 350) * 0.09 * 100) / 100}</span>
+                    <span>CGST (2.5%)</span>
+                    <span>₹{Math.round((selectedOrder.subtotal || 0) * 0.025 * 100) / 100}</span>
                   </div>
                   <div className="flex justify-between font-medium text-slate-600">
-                    <span>SGST 9%</span>
-                    <span>₹{Math.round((selectedOrder.subtotal || 350) * 0.09 * 100) / 100}</span>
+                    <span>SGST (2.5%)</span>
+                    <span>₹{Math.round((selectedOrder.subtotal || 0) * 0.025 * 100) / 100}</span>
                   </div>
                   <div className="flex justify-between font-medium text-slate-600">
                     <span>DELIVERY CHARGES</span>
@@ -1376,15 +1642,15 @@ export default function OrdersManager({ userRole }) {
                   {/* Grand Total */}
                   <div className="flex justify-between border-t border-double border-slate-950 pt-2 font-black text-xs text-slate-950 tracking-tight">
                     <span>GRAND NET PAYABLE</span>
-                    <span>₹{selectedOrder.total || selectedOrder.subtotal || 350}</span>
+                    <span>₹{selectedOrder.total || selectedOrder.subtotal || 0}</span>
                   </div>
                 </div>
 
                 {/* Print Thank You barcode footer */}
-                <div className="mt-6 text-center space-y-1 text-[9px] text-slate-500 pt-4 border-t border-dashed border-slate-400">
-                  <p className="font-extrabold text-slate-700 tracking-wider">THANKS FOR WEIGHING AT SWASTIK!</p>
-                  <div className="h-6 bg-[repeating-linear-gradient(90deg,black,black_2px,transparent_2px,transparent_6px)] opacity-60 w-36 mx-auto mt-2.5"></div>
-                  <p className="font-mono text-[80%] font-semibold uppercase mt-0.5 mt-2 text-slate-400">* GORM-POSTGRES-SECURE *</p>
+                <div className="mt-5 text-center space-y-1 text-[9px] text-slate-500 pt-3 border-t border-dashed border-slate-400">
+                  <p className="font-extrabold text-slate-700 tracking-wider">THANKS FOR WEIGHING AT {contactSettings?.brandName?.toUpperCase() || "SWASTIK"}!</p>
+                  <div className="h-6 bg-[repeating-linear-gradient(90deg,black,black_2px,transparent_2px,transparent_6px)] opacity-60 w-36 mx-auto mt-2"></div>
+                  <p className="font-mono text-[80%] font-semibold uppercase mt-1 text-slate-400">* OFFICIAL TAX INVOICE *</p>
                 </div>
 
               </div>
@@ -1403,25 +1669,41 @@ export default function OrdersManager({ userRole }) {
                         <h4 className="text-[10px] font-black uppercase text-cyan-300 tracking-wider">
                           Order Admin Actions
                         </h4>
-                        <p className="text-[9px] text-slate-500 font-semibold font-sans mt-0.5">Toggle live cart details & customer specs</p>
+                        <p className="text-[9px] text-slate-500 font-semibold font-sans mt-0.5">Modify, edit or permanently remove this order</p>
                       </div>
-                      <button
-                        onClick={() => {
-                          if (isEditingOrder) {
-                            setIsEditingOrder(false);
-                          } else {
-                            handleStartEditOrder(selectedOrder);
-                          }
-                        }}
-                        className={`px-3 py-1.5 rounded-xl font-bold text-[10px] uppercase flex items-center gap-1 border transition-all cursor-pointer active:scale-95 ${
-                          isEditingOrder 
-                            ? 'bg-amber-400/20 text-amber-300 border-amber-400/30'
-                            : 'bg-cyan-500/10 text-cyan-300 border-cyan-400/30 hover:bg-cyan-500/20'
-                        }`}
-                      >
-                        <Edit className="h-3 w-3" />
-                        <span>{isEditingOrder ? "View Bill" : "Modify details"}</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isEditingOrder) {
+                              setIsEditingOrder(false);
+                            } else {
+                              handleStartEditOrder(selectedOrder);
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-xl font-bold text-[10px] uppercase flex items-center gap-1 border transition-all cursor-pointer active:scale-95 ${
+                            isEditingOrder 
+                              ? 'bg-amber-400/20 text-amber-300 border-amber-400/30'
+                              : 'bg-cyan-500/10 text-cyan-300 border-cyan-400/30 hover:bg-cyan-500/20'
+                          }`}
+                        >
+                          <Edit className="h-3 w-3" />
+                          <span>{isEditingOrder ? "View Bill" : "Modify details"}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOrderToDelete(selectedOrder);
+                            setDeleteAdminPassword('');
+                            setDeletePasswordError('');
+                          }}
+                          className="px-3 py-1.5 rounded-xl font-bold text-[10px] uppercase flex items-center gap-1 border bg-red-500/20 text-red-300 border-red-500/30 hover:bg-red-500/30 transition-all cursor-pointer active:scale-95"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          <span>Delete Order</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1933,6 +2215,99 @@ export default function OrdersManager({ userRole }) {
                 </div>
               </div>
 
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Admin Password Verification Modal for Order Deletion */}
+      {orderToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-slate-900 border border-red-500/40 rounded-3xl max-w-md w-full p-6 shadow-2xl relative text-white space-y-4">
+            <button
+              onClick={() => {
+                setOrderToDelete(null);
+                setDeleteAdminPassword('');
+                setDeletePasswordError('');
+              }}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white bg-slate-950 rounded-full border border-white/10 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3 border-b border-white/10 pb-3">
+              <div className="w-10 h-10 rounded-2xl bg-red-500/20 border border-red-500/30 text-red-400 flex items-center justify-center shrink-0">
+                <Lock className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-sm text-white uppercase tracking-wider">
+                  {isHindi ? "सुरक्षा सत्यापन - आदेश हटाएँ" : "Admin Security Verification"}
+                </h3>
+                <p className="text-[10px] text-slate-400">
+                  {isHindi ? "आदेश हटाने के लिए एडमिन पासवर्ड दर्ज करें" : "Enter admin password to permanently delete this order"}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-2xl space-y-1">
+              <p className="text-xs font-bold text-red-200">
+                ⚠️ {isHindi ? "स्थायी रूप से हटाने की चेतावनी" : "Permanent Order Deletion Alert"}
+              </p>
+              <p className="text-[10px] text-slate-300 leading-relaxed">
+                {isHindi 
+                  ? `आदेश #${orderToDelete.id} (₹${orderToDelete.total || orderToDelete.totalAmount || 0}) के सभी आइटम्स, पेमेंट रिकॉर्ड्स और रिडीम किए गए पॉइंट्स हमेशा के लिए हटा दिए जाएंगे।`
+                  : `Order #${orderToDelete.id} (₹${orderToDelete.total || orderToDelete.totalAmount || 0}) and all associated order items, payment logs, and reward points will be permanently deleted.`}
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">
+                {isHindi ? "एडमिन लॉगिन पासवर्ड *" : "Admin Password *"}
+              </label>
+              <input
+                type="password"
+                placeholder={isHindi ? "पासवर्ड दर्ज करें (उदा. admin123)..." : "Enter admin password (e.g. admin123)..."}
+                value={deleteAdminPassword}
+                onChange={(e) => {
+                  setDeleteAdminPassword(e.target.value);
+                  setDeletePasswordError('');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleConfirmDeleteOrder();
+                  }
+                }}
+                autoFocus
+                className="w-full px-4 py-2.5 bg-slate-950 border border-white/15 rounded-xl text-xs text-white placeholder-slate-500 outline-none focus:border-red-400 transition-all font-mono"
+              />
+              {deletePasswordError && (
+                <p className="text-[11px] font-bold text-red-400 mt-1 flex items-center gap-1">
+                  {deletePasswordError}
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setOrderToDelete(null);
+                  setDeleteAdminPassword('');
+                  setDeletePasswordError('');
+                }}
+                className="w-1/2 py-2.5 bg-slate-950 hover:bg-slate-800 text-slate-300 border border-white/10 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
+              >
+                {isHindi ? "रद्द करें" : "Cancel"}
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteOrder}
+                className="w-1/2 py-2.5 bg-red-600 hover:bg-red-500 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-red-500/20 active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isHindi ? "हटाएं" : "Delete Order"}</span>
+              </button>
             </div>
 
           </div>

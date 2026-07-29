@@ -70,7 +70,7 @@ export const db = {
     throw new Error("Database not initialized");
   },
 
-  async execute(sql, params = []) {
+  async execute(sql, params = [], quiet = false) {
     let formattedSql = sql;
     if (this.isPostgres) {
       let index = 1;
@@ -84,7 +84,9 @@ export const db = {
       return new Promise((resolve, reject) => {
         sqliteDb.run(formattedSql, params, function (err) {
           if (err) {
-            console.error(`SQLite Error during: ${formattedSql}`, err);
+            if (!quiet) {
+              console.error(`SQLite Error during: ${formattedSql}`, err);
+            }
             reject(err);
           } else {
             resolve({ lastID: this.lastID, changes: this.changes });
@@ -217,6 +219,10 @@ export const db = {
         app_id VARCHAR(255) DEFAULT '',
         secret_key VARCHAR(255) DEFAULT '',
         environment VARCHAR(50) DEFAULT 'TEST',
+        razorpay_enabled ${booleanType} DEFAULT ${isPg ? 'TRUE' : 1},
+        razorpay_key_id VARCHAR(255) DEFAULT '',
+        razorpay_key_secret VARCHAR(255) DEFAULT '',
+        active_gateway VARCHAR(50) DEFAULT 'RAZORPAY',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );`,
@@ -246,6 +252,21 @@ export const db = {
         key_name VARCHAR(100) PRIMARY KEY,
         value_text ${textType},
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );`,
+
+      // 12. In-App Notifications Table
+      `CREATE TABLE IF NOT EXISTS notification (
+        id ${serialType},
+        recipient_role VARCHAR(50) NOT NULL,
+        recipient_phone VARCHAR(50) DEFAULT '',
+        order_id VARCHAR(50) DEFAULT '',
+        title_en VARCHAR(255) NOT NULL,
+        title_hi VARCHAR(255) DEFAULT '',
+        message_en ${textType} NOT NULL,
+        message_hi ${textType} DEFAULT '',
+        type VARCHAR(50) DEFAULT 'order_update',
+        is_read ${booleanType} DEFAULT ${isPg ? 'FALSE' : 0},
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );`
     ];
 
@@ -258,22 +279,65 @@ export const db = {
     }
 
     // Ensure order table has discount and payment columns
-    const alterOrderQueries = [
-      `ALTER TABLE "order" ADD COLUMN referral_discount REAL DEFAULT 0.0;`,
-      `ALTER TABLE "order" ADD COLUMN applied_points INT DEFAULT 0;`,
-      `ALTER TABLE "order" ADD COLUMN coupon_discount REAL DEFAULT 0.0;`,
-      `ALTER TABLE "order" ADD COLUMN coupon_code VARCHAR(100) DEFAULT '';`,
-      `ALTER TABLE "order" ADD COLUMN celebration_discount REAL DEFAULT 0.0;`,
-      `ALTER TABLE "order" ADD COLUMN celebration_offer_name VARCHAR(255) DEFAULT '';`,
-      `ALTER TABLE "order" ADD COLUMN customer_email VARCHAR(255) DEFAULT '';`,
-      `ALTER TABLE "order" ADD COLUMN payment_method VARCHAR(50) DEFAULT 'COD';`,
-      `ALTER TABLE "order" ADD COLUMN payment_status VARCHAR(50) DEFAULT 'UNPAID';`
+    let existingOrderCols = [];
+    try {
+      if (this.isPostgres) {
+        const cols = await this.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'order'`);
+        existingOrderCols = cols.map(c => (c.column_name || '').toLowerCase());
+      } else {
+        const cols = await this.query(`PRAGMA table_info("order")`);
+        existingOrderCols = cols.map(c => (c.name || '').toLowerCase());
+      }
+    } catch (e) {}
+
+    const alterOrderColumns = [
+      { name: 'referral_discount', sql: `ALTER TABLE "order" ADD COLUMN referral_discount REAL DEFAULT 0.0;` },
+      { name: 'applied_points', sql: `ALTER TABLE "order" ADD COLUMN applied_points INT DEFAULT 0;` },
+      { name: 'coupon_discount', sql: `ALTER TABLE "order" ADD COLUMN coupon_discount REAL DEFAULT 0.0;` },
+      { name: 'coupon_code', sql: `ALTER TABLE "order" ADD COLUMN coupon_code VARCHAR(100) DEFAULT '';` },
+      { name: 'celebration_discount', sql: `ALTER TABLE "order" ADD COLUMN celebration_discount REAL DEFAULT 0.0;` },
+      { name: 'celebration_offer_name', sql: `ALTER TABLE "order" ADD COLUMN celebration_offer_name VARCHAR(255) DEFAULT '';` },
+      { name: 'customer_email', sql: `ALTER TABLE "order" ADD COLUMN customer_email VARCHAR(255) DEFAULT '';` },
+      { name: 'payment_method', sql: `ALTER TABLE "order" ADD COLUMN payment_method VARCHAR(50) DEFAULT 'COD';` },
+      { name: 'payment_status', sql: `ALTER TABLE "order" ADD COLUMN payment_status VARCHAR(50) DEFAULT 'UNPAID';` }
     ];
-    for (const altq of alterOrderQueries) {
-      try {
-        await this.execute(altq);
-      } catch (err) {
-        // Ignore errors if columns already exist
+
+    for (const item of alterOrderColumns) {
+      if (!existingOrderCols.includes(item.name.toLowerCase())) {
+        try {
+          await this.execute(item.sql, [], true);
+        } catch (err) {
+          // Ignore if already exists
+        }
+      }
+    }
+
+    // Ensure payment_settings table has Razorpay columns
+    let existingPaymentCols = [];
+    try {
+      if (this.isPostgres) {
+        const cols = await this.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'payment_settings'`);
+        existingPaymentCols = cols.map(c => (c.column_name || '').toLowerCase());
+      } else {
+        const cols = await this.query(`PRAGMA table_info("payment_settings")`);
+        existingPaymentCols = cols.map(c => (c.name || '').toLowerCase());
+      }
+    } catch (e) {}
+
+    const alterPaymentColumns = [
+      { name: 'razorpay_enabled', sql: `ALTER TABLE payment_settings ADD COLUMN razorpay_enabled ${isPg ? 'BOOLEAN DEFAULT TRUE' : 'INT DEFAULT 1'};` },
+      { name: 'razorpay_key_id', sql: `ALTER TABLE payment_settings ADD COLUMN razorpay_key_id VARCHAR(255) DEFAULT '';` },
+      { name: 'razorpay_key_secret', sql: `ALTER TABLE payment_settings ADD COLUMN razorpay_key_secret VARCHAR(255) DEFAULT '';` },
+      { name: 'active_gateway', sql: `ALTER TABLE payment_settings ADD COLUMN active_gateway VARCHAR(50) DEFAULT 'RAZORPAY';` }
+    ];
+
+    for (const item of alterPaymentColumns) {
+      if (!existingPaymentCols.includes(item.name.toLowerCase())) {
+        try {
+          await this.execute(item.sql, [], true);
+        } catch (err) {
+          // Ignore if already exists
+        }
       }
     }
     

@@ -165,7 +165,7 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent flex flex-col justify-end p-6 md:p-10">
             <div className="space-y-3 max-w-2xl">
               <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                {/* {contactSettings?.logo && (
+                {contactSettings?.logo && (
                   <div className="bg-white p-1.5 rounded-2xl shadow-xl w-14 h-14 shrink-0 flex items-center justify-center border border-white/20 animate-fade-in">
                     <img 
                       src={contactSettings.logo} 
@@ -174,7 +174,7 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
                       referrerPolicy="no-referrer" 
                     />
                   </div>
-                )} */}
+                )}
                 <div className="space-y-1">
                   <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 text-[8.5px] font-black uppercase tracking-widest rounded-lg">
                     <Sparkles className="h-3 w-3 text-cyan-400 animate-pulse" />
