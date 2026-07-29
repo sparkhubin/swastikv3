@@ -785,16 +785,8 @@ export default function CartCheckout({ onViewChange }) {
       }
     }
 
-    // Cashfree Online Payment check for Refund & Return Policy Acceptance
+    // Cashfree Online Payment check
     const isOnlineCF = paymentMethod === 'cashfree' || paymentMethod === 'card' || paymentMethod === 'upi';
-    if (isOnlineCF && !acceptReturns) {
-      const alertMsg = language === 'hi'
-        ? "ऑनलाइन गेटवे के माध्यम से भुगतान करने के लिए कृपया रद्दीकरण और वापसी नीति स्वीकार करें।"
-        : "Please review and accept our Perishable Refund & Return Policy to proceed with Online Payment Gateway checkout.";
-      alert(alertMsg);
-      setCheckoutError(alertMsg);
-      return;
-    }
 
     setIsPlacing(true);
     setCheckoutError('');
@@ -1861,21 +1853,6 @@ export default function CartCheckout({ onViewChange }) {
                       : "To uphold optimal hygiene controls on edible items and organic harvests, Swastik Supermarket supports zero-friction return within 24 hours of dispatch if items represent quality variance. Approved refunds credit directly through Cashfree gateway within 3 days."}
                   </p>
                 </div>
-
-                {/* Acceptance check */}
-                <label className="flex items-start gap-2.5 cursor-pointer group mt-2 select-none">
-                  <input 
-                    type="checkbox" 
-                    checked={acceptReturns}
-                    onChange={(e) => setAcceptReturns(e.target.checked)}
-                    className="mt-0.5 rounded border-white/20 bg-slate-900 text-cyan-500 focus:ring-0 focus:ring-offset-0 cursor-pointer h-4 w-4"
-                  />
-                  <span className="text-[10px] text-slate-300 font-semibold group-hover:text-white transition-colors">
-                    {language === 'hi'
-                      ? "मैं स्वास्तिक की 24-घंटे वापसी और रिफंड शर्तों से सहमत हूँ।"
-                      : "I agree to Swastik Supermarket's 24-Hour refund and return terms."} <span className="text-red-400">*</span>
-                  </span>
-                </label>
               </div>
 
               {/* Checkout Error Banner */}

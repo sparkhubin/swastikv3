@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { ShoppingCart, Check } from 'lucide-react';
+import { ShoppingCart, Check, Plus, Minus } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
 import { useData } from '../context/DataContext';
 
 export default function ProductCard({ product }) {
   const { language, t } = useLanguage();
-  const { addToCart } = useCart();
+  const { cartItems, addToCart, updateQuantity, removeFromCart } = useCart();
   const { r2PublicUrl } = useData();
   const [isAdded, setIsAdded] = useState(false);
 
@@ -40,6 +40,9 @@ export default function ProductCard({ product }) {
   })();
 
   const selectedUnit = displayUnit;
+
+  const cartItem = cartItems?.find(item => item.product.id === product.id && (item.selectedUnit === selectedUnit));
+  const cartQty = cartItem ? cartItem.quantity : 0;
 
   const name = language === 'hi' ? product.nameHi : product.nameEn;
   const categoryTag = language === 'hi' ? product.subHi : product.subEn;
@@ -144,32 +147,58 @@ export default function ProductCard({ product }) {
             )}
           </div>
 
-          <button
-            onClick={handleAdd}
-            disabled={isOutOfStock}
-            className={`mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-2 text-xs font-bold transition-all duration-300 active:scale-95 border ${
-              isOutOfStock
-                ? 'bg-red-500/10 text-red-300/60 border-red-500/20 cursor-not-allowed'
-                : isAdded
-                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                : 'bg-white/10 text-white border-white/10 hover:bg-white/20 hover:border-white/20'
-            }`}
-            id={`add-btn-${product.id}`}
-          >
-            {isOutOfStock ? (
+          {isOutOfStock ? (
+            <button
+              disabled
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-2 text-xs font-bold bg-red-500/10 text-red-300/60 border border-red-500/20 cursor-not-allowed"
+            >
               <span>{language === 'hi' ? 'स्टॉक बाहर' : 'OUT OF STOCK'}</span>
-            ) : isAdded ? (
-              <>
-                <Check className="h-4 w-4 shrink-0 stroke-[3]" />
-                <span>{t('added').toUpperCase()}</span>
-              </>
-            ) : (
-              <>
-                <ShoppingCart className="h-4 w-4 shrink-0" />
-                <span>{t('addToCart').toUpperCase()}</span>
-              </>
-            )}
-          </button>
+            </button>
+          ) : cartQty > 0 ? (
+            <div className="mt-3 flex w-full items-center justify-between rounded-xl bg-emerald-500/20 border border-emerald-500/40 p-1 text-emerald-300 shadow-inner">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (cartQty === 1) {
+                    removeFromCart(product.id, selectedUnit);
+                  } else {
+                    updateQuantity(product.id, selectedUnit, -1);
+                  }
+                }}
+                className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/30 text-emerald-200 hover:bg-emerald-500/60 transition-all active:scale-90 font-bold"
+                title={language === 'hi' ? 'घटाएं' : 'Decrease'}
+              >
+                <Minus className="h-3.5 w-3.5 stroke-[3]" />
+              </button>
+              <div className="flex items-center gap-1.5 font-bold text-xs">
+                <span className="text-[10px] uppercase tracking-wider text-emerald-300 font-black">{t('added')}</span>
+                <span className="px-2 py-0.5 rounded bg-emerald-950/80 text-white font-mono text-xs border border-emerald-500/40 font-bold">
+                  {cartQty}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  addToCart(product, selectedUnit);
+                }}
+                className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/30 text-emerald-200 hover:bg-emerald-500/60 transition-all active:scale-90 font-bold"
+                title={language === 'hi' ? 'बढ़ाएं' : 'Increase'}
+              >
+                <Plus className="h-3.5 w-3.5 stroke-[3]" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleAdd}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-2 text-xs font-bold transition-all duration-300 active:scale-95 border bg-white/10 text-white border-white/10 hover:bg-white/20 hover:border-white/20"
+              id={`add-btn-${product.id}`}
+            >
+              <ShoppingCart className="h-4 w-4 shrink-0" />
+              <span>{t('addToCart').toUpperCase()}</span>
+            </button>
+          )}
         </div>
       </div>
     </article>

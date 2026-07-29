@@ -9,6 +9,7 @@ import {
   ArrowUpDown, 
   X,
   Plus,
+  Minus,
   LayoutGrid,
   List,
   Check,
@@ -16,6 +17,20 @@ import {
   Mic,
   MicOff
 } from 'lucide-react';
+
+// Safe dynamic Capacitor Speech Recognition helper
+async function getCapacitorSpeech() {
+  try {
+    const { Capacitor } = await import('@capacitor/core');
+    const { SpeechRecognition } = await import('@capacitor-community/speech-recognition');
+    if (Capacitor && Capacitor.isNativePlatform()) {
+      return { Capacitor, SpeechRecognition };
+    }
+  } catch (e) {
+    // Web environment or package omitted at build time
+  }
+  return null;
+}
 
 export default function Shop({ categoryFilterState, onCategoryFilterChange, searchQueryProp, onSearchQueryChange }) {
   const { t, language } = useLanguage();
@@ -85,13 +100,63 @@ export default function Shop({ categoryFilterState, onCategoryFilterChange, sear
   };
 
   // Speech Recognition initializer
-  const startSpeechRecognition = (selectedLang) => {
-    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const langToUse = selectedLang || (language === 'hi' ? 'hi-IN' : 'en-IN');
+  const startSpeechRecognition = async (selectedLang) => {
+    const langToUse = selectedLang || (language === "hi" ? "hi-IN" : "en-IN");
     setListeningLanguage(langToUse);
 
+    // ============================
+    // ANDROID / IOS CAPACITOR NATIVE
+    // ============================
+    const capSpeech = await getCapacitorSpeech();
+    if (capSpeech) {
+      const { SpeechRecognition } = capSpeech;
+      try {
+        const permission = await SpeechRecognition.requestPermissions();
+        if (permission.speechRecognition !== "granted") {
+          alert("Microphone permission denied");
+          return;
+        }
+
+        setIsListening(true);
+        setInterimTranscript("");
+
+        await SpeechRecognition.start({
+          language: langToUse,
+          maxResults: 1,
+          partialResults: true,
+          popup: true
+        });
+
+        SpeechRecognition.addListener("partialResults", (data) => {
+          if (!data.matches?.length) return;
+          const text = data.matches[0];
+          setInterimTranscript(text);
+          setSearchQuery(text);
+          if (onSearchQueryChange) onSearchQueryChange(text);
+        });
+
+        SpeechRecognition.addListener("listeningState", ({ status }) => {
+          console.log("Capacitor Speech Status:", status);
+          if (status === "stopped" || status === "inactive") {
+            setIsListening(false);
+          }
+        });
+      } catch (err) {
+        console.error("Capacitor Speech error:", err);
+        setIsListening(false);
+      }
+      return;
+    }
+
+    // ============================
+    // WEB BROWSER FALLBACK
+    // ============================
+    const SpeechRecognitionAPI =
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
+
     if (!SpeechRecognitionAPI) {
-      console.warn("Native speech recognition API not available. Launching bilingual sandbox assistant...");
+      console.warn("Native speech recognition API not available. Launching simulation...");
       setShowVoiceAssistantHelp(true);
       simulateVoiceInput(langToUse.startsWith('hi') ? "ताजा बासमती चावल" : "Fresh organic apples");
       return;
@@ -105,8 +170,8 @@ export default function Shop({ categoryFilterState, onCategoryFilterChange, sear
       const recognition = new SpeechRecognitionAPI();
       recognitionRef.current = recognition;
       recognition.lang = langToUse;
-      recognition.continuous = false;
       recognition.interimResults = true;
+      recognition.continuous = false;
 
       recognition.onstart = () => {
         setIsListening(true);
@@ -115,9 +180,8 @@ export default function Shop({ categoryFilterState, onCategoryFilterChange, sear
 
       recognition.onresult = (event) => {
         const transcript = Array.from(event.results)
-          .map((result) => result[0])
-          .map((result) => result.transcript)
-          .join('');
+          .map(r => r[0].transcript)
+          .join("");
         setInterimTranscript(transcript);
 
         if (event.results[0].isFinal) {
@@ -127,15 +191,14 @@ export default function Shop({ categoryFilterState, onCategoryFilterChange, sear
         }
       };
 
-      recognition.onerror = (event) => {
-        console.error("Speech recognition error:", event);
-        setIsListening(false);
-        // Automatically open helper drawer for sandbox testing when mic block is detected
-        setShowVoiceAssistantHelp(true);
-      };
-
       recognition.onend = () => {
         setIsListening(false);
+      };
+
+      recognition.onerror = (e) => {
+        console.error("Speech error:", e);
+        setIsListening(false);
+        setShowVoiceAssistantHelp(true);
       };
 
       recognition.start();
@@ -146,7 +209,16 @@ export default function Shop({ categoryFilterState, onCategoryFilterChange, sear
     }
   };
 
-  const stopSpeechRecognition = () => {
+  const stopSpeechRecognition = async () => {
+    const capSpeech = await getCapacitorSpeech();
+    if (capSpeech) {
+      try {
+        await capSpeech.SpeechRecognition.stop();
+      } catch (e) {}
+      setIsListening(false);
+      return;
+    }
+
     if (recognitionRef.current) {
       recognitionRef.current.stop();
     }
@@ -967,39 +1039,57 @@ export default function Shop({ categoryFilterState, onCategoryFilterChange, sear
 
 // Modular helper button component inside Shop.jsx for list mode
 function ListAddToCartButton({ product }) {
-  const { addToCart } = useCart();
+  const { cartItems, addToCart, updateQuantity, removeFromCart } = useCart();
   const { t } = useLanguage();
-  const [isAdded, setIsAdded] = useState(false);
 
-  const handleAdd = (e) => {
-    e.stopPropagation();
-    addToCart(product);
-    setIsAdded(true);
-    setTimeout(() => {
-      setIsAdded(false);
-    }, 1500);
-  };
+  const cartItem = cartItems?.find(item => item.product.id === product.id);
+  const cartQty = cartItem ? cartItem.quantity : 0;
+  const unit = cartItem ? cartItem.selectedUnit : undefined;
+
+  if (cartQty > 0) {
+    return (
+      <div className="flex w-full sm:w-36 items-center justify-between rounded-xl bg-emerald-500/20 border border-emerald-500/40 p-1 text-emerald-300 shadow-inner">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (cartQty === 1) {
+              removeFromCart(product.id, unit);
+            } else {
+              updateQuantity(product.id, unit, -1);
+            }
+          }}
+          className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/30 text-emerald-200 hover:bg-emerald-500/60 transition-all active:scale-90 font-bold"
+        >
+          <Minus className="h-3.5 w-3.5 stroke-[3]" />
+        </button>
+        <span className="px-2 py-0.5 rounded bg-emerald-950/80 text-white font-mono text-xs border border-emerald-500/40 font-bold">
+          {cartQty}
+        </span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            addToCart(product, unit);
+          }}
+          className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/30 text-emerald-200 hover:bg-emerald-500/60 transition-all active:scale-90 font-bold"
+        >
+          <Plus className="h-3.5 w-3.5 stroke-[3]" />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <button
-      onClick={handleAdd}
-      className={`flex w-full sm:w-36 items-center justify-center gap-2 rounded-xl py-2.5 px-4 text-xs font-bold transition-all duration-300 active:scale-95 border uppercase ${
-        isAdded
-          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30 font-black'
-          : 'bg-white/10 text-white border-white/10 hover:bg-white/20 hover:border-white/20'
-      }`}
+      onClick={(e) => {
+        e.stopPropagation();
+        addToCart(product);
+      }}
+      className="flex w-full sm:w-36 items-center justify-center gap-2 rounded-xl py-2.5 px-4 text-xs font-bold transition-all duration-300 active:scale-95 border uppercase bg-white/10 text-white border-white/10 hover:bg-white/20 hover:border-white/20"
     >
-      {isAdded ? (
-        <>
-          <Check className="h-4 w-4 shrink-0 stroke-[3]" />
-          <span>{t('added')}</span>
-        </>
-      ) : (
-        <>
-          <ShoppingCart className="h-4 w-4 shrink-0" />
-          <span>{t('addToCart')}</span>
-        </>
-      )}
+      <ShoppingCart className="h-4 w-4 shrink-0" />
+      <span>{t('addToCart')}</span>
     </button>
   );
 }

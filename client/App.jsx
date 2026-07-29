@@ -74,6 +74,19 @@ function AppContent() {
     }
   }, [currentView]);
 
+
+  const handleSearchClick = () => {
+    setCurrentView('shop');
+    setIsSidebarOpen(false);
+    setTimeout(() => {
+      const searchInput = document.getElementById('search-input-field');
+      if (searchInput) {
+        searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        searchInput.focus();
+      }
+    }, 150);
+  };
+
   // Quick navigation handlers from Flyout Menu
   const handleSidebarNav = (view, catId = 'all') => {
     setCurrentView(view);
@@ -116,7 +129,7 @@ function AppContent() {
       {/* 1. Header Top App Bar */}
       <Header 
         onMenuClick={() => setIsSidebarOpen(true)} 
-        onSearchClick={() => handleSidebarNav('shop', 'all')}
+        onSearchClick={handleSearchClick}
         currentView={currentView}
         onViewChange={setCurrentView}
       />

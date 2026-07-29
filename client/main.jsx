@@ -2,6 +2,8 @@ import {StrictMode, Component} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
+import { Capacitor } from '@capacitor/core';
+import { StatusBar, Style } from '@capacitor/status-bar';
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -127,6 +129,15 @@ if (rawApiUrl && (rawApiUrl.startsWith('http://') || rawApiUrl.startsWith('https
       console.warn("Could not intercept window.fetch globally:", err);
     }
   }
+}
+if (Capacitor.isNativePlatform()) {
+  StatusBar.setOverlaysWebView({
+    overlay: false
+  });
+
+  StatusBar.setStyle({
+    style: Style.Light
+  });
 }
 
 console.log("🚀 [Client main.jsx]: Top-level file execution started. If you see this, the Javascript bundle is downloading and parsing successfully!");

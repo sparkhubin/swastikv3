@@ -587,8 +587,8 @@ export default function Account({ onViewChange }) {
     }
     setSimulatedOtp(realWaCode);
     alert(isHindi 
-      ? `🔑 [स्वास्तिक सुरक्षा ओटीपी]: व्हाट्सएप पर भेजा गया कोड: ${realWaCode}` 
-      : `🔑 [Swastik Security OTP]: WhatsApp Code Sent: ${realWaCode}`
+      ? `🔑 [स्वास्तिक सुरक्षा ओटीपी]: व्हाट्सएप पर भेजा गया कोड` 
+      : `🔑 [Swastik Security OTP]: WhatsApp Code Sent`
     );
   };
 
