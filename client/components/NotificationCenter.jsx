@@ -85,12 +85,12 @@ export default function NotificationCenter({ role = 'customer', phone = '', clas
           setIsOpen(!isOpen);
           if (!isOpen) fetchNotifications();
         }}
-        className="relative p-2.5 rounded-full bg-slate-900/80 border border-white/10 hover:border-cyan-400/50 text-slate-200 hover:text-cyan-300 transition-all cursor-pointer flex items-center justify-center shadow-md active:scale-95"
+        className="relative p-2 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 hover:text-slate-900 transition-all cursor-pointer flex items-center justify-center shadow-sm active:scale-95"
         title={isHindi ? "इन-ऐप लाइव सूचनाएं" : "In-App Live Notifications"}
       >
         <Bell className="h-5 w-5" />
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white shadow-[0_0_10px_rgba(239,68,68,0.8)] animate-pulse">
+          <span className="absolute -top-1 -right-1 flex h-4.5 w-4.5 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-black text-white shadow-md animate-pulse">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -98,22 +98,22 @@ export default function NotificationCenter({ role = 'customer', phone = '', clas
 
       {/* Notifications Dropdown Panel */}
       {isOpen && (
-        <div className="absolute right-0 mt-3 w-80 md:w-96 bg-slate-900/95 backdrop-blur-xl border border-cyan-500/30 rounded-3xl shadow-2xl z-50 text-white overflow-hidden animate-fade-in">
+        <div className="fixed sm:absolute right-2 sm:right-0 top-16 sm:top-auto mt-2 w-[calc(100vw-1rem)] max-w-sm sm:w-96 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 text-slate-900 overflow-hidden animate-fade-in">
           
           {/* Panel Header */}
-          <div className="p-4 bg-slate-950/80 border-b border-white/10 flex items-center justify-between">
+          <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-300">
+              <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700">
                 <Bell className="h-4 w-4" />
               </div>
               <div>
-                <h4 className="text-xs font-black uppercase text-white flex items-center gap-1.5">
+                <h4 className="text-xs font-black uppercase text-slate-900 flex items-center gap-1.5">
                   <span>{isHindi ? "लाइव सूचनाएं" : "Live Notifications"}</span>
-                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
                     {role.toUpperCase()}
                   </span>
                 </h4>
-                <p className="text-[9px] text-slate-400 font-semibold">
+                <p className="text-[9px] text-slate-500 font-semibold">
                   {unreadCount > 0 
                     ? (isHindi ? `${unreadCount} अनपढ़ी सूचनाएं` : `${unreadCount} Unread Notifications`)
                     : (isHindi ? "सभी सूचनाएं पढ़ी जा चुकी हैं" : "All caught up!")}
@@ -125,7 +125,7 @@ export default function NotificationCenter({ role = 'customer', phone = '', clas
               {unreadCount > 0 && (
                 <button
                   onClick={handleMarkAllRead}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-white/5 transition-all text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                  className="p-1.5 rounded-lg text-slate-600 hover:text-emerald-700 hover:bg-slate-200 transition-all text-[10px] font-bold flex items-center gap-1 cursor-pointer"
                   title={isHindi ? "सभी को पढ़ा हुआ चिन्हित करें" : "Mark all as read"}
                 >
                   <CheckCheck className="h-3.5 w-3.5" />
@@ -134,7 +134,7 @@ export default function NotificationCenter({ role = 'customer', phone = '', clas
               )}
               <button
                 onClick={() => setIsOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-200 transition-all cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>

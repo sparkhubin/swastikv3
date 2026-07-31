@@ -249,9 +249,19 @@ export default function CustomersManager() {
     }, 2000);
   };
 
+  const [cardGenModalCust, setCardGenModalCust] = useState(null);
+  const [cardGenNum, setCardGenNum] = useState('');
+
+  const openCardGenModal = (customer) => {
+    setCardGenModalCust(customer);
+    const existingOrAuto = customer.primeMembershipNo || `SP-VIP-${customer.id || Math.floor(100 + Math.random() * 900)}-${(customer.phone || '9999').replace(/\s/g, '').slice(-4)}`;
+    setCardGenNum(existingOrAuto);
+  };
+
   const handlePrintCard = (customer) => {
     const printWindow = window.open('', '_blank');
-    const qrText = encodeURIComponent('https://swastiksupermarket.com/verify?id=' + customer.id);
+    const memberNo = customer.primeMembershipNo || ('SWASTIK-VIP-' + customer.id + '-' + (customer.phone || '9999').replace(/\s/g, '').slice(-4));
+    const qrText = encodeURIComponent('https://swastiksupermarket.com/verify?id=' + customer.id + '&card=' + encodeURIComponent(memberNo));
     const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + qrText;
     
     printWindow.document.write(
@@ -400,7 +410,7 @@ export default function CustomersManager() {
             '<div class="footer">' +
               '<div>' +
                 '<span class="footer-text">Membership ID:</span>' +
-                '<span style="font-family: monospace; color: white; margin-left: 4px; font-weight: bold;">SWASTIK-' + customer.id + '-' + (customer.phone || '9999').slice(-4) + '</span>' +
+                '<span style="font-family: monospace; color: white; margin-left: 4px; font-weight: bold;">' + memberNo + '</span>' +
               '</div>' +
               '<div>' +
                 '<span class="footer-text">Plan Status:</span>' +
@@ -438,6 +448,7 @@ export default function CustomersManager() {
         phone: selectedDetailCust.phone || '',
         points: selectedDetailCust.points || 0,
         isPrimeActive: !!selectedDetailCust.isPrimeActive,
+        primeMembershipNo: selectedDetailCust.primeMembershipNo || '',
         image: selectedDetailCust.image || '',
         password: selectedDetailCust.password || '',
         address: selectedDetailCust.address || '',
@@ -1093,60 +1104,27 @@ export default function CustomersManager() {
                               <span>Bills & Edit</span>
                             </button>
 
-                            {/* Activate / Deactivate VIP Section */}
+                            {/* Activate / Deactivate / Generate VIP Card Section */}
                             {cust.isPrimeActive ? (
                               <div className="flex gap-1 justify-center w-full max-w-[130px]">
                                 <button
                                   type="button"
-                                  onClick={() => handlePrintCard(cust)}
-                                  title="Print VIP Gold Membership Card Pass"
-                                  className="p-1 px-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-slate-100 rounded-lg text-[8px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-all"
+                                  onClick={() => openCardGenModal(cust)}
+                                  title="Manage or Print VIP Gold Membership Card Pass"
+                                  className="p-1 px-2 bg-amber-500/10 hover:bg-amber-500/20 active:scale-95 border border-amber-500/30 text-amber-300 rounded-lg text-[8px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-all"
                                 >
-                                  <Printer className="h-2.5 w-2.5 text-indigo-400" />
-                                  <span>Print</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (confirm('Deactivate Prime status for customer ' + cust.name + '?')) {
-                                      updateCustomer(cust.id, { ...cust, isPrimeActive: false });
-                                      const stored = localStorage.getItem('swastik_profile');
-                                      if (stored) {
-                                        const prof = JSON.parse(stored);
-                                        if (prof.phone === cust.phone || prof.email === cust.email) {
-                                          prof.isPrimeActive = false;
-                                          localStorage.setItem('swastik_profile', JSON.stringify(prof));
-                                          window.dispatchEvent(new Event('storage'));
-                                        }
-                                      }
-                                    }
-                                  }}
-                                  title="Deactivate VIP Privilege status"
-                                  className="p-1 px-1.5 bg-red-950/20 hover:bg-red-500/20 active:scale-95 border border-red-500/20 text-red-400 rounded-lg text-[8px] font-bold cursor-pointer transition-all"
-                                >
-                                  Disable
+                                  <Crown className="h-2.5 w-2.5 text-amber-400" />
+                                  <span>Card #{cust.primeMembershipNo ? 'Assigned' : 'Gen'}</span>
                                 </button>
                               </div>
                             ) : (
                               <button
                                 type="button"
-                                onClick={() => {
-                                  updateCustomer(cust.id, { ...cust, isPrimeActive: true });
-                                  const stored = localStorage.getItem('swastik_profile');
-                                  if (stored) {
-                                    const prof = JSON.parse(stored);
-                                    if (prof.phone === cust.phone || prof.email === cust.email) {
-                                      prof.isPrimeActive = true;
-                                      localStorage.setItem('swastik_profile', JSON.stringify(prof));
-                                      window.dispatchEvent(new Event('storage'));
-                                    }
-                                  }
-                                  alert('Successfully Activated Swastik Prime VIP Pass for ' + cust.name + '!');
-                                }}
+                                onClick={() => openCardGenModal(cust)}
                                 className="w-full max-w-[130px] px-2 py-1 bg-gradient-to-r from-amber-500/10 to-transparent hover:from-amber-500/20 hover:to-amber-500/10 border border-amber-500/30 text-amber-300 hover:text-amber-200 active:scale-95 rounded-xl text-[8px] font-black uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer transition-all"
                               >
                                 <Crown className="h-2.5 w-2.5 text-amber-400" />
-                                <span>Activate VIP</span>
+                                <span>Generate Card</span>
                               </button>
                             )}
 
@@ -2134,6 +2112,21 @@ export default function CustomersManager() {
                       />
                     </div>
 
+                    {/* Prime Membership Card Number field */}
+                    <div className="space-y-1 bg-amber-950/20 border border-amber-500/30 p-2.5 rounded-xl">
+                      <label className="text-[9px] uppercase tracking-widest text-amber-400 block font-black flex items-center gap-1">
+                        <Crown className="h-3 w-3 text-amber-400" />
+                        <span>Prime VIP Membership Card Number</span>
+                      </label>
+                      <input 
+                        type="text"
+                        value={editForm.primeMembershipNo || ''}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, primeMembershipNo: e.target.value }))}
+                        className="w-full bg-slate-950 border border-amber-500/30 rounded-xl px-3 py-1.5 text-amber-300 font-mono text-xs outline-none focus:border-amber-400 uppercase font-black"
+                        placeholder="e.g. SP-VIP-8899"
+                      />
+                    </div>
+
                     {/* VIP Gold toggle */}
                     <div className="flex items-center justify-between p-2 bg-slate-950/60 border border-white/5 rounded-xl mt-3">
                       <div className="flex items-center gap-2">
@@ -2163,6 +2156,7 @@ export default function CustomersManager() {
                           phone: editForm.phone,
                           points: editForm.points,
                           isPrimeActive: editForm.isPrimeActive,
+                          primeMembershipNo: editForm.primeMembershipNo ? editForm.primeMembershipNo.toUpperCase() : '',
                           image: editForm.image,
                           password: editForm.password,
                           address: editForm.address,
@@ -2181,6 +2175,7 @@ export default function CustomersManager() {
                               phone: editForm.phone,
                               points: editForm.points,
                               isPrimeActive: editForm.isPrimeActive,
+                              primeMembershipNo: editForm.primeMembershipNo ? editForm.primeMembershipNo.toUpperCase() : '',
                               image: editForm.image,
                               password: editForm.password,
                               address: editForm.address,
@@ -2304,6 +2299,214 @@ export default function CustomersManager() {
               </div>
 
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Membership Card Generator & Custom Assignment Modal */}
+      {cardGenModalCust && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-fade-in overflow-y-auto">
+          <div className="relative w-full max-w-lg bg-slate-950 border border-amber-500/30 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-5 my-auto max-h-[90vh] overflow-y-auto custom-scrollbar">
+            
+            <button
+              type="button"
+              onClick={() => setCardGenModalCust(null)}
+              className="absolute top-4 right-4 hover:bg-white/10 p-2 rounded-full text-slate-400 transition-all active:scale-90 cursor-pointer"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="border-b border-white/10 pb-3 flex items-center gap-2">
+              <Crown className="h-6 w-6 text-amber-400 fill-amber-400/20 animate-pulse" />
+              <div>
+                <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                  {isHindi ? "स्वास्तिक प्राइम वीआईपी कार्ड जनरेटर" : "Swastik Prime VIP Card Generator & Assignment"}
+                </h3>
+                <p className="text-[10px] text-slate-400 font-medium">
+                  {isHindi 
+                    ? "सदस्यता जनरेट या प्रिंट करने से पहले मैन्युअल रूप से कार्ड नंबर / आईडी असाइन करें।" 
+                    : "Manually assign or customize the Membership Card Number before generating & issuing the card."}
+                </p>
+              </div>
+            </div>
+
+            {/* Customer Details Summary */}
+            <div className="bg-slate-900/80 p-3.5 rounded-2xl border border-white/10 space-y-2">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-400 font-bold uppercase text-[9px]">{isHindi ? "ग्राहक का नाम:" : "Customer Name:"}</span>
+                <span className="font-black text-white uppercase">{cardGenModalCust.name}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-400 font-bold uppercase text-[9px]">{isHindi ? "फोन नंबर:" : "Phone Connection:"}</span>
+                <span className="font-mono text-cyan-300 font-bold">{cardGenModalCust.phone || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-400 font-bold uppercase text-[9px]">{isHindi ? "वर्तमान स्थिति:" : "VIP Status:"}</span>
+                <span className={`font-black text-[9px] px-2 py-0.5 rounded-full uppercase ${cardGenModalCust.isPrimeActive ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-slate-800 text-slate-400'}`}>
+                  {cardGenModalCust.isPrimeActive ? 'Active VIP' : 'Regular Customer'}
+                </span>
+              </div>
+            </div>
+
+            {/* Manual Membership Number Assignment Input */}
+            <div className="space-y-2 bg-gradient-to-br from-amber-950/20 to-indigo-950/20 p-4 rounded-2xl border border-amber-500/25">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-black uppercase tracking-wider text-amber-300 flex items-center gap-1">
+                  <span>💳</span>
+                  <span>{isHindi ? "कस्टम मेंबरशिप नंबर असाइन करें" : "MANUAL MEMBERSHIP NUMBER / CARD ID"}</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const rnd = `SP-VIP-${cardGenModalCust.id || '01'}-${Math.floor(1000 + Math.random() * 9000)}`;
+                    setCardGenNum(rnd);
+                  }}
+                  className="text-[9px] font-bold text-cyan-400 hover:text-cyan-300 uppercase tracking-wider underline cursor-pointer"
+                >
+                  {isHindi ? "ऑटो-जनरेट करें" : "Auto-Generate"}
+                </button>
+              </div>
+
+              <input 
+                type="text"
+                required
+                placeholder="e.g. SP-VIP-8899 or SWASTIK-1008"
+                value={cardGenNum}
+                onChange={(e) => setCardGenNum(e.target.value)}
+                className="w-full bg-slate-950 border-2 border-amber-400/50 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-sm font-mono font-black text-amber-300 uppercase tracking-widest outline-none shadow-inner"
+              />
+              <p className="text-[9px] text-slate-400 italic font-medium">
+                {isHindi 
+                  ? "यह नंबर ग्राहक के डिजिटल पास और प्रिंटेड वीआईपी कार्ड पर प्रदर्शित होगा।" 
+                  : "This exact custom card identifier will be printed on the Gold VIP Card and rendered in customer profile."}
+              </p>
+            </div>
+
+            {/* Card Preview Box */}
+            <div className="p-3.5 bg-gradient-to-br from-slate-900 via-indigo-950 to-black rounded-2xl border border-amber-500/30 text-white space-y-2 shadow-inner">
+              <div className="flex justify-between items-center border-b border-white/10 pb-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Crown className="h-4 w-4 text-amber-400 fill-amber-400" />
+                  <span className="text-[10px] font-black text-amber-300 tracking-wider uppercase">SWASTIK PRIME VIP PASS PREVIEW</span>
+                </div>
+                <span className="text-[8px] font-mono text-cyan-300 uppercase bg-indigo-500/20 px-1.5 py-0.5 rounded border border-indigo-500/30">Preview</span>
+              </div>
+              <div className="flex justify-between items-end pt-1">
+                <div>
+                  <p className="text-[8px] text-slate-400 uppercase font-bold">Member Name</p>
+                  <p className="text-xs font-black uppercase text-white tracking-wide">{cardGenModalCust.name}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[8px] text-amber-300/80 uppercase font-bold">Assigned Card No</p>
+                  <p className="text-xs font-mono font-black text-amber-300 tracking-wider">{cardGenNum || 'NOT ASSIGNED'}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="space-y-2 pt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!cardGenNum.trim()) {
+                      alert("Please enter a valid membership card number!");
+                      return;
+                    }
+                    const num = cardGenNum.trim().toUpperCase();
+                    updateCustomer(cardGenModalCust.id, {
+                      ...cardGenModalCust,
+                      isPrimeActive: true,
+                      primeMembershipNo: num
+                    });
+                    // Sync profile if current
+                    const stored = localStorage.getItem('swastik_profile');
+                    if (stored) {
+                      const prof = JSON.parse(stored);
+                      if (prof.phone === cardGenModalCust.phone || prof.email === cardGenModalCust.email) {
+                        prof.isPrimeActive = true;
+                        prof.primeMembershipNo = num;
+                        localStorage.setItem('swastik_profile', JSON.stringify(prof));
+                        window.dispatchEvent(new Event('storage'));
+                      }
+                    }
+                    setToastMessage(`Prime VIP Card ${num} assigned and activated!`);
+                    setCardGenModalCust(null);
+                    setTimeout(() => setToastMessage(''), 3500);
+                  }}
+                  className="w-full bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-slate-950 font-black text-xs uppercase tracking-wider py-2.5 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Crown className="h-4 w-4" />
+                  <span>{isHindi ? "सहेजें और वीआईपी सक्रिय करें" : "Save & Activate VIP Card"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!cardGenNum.trim()) {
+                      alert("Please enter a valid membership card number!");
+                      return;
+                    }
+                    const num = cardGenNum.trim().toUpperCase();
+                    const updatedObj = {
+                      ...cardGenModalCust,
+                      isPrimeActive: true,
+                      primeMembershipNo: num
+                    };
+                    updateCustomer(cardGenModalCust.id, updatedObj);
+                    // Sync profile if current
+                    const stored = localStorage.getItem('swastik_profile');
+                    if (stored) {
+                      const prof = JSON.parse(stored);
+                      if (prof.phone === cardGenModalCust.phone || prof.email === cardGenModalCust.email) {
+                        prof.isPrimeActive = true;
+                        prof.primeMembershipNo = num;
+                        localStorage.setItem('swastik_profile', JSON.stringify(prof));
+                        window.dispatchEvent(new Event('storage'));
+                      }
+                    }
+                    handlePrintCard(updatedObj);
+                    setToastMessage(`Card ${num} activated & opening print dialog...`);
+                    setCardGenModalCust(null);
+                    setTimeout(() => setToastMessage(''), 3500);
+                  }}
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-wider py-2.5 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 border border-indigo-400/30"
+                >
+                  <Printer className="h-4 w-4" />
+                  <span>{isHindi ? "सहेजें और कार्ड प्रिंट करें" : "Save & Print Card"}</span>
+                </button>
+              </div>
+
+              {cardGenModalCust.isPrimeActive && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm(`Deactivate Prime membership for ${cardGenModalCust.name}?`)) {
+                      updateCustomer(cardGenModalCust.id, {
+                        ...cardGenModalCust,
+                        isPrimeActive: false
+                      });
+                      const stored = localStorage.getItem('swastik_profile');
+                      if (stored) {
+                        const prof = JSON.parse(stored);
+                        if (prof.phone === cardGenModalCust.phone || prof.email === cardGenModalCust.email) {
+                          prof.isPrimeActive = false;
+                          localStorage.setItem('swastik_profile', JSON.stringify(prof));
+                          window.dispatchEvent(new Event('storage'));
+                        }
+                      }
+                      setToastMessage(`Prime status deactivated for ${cardGenModalCust.name}`);
+                      setCardGenModalCust(null);
+                      setTimeout(() => setToastMessage(''), 3000);
+                    }
+                  }}
+                  className="w-full bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-500/30 font-bold text-[10px] uppercase py-2 rounded-xl transition-all cursor-pointer"
+                >
+                  {isHindi ? "प्राइम वीआईपी स्थिति निष्क्रिय करें" : "Disable Prime VIP Status"}
+                </button>
+              )}
+            </div>
+
           </div>
         </div>
       )}

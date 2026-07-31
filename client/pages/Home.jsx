@@ -127,7 +127,7 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
     setShowDirections(true);
     setDirectionsStatus(language === 'hi' ? 'आपकी वर्तमान स्थिति से मार्ग की गणना की जा रही है...' : 'Calculating shortest route from current location...');
     setTimeout(() => {
-      const addressName = contactSettings?.address || (language === 'hi' ? "प्लॉट नंबर 46, ब्लॉक-बी, सेक्टर 18, नोएडा" : "Plot No 46, Block-B, Sector 18, Noida");
+      const addressName = contactSettings?.address || (language === 'hi' ? "सर्वे नंबर 100 संजीत रोड सरस्वती स्कूल के सामने, मंदसौर, मध्य प्रदेश" : "Survey no. 100 Sanjit road opposite of Saraswati school , Mandsaur, India, Madhya Pradesh");
       setDirectionsStatus(
         language === 'hi' 
           ? `मार्ग तैयार है! स्वास्तिक स्टोर का स्थान: ${addressName} है।`
@@ -152,65 +152,24 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
 
   return (
     <div className="flex flex-col gap-8 pb-12" id="home-view">
-      {/* 0. Flagship Store Full-Width Hero Section */}
+      {/* 0. Flagship Store Full-Width Hero Banner */}
       <section className="relative w-full overflow-hidden px-4 md:px-8 mt-2">
-        <div className="relative h-[250px] md:h-[350px] w-full rounded-2xl overflow-hidden group shadow-2xl border border-white/10">
+        <div className="relative h-[220px] md:h-[350px] w-full rounded-2xl overflow-hidden shadow-2xl border border-white/10">
           <img 
             src={contactSettings?.banner || "https://images.unsplash.com/photo-1534723452862-4c874018d66d?auto=format&fit=crop&q=80&w=1920"} 
-            alt={contactSettings?.brandName || "Swastik Supermarket Flagship Store"}
-            className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-102 filter brightness-[0.7] contrast-[1.05]"
+            alt={contactSettings?.brandName || "Swastik Supermarket Banner"}
+            className="w-full h-full object-cover rounded-2xl"
             referrerPolicy="no-referrer"
           />
-          {/* Ambient Overlay to blend with the app theme */}
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent flex flex-col justify-end p-6 md:p-10">
-            <div className="space-y-3 max-w-2xl">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                {contactSettings?.logo && (
-                  <div className="bg-white p-1.5 rounded-2xl shadow-xl w-14 h-14 shrink-0 flex items-center justify-center border border-white/20 animate-fade-in">
-                    <img 
-                      src={contactSettings.logo} 
-                      alt="Brand Logo" 
-                      className="w-11 h-11 object-contain rounded-xl" 
-                      referrerPolicy="no-referrer" 
-                    />
-                  </div>
-                )}
-                <div className="space-y-1">
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 text-[8.5px] font-black uppercase tracking-widest rounded-lg">
-                    <Sparkles className="h-3 w-3 text-cyan-400 animate-pulse" />
-                    <span>{contactSettings?.brandName ? contactSettings.brandName.toUpperCase() : (language === 'hi' ? 'स्वास्तिक प्रामाणिकता - मुख्य शाखा' : 'SWASTIK FLAGSHIP - MAIN SUPERSTORE')}</span>
-                  </div>
-                  <h1 className="text-white font-black text-xl md:text-3xl tracking-tight text-glow uppercase leading-none">
-                    {contactSettings?.brandName || (language === 'hi' ? 'स्वास्तिक सुपरमार्केट और जैविक किराना' : 'Swastik Supermarket & Organic Groceries')}
-                  </h1>
-                </div>
-              </div>
-              <p className="text-xs md:text-sm text-slate-300 font-medium leading-relaxed">
-                {contactSettings?.address || (language === 'hi' 
-                  ? 'हमारे आधुनिक सुपरस्टोर की एक झलक। यहाँ आपको मिलता है सर्वोत्तम उच्च-गुणवत्ता वाले ताजे फल, सब्जियां, और दैनिक किराना सीधे आपके घर।' 
-                  : 'A glance at our physical flagship superstore. Discover unmatched fresh stocks, organic grains, and friendly store-side service.')}
-              </p>
-              
-              {/* Customizable Badge Indicator / Instructional placeholder tag */}
-              <div className="pt-1 flex items-center gap-2">
-                <span className="text-[9px] text-slate-400 font-bold bg-slate-950/80 px-2.5 py-0.5 rounded border border-white/5 flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
-                  <span>{language === 'hi' ? 'सक्रिय विन्यास' : 'Live Configured'}</span>
-                </span>
-                {contactSettings?.gst && (
-                  <span className="text-[9px] text-cyan-400/80 font-mono bg-slate-950/80 px-2.5 py-0.5 rounded border border-white/5">
-                    GST: {contactSettings.gst}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 
       {/* 1. Hero Promo Slide Section */}
       <section className="relative w-full overflow-hidden px-4 md:px-8 mt-1 pt-1">
-        <div className="relative h-[220px] md:h-[320px] w-full rounded-2xl overflow-hidden group">
+        <div 
+          onClick={handleSlideAction}
+          className={`relative h-[220px] md:h-[320px] w-full rounded-2xl overflow-hidden group shadow-2xl border border-white/10 ${hasLink ? 'cursor-pointer' : ''}`}
+        >
           {currentSlide && (
             <img 
               src={currentSlide.image} 
@@ -219,31 +178,14 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
               referrerPolicy="no-referrer"
             />
           )}
-          {/* Gradient Dark Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/45 to-transparent flex flex-col justify-center px-6 md:px-12">
-            <span className="text-secondary-container font-extrabold text-xs tracking-wider uppercase mb-2">
-              {slideLabel}
-            </span>
-            <h2 className="text-white font-black text-xl md:text-3xl leading-tight whitespace-pre-line mb-4 drop-shadow">
-              {slideTitle}
-            </h2>
-            {hasLink && (
-              <button 
-                onClick={handleSlideAction}
-                className="bg-secondary-container text-on-secondary-container hover:brightness-95 px-5 py-2.5 rounded-lg text-xs md:text-sm font-black uppercase tracking-wide self-start active:scale-95 transition-all shadow-md"
-              >
-                {slideBtnText}
-              </button>
-            )}
-          </div>
 
           {/* Slide Indicator Dots */}
-          <div className="absolute bottom-4 right-4 flex gap-2">
+          <div className="absolute bottom-4 right-4 flex gap-2 z-10" onClick={(e) => e.stopPropagation()}>
             {slidesList.map((_, i) => (
               <button
                 key={i}
                 onClick={() => setActiveSlide(i)}
-                className={`h-2 rounded-full transition-all duration-300 ${activeSlide === i ? 'w-6 bg-secondary-container' : 'w-2 bg-white/50'}`}
+                className={`h-2 rounded-full transition-all duration-300 ${activeSlide === i ? 'w-6 bg-cyan-400' : 'w-2 bg-white/60 hover:bg-white'}`}
               />
             ))}
           </div>
@@ -263,10 +205,10 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
               className="flex flex-col items-center gap-2 group cursor-pointer shrink-0 min-w-[76px]"
               id={`cat-circle-${cat.id}`}
             >
-              <div className="w-14 h-14 rounded-2xl bg-white/5 backdrop-blur-md flex items-center justify-center text-2xl group-hover:bg-cyan-500/20 group-hover:border-cyan-400/40 active:scale-95 transition-all duration-200 shadow-lg border border-white/10">
+              <div className="w-14 h-14 rounded-2xl bg-white flex items-center justify-center text-2xl group-hover:bg-emerald-50 group-hover:border-emerald-400 active:scale-95 transition-all duration-200 shadow-sm border border-slate-200">
                 {cat.icon}
               </div>
-              <span className="text-xs font-bold text-slate-300 group-hover:text-cyan-400 tracking-wide">
+              <span className="text-xs font-extrabold text-slate-700 group-hover:text-emerald-700 tracking-wide">
                 {cat.label}
               </span>
             </button>
@@ -276,26 +218,26 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
 
       {/* 3. Offer Zone Banner (Ticking Flash Sale) */}
       <section className="px-4 md:px-8">
-        <div className="bg-gradient-to-r from-pink-500/15 via-purple-500/5 to-cyan-500/5 backdrop-blur-xl text-white rounded-2xl p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 border border-white/15 shadow-xl">
+        <div className="bg-gradient-to-r from-emerald-600 via-teal-700 to-emerald-800 text-white rounded-2xl p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-lg border border-emerald-500/30">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-pink-500/20 text-pink-300 border border-pink-500/30 font-extrabold text-xs tracking-wider mr-2 uppercase rounded-lg mb-3">
-              <Flame className="h-3.5 w-3.5 animate-bounce text-pink-400" />
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/20 text-white border border-white/30 font-black text-xs tracking-wider mr-2 uppercase rounded-lg mb-3">
+              <Flame className="h-3.5 w-3.5 animate-bounce text-amber-300" />
               <span>{t('offerZone')}</span>
             </div>
-            <h3 className="font-extrabold text-lg md:text-xl text-white tracking-tight text-glow">
+            <h3 className="font-black text-lg md:text-xl text-white tracking-tight">
               {t('flashSaleTitle')}
             </h3>
-            <p className="text-xs md:text-sm text-slate-300 mt-1">
+            <p className="text-xs md:text-sm text-emerald-100 mt-1 font-medium">
               {t('flashSaleDesc')}
             </p>
           </div>
-          <div className="flex flex-col items-end shrink-0 select-none bg-slate-950/50 p-4 rounded-xl border border-white/10 shadow-lg">
-            <span className="font-black text-xl md:text-2xl text-cyan-400 tracking-wider uppercase block">
+          <div className="flex flex-col items-end shrink-0 select-none bg-emerald-950/40 p-4 rounded-xl border border-white/20 shadow-md">
+            <span className="font-black text-xl md:text-2xl text-amber-300 tracking-wider uppercase block">
               {t('upTo60')}
             </span>
-            <div className="flex items-center gap-1.5 text-xs text-slate-300 mt-1">
-              <Timer className="h-3.5 w-3.5 text-cyan-400" />
-              <p className="font-mono font-bold">
+            <div className="flex items-center gap-1.5 text-xs text-white mt-1">
+              <Timer className="h-3.5 w-3.5 text-amber-300" />
+              <p className="font-mono font-black">
                 {String(timeLeft.hours).padStart(2, '0')}h : {String(timeLeft.minutes).padStart(2, '0')}m : {String(timeLeft.seconds).padStart(2, '0')}s
               </p>
             </div>
@@ -307,8 +249,8 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
       <section className="px-4 md:px-8">
         <div className="flex justify-between items-end mb-5">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-secondary" />
-            <h3 className="font-black text-lg md:text-xl text-primary tracking-tight">
+            <Sparkles className="h-5 w-5 text-emerald-600" />
+            <h3 className="font-black text-lg md:text-xl text-slate-900 tracking-tight">
               {t('featuredProducts')}
             </h3>
           </div>
@@ -317,10 +259,10 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
               onCategorySelect('all');
               onViewChange('shop');
             }}
-            className="flex items-center text-xs font-bold text-secondary hover:underline transition-all tracking-wider uppercase"
+            className="flex items-center text-xs font-extrabold text-emerald-700 hover:text-emerald-800 transition-all tracking-wider uppercase gap-0.5"
           >
             <span>{t('viewAll')}</span>
-            <ChevronRight className="h-3.5 w-3.5" />
+            <ChevronRight className="h-4 w-4" />
           </button>
         </div>
 
@@ -332,20 +274,20 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
       </section>
 
       {/* 5. Customer Testimonials Slider */}
-      <section className="bg-white/5 backdrop-blur-md border-t border-b border-white/10 py-12 px-4 md:px-8">
+      <section className="bg-slate-100/90 border-t border-b border-slate-200 py-10 px-4 md:px-8">
         <div className="max-w-3xl mx-auto flex flex-col gap-6 items-center text-center">
-          <h3 className="font-extrabold text-lg md:text-xl text-white text-glow">
+          <h3 className="font-black text-lg md:text-xl text-slate-900">
             {t('customerSay')}
           </h3>
           
-          <div className="relative w-full overflow-hidden bg-white/5 backdrop-blur-md p-6 sm:p-8 rounded-2xl border border-white/12 shadow-xl mt-2 select-none">
+          <div className="relative w-full overflow-hidden bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-md mt-1 select-none">
             {/* Nav Prev Button */}
             <button 
               onClick={() => {
                 const prevIndex = (activeTestimonial - 1 + reviews.length) % reviews.length;
                 setActiveTestimonial(prevIndex);
               }}
-              className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 rounded-full p-2 bg-white/10 border border-white/10 hover:bg-white/20 hover:text-cyan-400 text-slate-300 transition-all active:scale-90 z-10"
+              className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 rounded-full p-2 bg-slate-100 border border-slate-200 hover:bg-slate-200 text-slate-700 transition-all active:scale-90 z-10"
               id="prev-testimonial-btn"
               type="button"
             >
@@ -357,25 +299,25 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
               const activeReview = reviews[activeTestimonial % reviews.length];
               return (
                 <div className="px-8 sm:px-12 flex flex-col items-center animate-fade-in" key={activeReview.id}>
-                  <div className="flex text-cyan-400 mb-4 justify-center">
+                  <div className="flex text-amber-400 mb-4 justify-center">
                     {Array.from({ length: activeReview.rating || 5 }).map((_, i) => (
-                      <Star key={i} className="h-5 w-5 fill-current stroke-none text-glow text-amber-400" />
+                      <Star key={i} className="h-5 w-5 fill-current stroke-none text-amber-400" />
                     ))}
                   </div>
 
-                  <blockquote className="text-sm sm:text-base leading-relaxed text-slate-200 font-medium italic min-h-[5rem] flex items-center justify-center text-center">
+                  <blockquote className="text-sm sm:text-base leading-relaxed text-slate-700 font-semibold italic min-h-[4.5rem] flex items-center justify-center text-center">
                     "{language === 'hi' ? activeReview.commentHi : activeReview.commentEn}"
                   </blockquote>
 
-                  <div className="flex items-center gap-3 not-italic border-t border-white/10 mt-6 pt-4 justify-center w-full max-w-xs mx-auto">
-                    <div className="w-10 h-10 rounded-full bg-cyan-500/20 border border-cyan-400/30 text-cyan-300 flex items-center justify-center font-black text-xs shadow-lg uppercase">
+                  <div className="flex items-center gap-3 not-italic border-t border-slate-100 mt-5 pt-4 justify-center w-full max-w-xs mx-auto">
+                    <div className="w-10 h-10 rounded-full bg-emerald-100 border border-emerald-200 text-emerald-800 flex items-center justify-center font-black text-xs shadow-sm uppercase">
                       {activeReview.name ? activeReview.name[0] : 'U'}
                     </div>
                     <div className="text-left">
-                      <span className="font-bold text-xs text-white block">
+                      <span className="font-extrabold text-xs text-slate-900 block">
                         {activeReview.name}
                       </span>
-                      <span className="text-[10px] text-slate-400 block font-semibold uppercase tracking-wider">
+                      <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">
                         {language === 'hi' ? 'सत्यापित ग्राहक' : 'Verified Shopper'}
                       </span>
                     </div>
@@ -390,7 +332,7 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
                 const nextIndex = (activeTestimonial + 1) % reviews.length;
                 setActiveTestimonial(nextIndex);
               }}
-              className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 rounded-full p-2 bg-white/10 border border-white/10 hover:bg-white/20 hover:text-cyan-400 text-slate-300 transition-all active:scale-90 z-10"
+              className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 rounded-full p-2 bg-slate-100 border border-slate-200 hover:bg-slate-200 text-slate-700 transition-all active:scale-90 z-10"
               id="next-testimonial-btn"
               type="button"
             >
@@ -399,12 +341,12 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
           </div>
 
           {/* Sider Dots Indicator */}
-          <div className="flex gap-2.5 mt-3 justify-center">
+          <div className="flex gap-2 mt-2 justify-center">
             {reviews.map((_, idx) => (
               <button
                 key={idx}
                 onClick={() => setActiveTestimonial(idx)}
-                className={`h-2 rounded-full transition-all duration-300 ${activeTestimonial === idx ? 'w-6 bg-cyan-400 shadow-md shadow-cyan-400/30' : 'w-2 bg-white/30'}`}
+                className={`h-2 rounded-full transition-all duration-300 ${activeTestimonial === idx ? 'w-6 bg-emerald-600 shadow-sm' : 'w-2 bg-slate-300'}`}
                 id={`testimonial-dot-${idx}`}
                 type="button"
               />
@@ -414,13 +356,13 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
       </section>
 
       {/* 6. Flagship Store details with interactive direction coordinates */}
-      <section className="px-4 md:px-8 max-w-7xl mx-auto w-full mt-4">
-        <div className="grid md:grid-cols-2 gap-8 items-stretch bg-white/5 backdrop-blur-xl border border-white/12 p-6 rounded-2xl shadow-xl">
-          <div className="flex flex-col justify-center text-white">
-            <h3 className="font-black text-lg md:text-xl text-white mb-3 text-glow">
+      <section className="px-4 md:px-8 max-w-7xl mx-auto w-full mt-2">
+        <div className="grid md:grid-cols-2 gap-8 items-stretch bg-white border border-slate-200 p-6 sm:p-8 rounded-2xl shadow-md">
+          <div className="flex flex-col justify-center text-slate-900">
+            <h3 className="font-black text-lg md:text-xl text-slate-900 mb-2">
               {language === 'hi' ? 'विशेष आउटलेट पर पधारें' : 'Visit Our Experience Outlet'}
             </h3>
-            <p className="text-sm text-slate-300 leading-relaxed mb-6">
+            <p className="text-sm text-slate-600 leading-relaxed mb-6 font-medium">
               {contactSettings?.brandName 
                 ? (language === 'hi' ? `${contactSettings.brandName} में आपका स्वागत है। हमारे प्रमुख आउटलेट पर पधारें और उच्च-गुणवत्ता वाले उत्पादों का आनंद लें।` : `Welcome to ${contactSettings.brandName}. Drop by our flagship experience hub for direct purchases, tastings, and instant order pickup.`)
                 : t('visitStoreDesc')}
@@ -428,45 +370,45 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
 
             <div className="space-y-4 mb-6">
               <div className="flex items-start gap-3">
-                <MapPin className="h-5 w-5 text-cyan-400 shrink-0 mt-0.5" />
+                <MapPin className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-bold text-sm text-white">{contactSettings?.brandName || t('storeAddressTitle')}</p>
-                  <p className="text-xs text-slate-400">{contactSettings?.address || t('storeAddressSub')}</p>
+                  <p className="font-extrabold text-sm text-slate-900">{contactSettings?.brandName || t('storeAddressTitle')}</p>
+                  <p className="text-xs text-slate-500 font-medium">{contactSettings?.address || t('storeAddressSub')}</p>
                 </div>
               </div>
               
               <div className="flex items-start gap-3">
-                <Clock className="h-5 w-5 text-cyan-400 shrink-0 mt-0.5" />
+                <Clock className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-bold text-sm text-white">{t('openDaily')}</p>
-                  <p className="text-xs text-slate-400">{t('storeHours')}</p>
+                  <p className="font-extrabold text-sm text-slate-900">{t('openDaily')}</p>
+                  <p className="text-xs text-slate-500 font-medium">{t('storeHours')}</p>
                 </div>
               </div>
 
               <div className="flex items-start gap-3">
-                <Phone className="h-5 w-5 text-cyan-400 shrink-0 mt-0.5" />
+                <Phone className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-bold text-sm text-white">{contactSettings?.phone || "+91 11 2345 6789"}</p>
-                  <p className="text-xs text-slate-400">{contactSettings?.email || "support@swastik.com"}</p>
+                  <p className="font-extrabold text-sm text-slate-900">{contactSettings?.phone || "094845 40001"}</p>
+                  <p className="text-xs text-slate-500 font-medium">{contactSettings?.email || "info.swastiksupermarket@gmail.com"}</p>
                 </div>
               </div>
             </div>
 
             <button
               onClick={handleDirections}
-              className="bg-cyan-500/20 text-cyan-200 border border-cyan-500/30 hover:bg-cyan-500/35 py-3 px-8 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all self-start active:scale-95 shadow-md shrink-0"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-8 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all self-start active:scale-95 shadow-sm shrink-0"
               id="get-directions-btn"
             >
-              <Navigation className="h-4 w-4 fill-current text-cyan-400 stroke-none" />
+              <Navigation className="h-4 w-4 fill-current text-white stroke-none" />
               <span>{t('getDirections')}</span>
             </button>
           </div>
 
           <div className="space-y-3">
-            <div className="rounded-xl overflow-hidden border border-white/10 relative h-[300px] md:h-[400px] shadow-lg">
+            <div className="rounded-xl overflow-hidden border border-slate-200 relative h-[300px] md:h-[380px] shadow-sm">
               <iframe 
                 src={getGoogleMapsEmbedUrl(contactSettings)}
-                className="w-full h-full border-0 filter invert contrast-[1.05] grayscale-[0.1]"
+                className="w-full h-full border-0"
                 allowFullScreen="" 
                 loading="lazy" 
                 referrerPolicy="no-referrer-when-downgrade"
@@ -479,33 +421,33 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
 
       {/* Get Directions Interactive Modal popover */}
       {showDirections && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 transition-opacity animate-fade-in overflow-y-auto">
-          <div className="bg-slate-950/90 backdrop-blur-2xl border border-white/20 rounded-2xl max-w-sm w-full p-6 shadow-2xl relative text-white max-h-[90vh] overflow-y-auto custom-scrollbar">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 transition-opacity animate-fade-in overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-sm w-full p-6 shadow-2xl relative text-slate-900 max-h-[90vh] overflow-y-auto custom-scrollbar">
             <button 
               onClick={() => setShowDirections(false)}
-              className="absolute top-4 right-4 rounded-full p-1.5 hover:bg-white/10 text-slate-400"
+              className="absolute top-4 right-4 rounded-full p-1.5 hover:bg-slate-100 text-slate-500"
             >
               <X className="h-5 w-5" />
             </button>
-            <div className="flex items-center gap-2 mb-4 text-cyan-400">
+            <div className="flex items-center gap-2 mb-4 text-emerald-700">
               <Map className="h-6 w-6 stroke-[2]" />
-              <h4 className="font-bold text-base text-glow">Route to {contactSettings?.brandName || t('title')}</h4>
+              <h4 className="font-extrabold text-base">Route to {contactSettings?.brandName || t('title')}</h4>
             </div>
-            <p className="text-sm font-medium text-slate-100 bg-white/5 p-4 rounded-xl border border-white/10">
+            <p className="text-sm font-semibold text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-200">
               {directionsStatus}
             </p>
-            <div className="mt-6 flex justify-end gap-3 font-semibold text-xs uppercase tracking-wider">
+            <div className="mt-6 flex justify-end gap-3 font-extrabold text-xs uppercase tracking-wider">
               <button 
                 onClick={() => setShowDirections(false)}
-                className="px-4 py-2 border border-white/10 rounded-lg text-slate-300 hover:bg-white/5 transition-all"
+                className="px-4 py-2 border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-100 transition-all"
               >
                 Close
               </button>
               <a 
-                href={contactSettings?.googleMaps || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(contactSettings?.address || "Plot No 46, Block-B, Sector 18, Noida, Uttar Pradesh 201301")}`} 
+                href={contactSettings?.googleMaps || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(contactSettings?.address || "Survey no. 100 Sanjit road opposite of Saraswati school , Mandsaur, India, Madhya Pradesh")}`} 
                 target="_blank" 
                 rel="noreferrer"
-                className="px-5 py-2.5 bg-cyan-500/20 text-cyan-200 border border-cyan-500/30 rounded-lg hover:bg-cyan-500/30 transition-all text-center"
+                className="px-5 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all text-center shadow-sm"
               >
                 Open Google Maps
               </a>

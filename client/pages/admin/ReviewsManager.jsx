@@ -462,13 +462,13 @@ export default function ReviewsManager({ userRole }) {
               </div>
 
               {/* Owner Official Response Reply section */}
-              <div className="bg-slate-900 border border-white/5 rounded-2xl p-4 space-y-3">
+              <div className="bg-slate-900 border border-white/10 rounded-2xl p-4 space-y-3">
                 <span className="text-[9px] font-black uppercase text-cyan-400 tracking-wider block font-bold">Business Owner Reply Pin</span>
                 
                 {r.response ? (
-                  <div className="bg-cyan-500/5 border border-cyan-500/20 px-3.5 py-2.5 rounded-xl text-xs text-cyan-200 space-y-1">
-                    <p className="font-bold uppercase text-[8px] text-cyan-400 mb-0.5">Official Maps Response:</p>
-                    <p className="font-semibold leading-relaxed">“{r.response}”</p>
+                  <div className="bg-slate-950/90 border border-cyan-500/40 px-3.5 py-2.5 rounded-xl text-xs space-y-1 shadow-sm">
+                    <p className="font-extrabold uppercase text-[9px] text-cyan-400 mb-0.5">Official Maps Response:</p>
+                    <p className="font-semibold leading-relaxed text-slate-200">“{r.response}”</p>
                   </div>
                 ) : (
                   <p className="text-[10px] text-slate-500 font-semibold italic">No response drafted yet.</p>

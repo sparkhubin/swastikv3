@@ -11,6 +11,7 @@ import Account from './pages/Account';
 // Custom Informational Pages
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
+import RefundPolicy from './pages/RefundPolicy';
 import ContactUs from './pages/ContactUs';
 import StoreLocator from './pages/StoreLocator';
 import Partners from './pages/Partners';
@@ -124,7 +125,7 @@ function AppContent() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-transparent font-sans text-white">
+    <div className="flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900">
       {/* 1. Header Top App Bar */}
       <Header 
         onMenuClick={() => setIsSidebarOpen(true)} 
@@ -143,11 +144,11 @@ function AppContent() {
           />
 
           {/* Sizable Sliding block */}
-          <div className="relative flex w-full max-w-xs flex-col bg-slate-950/80 backdrop-blur-2xl border-r border-white/20 h-full p-6 shadow-2xl z-10 animate-slide-in text-white">
+          <div className="relative flex w-full max-w-xs flex-col bg-white border-r border-slate-200 h-full p-6 shadow-2xl z-10 animate-slide-in text-slate-900">
             {/* Close Button top-right */}
             <button
               onClick={() => setIsSidebarOpen(false)}
-              className="absolute top-5 right-5 rounded-full p-2 hover:bg-white/10 text-slate-300 transition-all active:scale-90"
+              className="absolute top-5 right-5 rounded-full p-2 hover:bg-slate-100 text-slate-500 transition-all active:scale-90"
               id="close-sidebar-btn"
             >
               <X className="h-5 w-5" />
@@ -156,21 +157,27 @@ function AppContent() {
             {/* Core branding logo header */}
             <div className="mb-8 pt-4 flex items-center gap-3">
               {contactSettings?.logo ? (
-                <img 
-                  src={contactSettings.logo} 
-                  alt="Swastik Logo" 
-                  className="h-9 w-9 rounded-xl object-cover bg-white pointer-events-none p-1 border border-white/25 shadow-md shadow-amber-500/10"
-                  referrerPolicy="no-referrer"
-                />
+                <div className="relative shrink-0">
+                  <img 
+                    src={contactSettings.logo} 
+                    alt="Swastik Logo" 
+                    className="h-12 w-12 rounded-2xl object-cover p-0.5 bg-white border border-emerald-500/30 shadow-md pointer-events-none"
+                    referrerPolicy="no-referrer"
+                  />
+                  <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  </span>
+                </div>
               ) : (
-                <div className="w-8 h-8 bg-gradient-to-tr from-cyan-400 to-pink-500 rounded-lg shadow-lg"></div>
+                <div className="w-10 h-10 bg-gradient-to-tr from-emerald-500 to-teal-600 rounded-2xl shadow-md flex items-center justify-center font-black text-white text-sm">✨</div>
               )}
               <div>
-                <span className="text-[15px] font-black text-white tracking-tight block leading-tight">
+                <span className="text-sm font-black text-slate-900 tracking-tight block leading-tight uppercase">
                   {contactSettings?.brandName || t('title')}
                 </span>
-                <p className="text-[10px] text-cyan-300 font-bold uppercase tracking-widest mt-0.5">
-                  {t('dailyEssentials')}
+                <p className="text-[10px] text-emerald-700 font-extrabold uppercase tracking-wider mt-0.5">
+                  Swastik Supermarket
                 </p>
               </div>
             </div>
@@ -186,51 +193,61 @@ function AppContent() {
                 <button
                   onClick={() => handleSidebarNav('home')}
                   className={`flex w-full items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-bold transition-all ${
-                    currentView === 'home' ? 'bg-white/20 text-white shadow-inner border border-white/10' : 'text-slate-300 hover:bg-white/5'
+                    currentView === 'home' ? 'bg-emerald-50 text-emerald-800 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
-                  <HomeIcon className="h-4.5 w-4.5 text-cyan-400" />
+                  <HomeIcon className="h-4.5 w-4.5 text-emerald-600" />
                   <span>{t('home')}</span>
                 </button>
 
                 <button
                   onClick={() => handleSidebarNav('shop')}
                   className={`flex w-full items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-bold transition-all ${
-                    currentView === 'shop' ? 'bg-white/20 text-white shadow-inner border border-white/10' : 'text-slate-300 hover:bg-white/5'
+                    currentView === 'shop' ? 'bg-emerald-50 text-emerald-800 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
-                  <Store className="h-4.5 w-4.5 text-cyan-400" />
+                  <Store className="h-4.5 w-4.5 text-emerald-600" />
                   <span>{t('shop')}</span>
                 </button>
 
                 <button
                   onClick={() => handleSidebarNav('cart')}
                   className={`flex w-full items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-bold transition-all ${
-                    currentView === 'cart' ? 'bg-white/20 text-white shadow-inner border border-white/10' : 'text-slate-300 hover:bg-white/5'
+                    currentView === 'cart' ? 'bg-emerald-50 text-emerald-800 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
-                  <ShoppingCart className="h-4.5 w-4.5 text-cyan-400" />
+                  <ShoppingCart className="h-4.5 w-4.5 text-emerald-600" />
                   <span>{t('cart')}</span>
                 </button>
 
                 <button
                   onClick={() => handleSidebarNav('account')}
                   className={`flex w-full items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-bold transition-all ${
-                    currentView === 'account' ? 'bg-white/20 text-white shadow-inner border border-white/10' : 'text-slate-300 hover:bg-white/5'
+                    currentView === 'account' ? 'bg-emerald-50 text-emerald-800 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
-                  <User className="h-4.5 w-4.5 text-cyan-400" />
+                  <User className="h-4.5 w-4.5 text-emerald-600" />
                   <span>{t('account')}</span>
                 </button>
 
                 <button
                   onClick={() => handleSidebarNav('partners')}
                   className={`flex w-full items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-bold transition-all ${
-                    currentView === 'partners' ? 'bg-white/20 text-white shadow-inner border border-white/10' : 'text-slate-300 hover:bg-white/5'
+                    currentView === 'partners' ? 'bg-emerald-50 text-emerald-800 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
-                  <Users className="h-4.5 w-4.5 text-cyan-400" />
+                  <Users className="h-4.5 w-4.5 text-emerald-600" />
                   <span>{language === 'hi' ? 'किसान और पार्टनर्स' : 'Partners & Sourcing'}</span>
+                </button>
+
+                <button
+                  onClick={() => handleSidebarNav('admin')}
+                  className={`flex w-full items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-bold transition-all ${
+                    currentView === 'admin' ? 'bg-slate-900 text-cyan-400 shadow-sm border border-slate-800' : 'text-slate-700 hover:bg-slate-100 font-extrabold'
+                  }`}
+                >
+                  <ShieldAlert className="h-4.5 w-4.5 text-cyan-500" />
+                  <span>{language === 'hi' ? 'कर्मचारी और एडमिन पैनल' : 'Staff & Admin Panel'}</span>
                 </button>
               </div>
 
@@ -250,12 +267,12 @@ function AppContent() {
                   <button
                     key={cat.id}
                     onClick={() => handleSidebarNav('shop', cat.id)}
-                    className={`flex w-full items-center gap-3.5 px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-300 transition-all hover:bg-white/5 ${
-                      activeCategory === cat.id && currentView === 'shop' ? 'font-black bg-white/10 text-white border border-white/5' : ''
+                    className={`flex w-full items-center gap-3.5 px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 transition-all hover:bg-slate-100 ${
+                      activeCategory === cat.id && currentView === 'shop' ? 'font-black bg-emerald-50 text-emerald-800 border border-emerald-200' : ''
                     }`}
                   >
-                    <span className="text-base">{cat.icon}</span>
-                    <span>{language === 'hi' ? (cat.nameHi || cat.label) : (cat.nameEn || cat.label)}</span>
+                    <span>{cat.icon || "🛒"}</span>
+                    <span>{language === 'hi' ? (cat.nameHi || cat.nameEn) : cat.nameEn}</span>
                   </button>
                 ))}
               </div>
@@ -269,7 +286,7 @@ function AppContent() {
                 <button
                   onClick={() => handleSidebarNav('privacy')}
                   className={`flex w-full items-center gap-3.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                    currentView === 'privacy' ? 'bg-white/20 text-white border border-white/10' : 'text-slate-300 hover:bg-white/5'
+                    currentView === 'privacy' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-sm' : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
                   <span className="text-sm">🛡️</span>
@@ -279,7 +296,7 @@ function AppContent() {
                 <button
                   onClick={() => handleSidebarNav('terms')}
                   className={`flex w-full items-center gap-3.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                    currentView === 'terms' ? 'bg-white/20 text-white border border-white/10' : 'text-slate-300 hover:bg-white/5'
+                    currentView === 'terms' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-sm' : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
                   <span className="text-sm">⚖️</span>
@@ -287,9 +304,19 @@ function AppContent() {
                 </button>
 
                 <button
+                  onClick={() => handleSidebarNav('refund')}
+                  className={`flex w-full items-center gap-3.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                    currentView === 'refund' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <span className="text-sm">🔄</span>
+                  <span>{t('refundPolicy')}</span>
+                </button>
+
+                <button
                   onClick={() => handleSidebarNav('contact')}
                   className={`flex w-full items-center gap-3.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                    currentView === 'contact' ? 'bg-white/20 text-white border border-white/10' : 'text-slate-300 hover:bg-white/5'
+                    currentView === 'contact' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-sm' : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
                   <span className="text-sm">📞</span>
@@ -299,7 +326,7 @@ function AppContent() {
                 <button
                   onClick={() => handleSidebarNav('locator')}
                   className={`flex w-full items-center gap-3.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                    currentView === 'locator' ? 'bg-white/20 text-white border border-white/10' : 'text-slate-300 hover:bg-white/5'
+                    currentView === 'locator' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-sm' : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
                   <span className="text-sm">📍</span>
@@ -309,19 +336,21 @@ function AppContent() {
             </div>
 
             {/* Bottom Actions footer inside Drawer */}
-            <div className="mt-auto pt-6 border-t border-white/10 space-y-3 font-semibold text-[11px]">
-              {/* Language Switch */}
+            <div className="mt-auto pt-6 border-t border-slate-200 space-y-3 font-semibold text-[11px]">
+              {/* Language Switch - Commented out as requested, default is English */}
+              {/* 
               <button
                 onClick={toggleLanguage}
-                className="flex w-full items-center justify-between px-3 py-2 border border-white/10 bg-white/5 rounded-xl hover:bg-white/10 transition-all"
+                className="flex w-full items-center justify-between px-3 py-2 border border-slate-200 bg-slate-50 rounded-xl hover:bg-slate-100 transition-all"
               >
-                <span className="text-slate-300">🌐 {language === 'en' ? 'Switch to Hindi' : 'अंग्रेजी चुनें'}</span>
-                <span className="text-[9px] bg-cyan-500/20 text-cyan-300 border border-cyan-400/20 px-1.5 py-0.5 rounded uppercase font-black">
+                <span className="text-slate-700">🌐 {language === 'en' ? 'Switch to Hindi' : 'अंग्रेजी चुनें'}</span>
+                <span className="text-[9px] bg-emerald-100 text-emerald-800 border border-emerald-200 px-1.5 py-0.5 rounded uppercase font-black">
                   {language === 'en' ? 'हिंदी' : 'EN'}
                 </span>
               </button>
+              */}
 
-              <div className="text-center text-slate-500 text-[10px] pt-1">
+              <div className="text-center text-slate-400 text-[10px] pt-1 font-medium">
                 Swastik Supermarket Mobile v1.4.0
               </div>
             </div>
@@ -363,6 +392,9 @@ function AppContent() {
         )}
         {currentView === 'terms' && (
           <TermsOfService />
+        )}
+        {currentView === 'refund' && (
+          <RefundPolicy />
         )}
         {currentView === 'contact' && (
           <ContactUs />

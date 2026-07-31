@@ -28,19 +28,29 @@ import {
 } from 'lucide-react';
 import R2ImageUploader from './R2ImageUploader';
 import NotificationCenter from '../../components/NotificationCenter';
+import { isOrder1HourLocked, getLockTimeRemainingFormatted } from '../../utils/orderLock';
 
 export default function OrdersManager({ userRole }) {
   const { isHindi } = useLanguage();
   const { orders, updateOrder, deleteOrder, addOrder, products, offers, staff, contactSettings } = useData();
 
+  const activeStaff = React.useMemo(() => {
+    try {
+      const saved = localStorage.getItem('swastik_logged_in_staff');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  }, []);
+
   // Print Official Tax Invoice PDF
   const handlePrintInvoice = (order) => {
     if (!order) return;
     const storeName = contactSettings?.brandName || "Swastik Supermarket";
-    const storeAddress = contactSettings?.address || "Plot No 46, Block-B, Sector 18, Noida, UP 201301";
-    const storePhone = contactSettings?.phone || "+91 11 2345 6789";
-    const storeEmail = contactSettings?.email || "support@swastik.com";
-    const storeGst = contactSettings?.gst || contactSettings?.gstin || "09AAAAA0000A1Z5";
+    const storeAddress = contactSettings?.address || "Survey no. 100 Sanjit road opposite of Saraswati school , Mandsaur, India, Madhya Pradesh";
+    const storePhone = contactSettings?.phone || "094845 40001";
+    const storeEmail = contactSettings?.email || "info.swastiksupermarket@gmail.com";
+    const storeGst = contactSettings?.gst || contactSettings?.gstin || "23AAAAA0000A1Z5";
     const storeFssai = contactSettings?.fssai || "12721001000123";
     const storeLogo = contactSettings?.logo || "";
 
@@ -210,6 +220,14 @@ export default function OrdersManager({ userRole }) {
 
   const handleConfirmDeleteOrder = () => {
     if (!orderToDelete) return;
+
+    if (isOrder1HourLocked(orderToDelete)) {
+      setDeletePasswordError(isHindi 
+        ? "🔒 यह ऑर्डर डिलीवर होने के 1 घंटे बाद पूरी तरह लॉक है! इसे डिलीट नहीं किया जा सकता।" 
+        : "🔒 This order was delivered over 1 hour ago and is permanently locked! Deletion is disabled.");
+      return;
+    }
+
     const pwd = deleteAdminPassword.trim();
     if (!pwd) {
       setDeletePasswordError(isHindi ? "कृपया एडमिन पासवर्ड दर्ज करें!" : "Please enter admin password!");
@@ -426,9 +444,21 @@ export default function OrdersManager({ userRole }) {
     }
   }, [filteredOrders.length, totalPages, currentPage]);
 
-  const getStatusBadge = (statusStr) => {
-    const status = statusStr || "Confirmed";
-    if (status === "Delivered") {
+  const getStatusBadge = (orderOrStatus) => {
+    const orderObj = typeof orderOrStatus === 'object' ? orderOrStatus : null;
+    const statusStr = (orderObj ? orderObj.status : orderOrStatus) || "Confirmed";
+    const status = (statusStr || '').toLowerCase();
+    const isLocked = orderObj ? isOrder1HourLocked(orderObj) : false;
+
+    if (status === "delivered" || status === "completed") {
+      if (isLocked) {
+        return (
+          <span className="inline-flex items-center gap-1 bg-rose-500/15 text-rose-300 border border-rose-500/30 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider">
+            <Lock className="h-3 w-3 text-rose-400" />
+            <span>Delivered (Locked)</span>
+          </span>
+        );
+      }
       return (
         <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider">
           <CheckCircle className="h-3 w-3" />
@@ -436,7 +466,7 @@ export default function OrdersManager({ userRole }) {
         </span>
       );
     }
-    if (status === "In Transit" || status === "Dispatched") {
+    if (status === "in transit" || status === "dispatched" || status === "out for delivery") {
       return (
         <span className="inline-flex items-center gap-1 bg-amber-500/10 text-amber-400 border border-amber-500/25 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider">
           <Truck className="h-3 w-3" />
@@ -467,6 +497,12 @@ export default function OrdersManager({ userRole }) {
   };
 
   const handleStartEditOrder = (order) => {
+    if (isOrder1HourLocked(order)) {
+      alert(isHindi
+        ? "🔒 यह ऑर्डर डिलीवर होने के 1 घंटे बाद पूरी तरह लॉक हो चुका है! ऑर्डर सामग्री या विवरण संशोधित नहीं किए जा सकते। केवल भुगतान विवरण ही अपडेट किए जा सकते हैं।"
+        : "🔒 This order was delivered over 1 hour ago and is permanently locked! Details cannot be modified. Only payment settlement can be updated.");
+      return;
+    }
     setIsEditingOrder(true);
     setEditOrderItems(order.items ? [...order.items] : []);
     setEditOrderName(order.customerName || order.name || '');
@@ -478,6 +514,12 @@ export default function OrdersManager({ userRole }) {
   };
 
   const handleSaveEditedOrder = () => {
+    if (isOrder1HourLocked(selectedOrder)) {
+      alert(isHindi
+        ? "🔒 डिलीवर होने के 1 घंटे बाद यह ऑर्डर पूरी तरह लॉक है! केवल भुगतान विवरण ही अपडेट हो सकते हैं।"
+        : "🔒 This order is permanently locked 1 hour post-delivery! Only payment details can be updated.");
+      return;
+    }
     if (!editOrderName.trim() || !editOrderPhone.trim() || !editOrderAddress.trim()) {
       alert("Customer Name, Phone and Shipping Address are required!");
       return;
@@ -633,35 +675,50 @@ export default function OrdersManager({ userRole }) {
   };
 
   const handleUpdateStep = (id, step, statusKey, isActive) => {
-    updateOrder(id, { step, status: statusKey, isActive });
+    const existingOrder = orders.find(o => String(o.id) === String(id)) || (selectedOrder && String(selectedOrder.id) === String(id) ? selectedOrder : null);
     
-    let targetOrd = null;
-    if (selectedOrder && selectedOrder.id === id) {
-      setSelectedOrder(prev => {
-        const updated = {
-          ...prev,
-          step,
-          status: statusKey,
-          isActive
-        };
-        targetOrd = updated;
-        return updated;
-      });
-    } else {
-      targetOrd = orders.find(o => o.id === id);
+    if (existingOrder) {
+      if (isOrder1HourLocked(existingOrder)) {
+        alert(isHindi 
+          ? '🔒 यह ऑर्डर डिलीवर होने के 1 घंटे बाद पूरी तरह लॉक हो चुका है! एडमिन व स्टाफ दोनों के लिए स्थिति या विवरण बदलना बंद है। केवल भुगतान विवरण ही अपडेट हो सकते हैं।' 
+          : '🔒 This order was delivered over 1 hour ago and is permanently locked! Status or order details cannot be changed for both Admin & Staff. Only payment details can be updated.');
+        return;
+      }
+      const targetSt = (existingOrder.status || '').toLowerCase();
+      const isCurrentlyDelivered = targetSt === 'delivered' || targetSt === 'completed';
+      if (isCurrentlyDelivered && userRole !== 'admin') {
+        alert(isHindi ? 'डिलीवरी के बाद केवल एडमिन स्थिति बदल सकता है!' : 'Only Admin can change the status after an order is marked Delivered!');
+        return;
+      }
+    }
+
+    const isNowDelivered = statusKey === "Delivered" || step === 2;
+    const payload = {
+      step,
+      status: statusKey,
+      isActive,
+      deliveryDate: isNowDelivered ? (existingOrder?.deliveryDate || new Date().toISOString()) : existingOrder?.deliveryDate
+    };
+
+    updateOrder(id, payload);
+
+    const updatedOrder = existingOrder 
+      ? { ...existingOrder, ...payload }
+      : { id, ...payload };
+
+    if (selectedOrder && String(selectedOrder.id) === String(id)) {
+      setSelectedOrder(updatedOrder);
     }
 
     if (statusKey === "Delivered" || step === 2) {
       setTimeout(() => {
-        const orderToNotify = targetOrd || { id, step, status: statusKey, isActive };
-        handleSendWhatsappInvoice(orderToNotify);
+        handleSendWhatsappInvoice(updatedOrder);
         alert(`Status updated to DELIVERED successfully!\nSimulated WhatsApp Notification & signed PDF Bill invoice auto-dispatched to the customer!`);
       }, 300);
     } else if (step === 1 || statusKey === "Dispatched" || statusKey === "Out for Delivery") {
       setTimeout(() => {
-        const orderToNotify = targetOrd || { id, step, status: statusKey, isActive };
-        handleSendWhatsappDispatchAlert(orderToNotify);
-        alert(`Status updated to DISPATCHED!\nAutomated 'order_dispatch_alert' WhatsApp notification sent to ${orderToNotify.customerName || 'customer'}!`);
+        handleSendWhatsappDispatchAlert(updatedOrder);
+        alert(`Status updated to DISPATCHED!\nAutomated 'order_dispatch_alert' WhatsApp notification sent to ${updatedOrder.customerName || 'customer'}!`);
       }, 300);
     }
   };
@@ -672,9 +729,22 @@ export default function OrdersManager({ userRole }) {
     const orderId = targetOrder.id;
     const phoneNum = targetOrder.customerPhone || targetOrder.customerMobile || targetOrder.phone || "+91 95400 12099";
     const clientName = targetOrder.customerName || targetOrder.name || "Valued Customer";
-    const grandTotal = targetOrder.total || targetOrder.grand_total || targetOrder.subtotal || 1200;
 
-    const bodyMsg = `Hello ${clientName}, your Swastik order ${orderId} has been handed over to our delivery partner! Total bill amount is ${grandTotal}. You can track or contact your rider directly from the Swastik app.`;
+    const subtotal = targetOrder.items && targetOrder.items.length > 0 
+      ? targetOrder.items.reduce((sum, it) => sum + (Number(it.price || it.salePrice || 0) * Number(it.qty || 1)), 0)
+      : Number(targetOrder.subtotal || targetOrder.subtotal_amount || 0);
+    const gst = Number(targetOrder.gst || targetOrder.gst_amount || 0);
+    const deliveryFee = Number(targetOrder.deliveryFee || targetOrder.delivery_fee || 0);
+    const referralDiscount = Number(targetOrder.referralDiscount || targetOrder.referral_discount || 0);
+    const couponDiscount = Number(targetOrder.couponDiscount || targetOrder.coupon_discount || 0);
+    const celebrationDiscount = Number(targetOrder.celebrationDiscount || targetOrder.celebration_discount || 0);
+
+    const calcTotal = subtotal + gst + deliveryFee - referralDiscount - couponDiscount - celebrationDiscount;
+    const rawTotal = Number(targetOrder.total || targetOrder.grand_total || 0);
+
+    const grandTotal = rawTotal > 0 ? rawTotal : (calcTotal > 0 ? Math.round(calcTotal) : (subtotal > 0 ? Math.round(subtotal) : 350));
+
+    const bodyMsg = `Hello ${clientName}, your Swastik order ${orderId} has been handed over to our delivery partner! Total bill amount is ₹${grandTotal}. You can track or contact your rider directly from the Swastik app.`;
 
     try {
       await fetch('/api/whatsapp/send', {
@@ -684,7 +754,7 @@ export default function OrdersManager({ userRole }) {
           to: phoneNum, 
           message: bodyMsg,
           templateName: 'order_dispatch_alert',
-          templateParams: [clientName, orderId, String(grandTotal)]
+          templateParams: [clientName, String(orderId), `₹${grandTotal}`]
         })
       });
     } catch (e) {
@@ -694,6 +764,15 @@ export default function OrdersManager({ userRole }) {
 
   const handleAgentDetailsChange = (field, value) => {
     if (!selectedOrder) return;
+    if (isOrder1HourLocked(selectedOrder)) {
+      const isPaymentField = ['paymentStatus', 'paymentMethod', 'codStatus', 'codNotes', 'codCollectedAt'].includes(field);
+      if (!isPaymentField) {
+        alert(isHindi 
+          ? '🔒 डिलीवर होने के 1 घंटे बाद यह ऑर्डर पूरी तरह लॉक है! केवल भुगतान विवरण ही बदले जा सकते हैं।' 
+          : '🔒 This order is permanently locked 1 hour after delivery! Only payment details can be modified.');
+        return;
+      }
+    }
     const patch = { [field]: value };
     updateOrder(selectedOrder.id, patch);
     setSelectedOrder(prev => ({ ...prev, ...patch }));
@@ -710,9 +789,23 @@ export default function OrdersManager({ userRole }) {
     // Default fallback phone values if not provided
     const phoneNum = targetOrder.customerPhone || targetOrder.customerMobile || targetOrder.phone || "+91 98450 12099";
     const clientName = targetOrder.customerName || targetOrder.name || "Valued Customer";
-    const grandTotal = targetOrder.total || targetOrder.subtotal || 350;
+
+    const subtotal = targetOrder.items && targetOrder.items.length > 0 
+      ? targetOrder.items.reduce((sum, it) => sum + (Number(it.price || it.salePrice || 0) * Number(it.qty || 1)), 0)
+      : Number(targetOrder.subtotal || targetOrder.subtotal_amount || 0);
+    const gst = Number(targetOrder.gst || targetOrder.gst_amount || 0);
+    const deliveryFee = Number(targetOrder.deliveryFee || targetOrder.delivery_fee || 0);
+    const referralDiscount = Number(targetOrder.referralDiscount || targetOrder.referral_discount || 0);
+    const couponDiscount = Number(targetOrder.couponDiscount || targetOrder.coupon_discount || 0);
+    const celebrationDiscount = Number(targetOrder.celebrationDiscount || targetOrder.celebration_discount || 0);
+
+    const calcTotal = subtotal + gst + deliveryFee - referralDiscount - couponDiscount - celebrationDiscount;
+    const rawTotal = Number(targetOrder.total || targetOrder.grand_total || 0);
+
+    const grandTotal = rawTotal > 0 ? rawTotal : (calcTotal > 0 ? Math.round(calcTotal) : (subtotal > 0 ? Math.round(subtotal) : 350));
+
     const itemsLabel = targetOrder.items && targetOrder.items.length > 0 
-      ? targetOrder.items.map(it => `${it.qty}x ${it.nameEn || it.nameHi}`).join(', ') 
+      ? targetOrder.items.map(it => `${it.qty}x ${it.nameEn || it.nameHi || it.name}`).join(', ') 
       : 'Organic dairy & fresh farm essentials';
 
     const bodyMsg = `Hi ${clientName}, your Swastik order ${orderId} has been marked as DELIVERED successfully! Please find your official invoice PDF containing your summary of ${itemsLabel} for a total of ₹${grandTotal} attached. Track bills: ${window.location.origin}/account`;
@@ -805,7 +898,10 @@ export default function OrdersManager({ userRole }) {
         </div>
 
         <div className="flex flex-wrap gap-2 items-center">
-          <NotificationCenter role="delivery" />
+          <NotificationCenter 
+            role={userRole === 'delivery' ? 'delivery' : (userRole === 'admin' ? 'admin' : 'staff')} 
+            phone={activeStaff?.mobile || ''} 
+          />
 
           {userRole !== 'customer' && (
             <button
@@ -1021,7 +1117,7 @@ export default function OrdersManager({ userRole }) {
                     </td>
 
                     <td className="p-4 text-center">
-                      {getStatusBadge(o.status)}
+                      {getStatusBadge(o)}
                     </td>
 
                     <td className="p-4 text-center">
@@ -1103,215 +1199,6 @@ export default function OrdersManager({ userRole }) {
             </div>
           </div>
         )}
-      </div>
-
-      {/* 3.5. Third-Party Billing Software Outbox Dispatcher (Custom WhatsApp Gateway API Integration) */}
-      <div className="bg-slate-900 border-2 border-emerald-500/30 rounded-3xl p-6 space-y-5 shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-3 bg-emerald-500/10 text-emerald-400 font-mono text-[8px] uppercase tracking-widest border-b border-l border-emerald-500/20 rounded-bl-xl font-bold">
-          Meta Cloud Sandbox API Integration Active
-        </div>
-
-        <div className="border-b border-white/10 pb-3">
-          <h3 className="font-black text-white text-sm flex items-center gap-2">
-            <Smartphone className="h-5 w-5 text-emerald-400" />
-            <span>External Third-Party Billing Software (WhatsApp Dispatch Portal)</span>
-          </h3>
-          <p className="text-[10px] text-slate-400 mt-1 font-medium leading-relaxed">
-            Trigger on-demand customer notifications containing signed PDF bill receipts and custom reminders. This matches webhook integration routes used by enterprise packages (such as <strong>Tally, Marg ERP, ClearTax, and custom CRM platforms</strong>) via Meta WhatsApp Business Cloud API.
-          </p>
-        </div>
-
-        <form onSubmit={(e) => {
-          e.preventDefault();
-          if (!tpMobileNumber || tpMobileNumber.length < 10) {
-            alert("Please provide a valid 10-digit mobile number!");
-            return;
-          }
-          setIsTpSending(true);
-          setTpLogs([]);
-
-          const log1 = `[Webhook Engine] Initializing integration request to: POST https://api.thirdparty-billing-service.com/v1/whatsapp/dispatch`;
-          setTpLogs(prev => [...prev, log1]);
-
-          setTimeout(() => {
-            const log2 = `[API Auth] Verification: Header Bearer Token Authorized. Resolving customer record basis mobile: +91 ${tpMobileNumber}...`;
-            setTpLogs(prev => [...prev, log2]);
-          }, 400);
-
-          setTimeout(() => {
-            const log3 = `[PDF Compiler] Compiling high-fidelity Thermal Receipt details...\n- Customer Name: ${tpCustomerName || 'Guest User'}\n- Dynamic Invoice ID: ${tpOrderId}\n- Transaction Total: ₹${tpBillAmount} INR\n- Item summary: ${tpItemsList}\n- Receipt State: PAID / SETTLED\n- Generated Receipt Storage node: https://invoice-storage.swastik.com/tp-${tpOrderId}.pdf`;
-            setTpLogs(prev => [...prev, log3]);
-          }, 900);
-
-          setTimeout(() => {
-            const payload = {
-              third_party_software: "Tally/Marg/Cleartax External Billing API Module",
-              dispatcher_phone: tpMobileNumber,
-              payload: {
-                customer_name: tpCustomerName || 'Guest User',
-                order_id: tpOrderId,
-                price_total_inr: parseFloat(tpBillAmount || '480'),
-                breakdown_items_raw: tpItemsList,
-                pdf_receipt_url: `https://invoice-storage.swastik.com/tp-${tpOrderId}.pdf`
-              },
-              message_templates: {
-                body_text: tpCustomMessage,
-                attachment_pdf: `https://invoice-storage.swastik.com/tp-${tpOrderId}.pdf`
-              }
-            };
-
-            const log4 = `[API Payload Outbound Request Webhook]:\n${JSON.stringify(payload, null, 2)}`;
-            setTpLogs(prev => [...prev, log4]);
-          }, 1500);
-
-          setTimeout(() => {
-            const log5 = `[Meta Sandbox Message Gateway] Handshake 200 OK. WhatsApp message & verification PDF successfully push-dispatched to recipient +91 ${tpMobileNumber}! Delivery status: DELIVERED.\n\n[Live Message Stream Preview]:\n"Hi ${tpCustomerName || 'Guest'}, thank you for choosing Swastik Delivery! Your digital invoice and physical items (${tpItemsList}) with Order ID ${tpOrderId} have been successfully compiled for a total of ₹${tpBillAmount}. Please download your official PDF bill here: https://invoice-storage.swastik.com/tp-${tpOrderId}.pdf. Thank you for your support!"`;
-            setTpLogs(prev => [...prev, log5]);
-            setIsTpSending(false);
-            alert(`Verified Sandbox: Third-Party WhatsApp Billing Message & PDF receipt successfully dispatched to +91 ${tpMobileNumber}!`);
-          }, 2400);
-        }} className="grid grid-cols-1 md:grid-cols-12 gap-5 text-slate-300 font-sans text-xs">
-          
-          <div className="md:col-span-4 space-y-3.5">
-            <div>
-              <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Customer Mobile Number (10 Digits)</label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-[10px] text-slate-500 font-mono font-bold">+91</span>
-                <input 
-                  type="text" 
-                  pattern="[0-9]{10}"
-                  maxLength={10}
-                  required
-                  placeholder="9876543210"
-                  value={tpMobileNumber}
-                  onChange={(e) => setTpMobileNumber(e.target.value.replace(/\D/g, ''))}
-                  className="w-full bg-slate-950 border border-white/10 rounded-xl pl-10 pr-3 py-2 text-xs font-mono text-white outline-none focus:border-emerald-400"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Customer Name / Buyer Segment</label>
-              <input 
-                type="text" 
-                required
-                placeholder="Rajesh Patel (Delhi)"
-                value={tpCustomerName}
-                onChange={(e) => setTpCustomerName(e.target.value)}
-                className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-emerald-400"
-              />
-            </div>
-
-            <div className="flex gap-2">
-              <button 
-                type="button"
-                onClick={() => {
-                  setTpMobileNumber("9876543210");
-                  setTpCustomerName("Rajesh Patel (Delhi)");
-                  setTpOrderId("MARG-BILL-8873");
-                  setTpBillAmount("1250");
-                  setTpItemsList("5kg Premium Basmati Rice, 1L Organic Mustard Oil, 2kg Organic Chana Dal");
-                }}
-                className="flex-1 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-wider text-center transition cursor-pointer text-slate-400 hover:text-white"
-              >
-                ⚡ Insert Staff Sample
-              </button>
-              <button 
-                type="button"
-                onClick={() => {
-                  setTpMobileNumber("");
-                  setTpCustomerName("");
-                  setTpOrderId('SW-TP-' + Math.floor(10000 + Math.random() * 90000));
-                  setTpBillAmount("480");
-                  setTpItemsList("Organic Farm Fresh Tomatoes, Premium Cow Ghee");
-                  setTpLogs([]);
-                }}
-                className="py-1.5 px-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[9.5px]"
-                title="Reset Form"
-              >
-                <RefreshCw className="h-3.5 w-3.5 text-slate-400 animate-spin-hover" />
-              </button>
-            </div>
-          </div>
-
-          <div className="md:col-span-4 space-y-3.5">
-            <div>
-              <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Custom Order ID</label>
-              <input 
-                type="text" 
-                required
-                placeholder="SW-TP-55219"
-                value={tpOrderId}
-                onChange={(e) => setTpOrderId(e.target.value)}
-                className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white outline-none focus:border-emerald-400"
-              />
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              <div className="col-span-1">
-                <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Bill Amount</label>
-                <input 
-                  type="number" 
-                  required
-                  placeholder="480"
-                  value={tpBillAmount}
-                  onChange={(e) => setTpBillAmount(e.target.value)}
-                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white outline-none focus:border-emerald-400"
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Billing Items Summary</label>
-                <input 
-                  type="text" 
-                  required
-                  placeholder="1kg Paneer, 1L Milk"
-                  value={tpItemsList}
-                  onChange={(e) => setTpItemsList(e.target.value)}
-                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-emerald-400"
-                />
-              </div>
-            </div>
-
-            <button 
-              type="submit"
-              disabled={isTpSending}
-              className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-black text-[10px] uppercase tracking-wider rounded-xl transition-all shadow-md shadow-emerald-500/10 flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
-            >
-              <Plus className="h-4 w-4 text-slate-950 font-black" />
-              <span>{isTpSending ? "DISPATCHING METADATA..." : "DISPATCH BILL VIA EXTERNAL API"}</span>
-            </button>
-          </div>
-
-          <div className="md:col-span-4 space-y-2 flex flex-col justify-between">
-            <div>
-              <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Generated Output message body preview</label>
-              <div className="bg-slate-950/80 border border-white/5 p-3 rounded-2xl text-[9.5px] font-mono text-slate-300 leading-normal max-h-[140px] overflow-y-auto min-h-[105px]">
-                {tpCustomMessage}
-              </div>
-            </div>
-            <div className="text-[9px] text-slate-500 font-bold bg-white/5 border border-white/5 px-3 py-2 rounded-xl">
-              💡 Billing systems will call this API pipeline at invoice creation.
-            </div>
-          </div>
-
-        </form>
-
-        {/* Integration API Logging Console screen */}
-        <div className="space-y-1.5 font-mono pt-1 text-xs">
-          <div className="flex items-center gap-1.5 text-emerald-400/90 text-[10px] font-black uppercase tracking-wider">
-            <Terminal className="h-4 w-4" />
-            <span>Third-Party Webhook Live Payload Debug Console</span>
-          </div>
-          <div className="bg-slate-950 border border-white/10 p-3 rounded-2xl text-[9px] font-mono text-emerald-300 leading-relaxed space-y-2 max-h-[180px] overflow-y-auto shadow-inner select-all">
-            {tpLogs.length === 0 ? (
-              <span className="text-slate-600 block italic">Configure the metrics above and click "DISPATCH BILL VIA EXTERNAL API" to stream outbound web service payloads...</span>
-            ) : (
-              tpLogs.map((log, lidx) => (
-                <span key={lidx} className="block whitespace-pre-wrap">{log}</span>
-              ))
-            )}
-          </div>
-        </div>
       </div>
 
       {/* 4. Thermal Cash Receipt invoice Modal Popup Overlay Panel (Requirement 5) */}
@@ -1519,10 +1406,10 @@ export default function OrdersManager({ userRole }) {
                     {contactSettings?.brandName || "SWASTIK SUPERMARKET"}
                   </h3>
                   <p className="text-[10px] text-slate-600 font-bold">
-                    {contactSettings?.address || "PLOT NO 46, SECTOR 18, NOIDA UP"}
+                    {contactSettings?.address || "Survey no. 100 Sanjit road opposite of Saraswati school , Mandsaur, India, Madhya Pradesh"}
                   </p>
                   <p className="text-[9px] text-slate-600 font-semibold">
-                    TEL: {contactSettings?.phone || "+91 11 2345 6789"} | EMAIL: {contactSettings?.email || "support@swastik.com"}
+                    TEL: {contactSettings?.phone || "094845 40001"} | EMAIL: {contactSettings?.email || "info.swastiksupermarket@gmail.com"}
                   </p>
                   {(contactSettings?.gst || contactSettings?.gstin) && (
                     <p className="text-[8.5px] text-slate-500 font-mono font-bold">
@@ -1745,12 +1632,48 @@ export default function OrdersManager({ userRole }) {
 
                 {/* Pilot details assignments */}
                 <div className="bg-slate-900 border border-white/10 rounded-2xl p-4 space-y-3">
-                  <h4 className="text-[10px] font-black uppercase text-cyan-300 tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-2">
-                    <User className="h-4 w-4" />
-                    <span>Courier Pilot Details</span>
+                  <h4 className="text-[10px] font-black uppercase text-cyan-300 tracking-wider flex items-center justify-between border-b border-white/5 pb-2">
+                    <span className="flex items-center gap-1.5"><User className="h-4 w-4" /> <span>Courier Pilot Details</span></span>
+                    {selectedOrder.codStatus === 'CLEARED_TO_ADMIN' ? (
+                      <span className="text-[8px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded font-mono font-bold">
+                        ✅ COD Cleared
+                      </span>
+                    ) : (
+                      <span className="text-[8px] bg-rose-500/20 text-rose-300 border border-rose-500/30 px-2 py-0.5 rounded font-mono font-bold">
+                        🔴 COD Pending
+                      </span>
+                    )}
                   </h4>
 
                   <div className="space-y-3">
+                    {/* Quick Select Delivery Executive */}
+                    <div>
+                      <label className="text-[8px] font-black uppercase text-cyan-400 block mb-1">
+                        🛵 Quick Select Registered Delivery Boy
+                      </label>
+                      <select
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (!val) return;
+                          const chosen = staff?.find(s => s.id === Number(val));
+                          if (chosen) {
+                            handleAgentDetailsChange('deliveryPartnerName', chosen.name);
+                            handleAgentDetailsChange('deliveryPartnerPhone', chosen.mobile);
+                            handleAgentDetailsChange('deliveryStaffId', chosen.id);
+                          }
+                        }}
+                        disabled={userRole === 'customer'}
+                        className="w-full bg-slate-950 border border-cyan-500/30 text-cyan-200 rounded-xl px-3 py-2 text-xs outline-none cursor-pointer font-bold"
+                      >
+                        <option value="">-- Choose Registered Delivery Executive --</option>
+                        {staff?.filter(s => s.permissions?.includes('delivery') || s.name.toLowerCase().includes('delivery') || s.name.toLowerCase().includes('pilot') || s.name.toLowerCase().includes('rider')).map(s => (
+                          <option key={s.id} value={s.id}>
+                            🛵 {s.name} ({s.mobile})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
                     <div>
                       <label className="text-[8px] font-black uppercase text-slate-400 block mb-1">Pilot Agent Name</label>
                       <input 
@@ -1758,7 +1681,7 @@ export default function OrdersManager({ userRole }) {
                         value={selectedOrder.deliveryPartnerName || ''}
                         onChange={(e) => handleAgentDetailsChange('deliveryPartnerName', e.target.value)}
                         disabled={userRole === 'customer'}
-                        placeholder="Rakesh Pilot"
+                        placeholder="Pradeep Kumar"
                         className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white"
                       />
                     </div>
@@ -1771,7 +1694,7 @@ export default function OrdersManager({ userRole }) {
                           value={selectedOrder.deliveryPartnerPhone || ''}
                           onChange={(e) => handleAgentDetailsChange('deliveryPartnerPhone', e.target.value)}
                           disabled={userRole === 'customer'}
-                          placeholder="+91 99999-88888"
+                          placeholder="+91 95400 12099"
                           className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white"
                         />
                       </div>
@@ -1786,6 +1709,31 @@ export default function OrdersManager({ userRole }) {
                           className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white"
                         />
                       </div>
+                    </div>
+
+                    {/* Admin COD Cash Clearance Toggle */}
+                    <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs">
+                      <span className="text-[9px] font-bold text-slate-300">
+                        COD Cash Settlement with Admin:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextStatus = selectedOrder.codStatus === 'CLEARED_TO_ADMIN' ? 'PENDING_CLEARANCE' : 'CLEARED_TO_ADMIN';
+                          handleAgentDetailsChange('codStatus', nextStatus);
+                          if (nextStatus === 'CLEARED_TO_ADMIN') {
+                            handleAgentDetailsChange('codClearedAt', new Date().toISOString());
+                          }
+                        }}
+                        disabled={userRole === 'customer'}
+                        className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition ${
+                          selectedOrder.codStatus === 'CLEARED_TO_ADMIN'
+                            ? 'bg-emerald-500 text-slate-950 hover:bg-emerald-400'
+                            : 'bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30'
+                        }`}
+                      >
+                        {selectedOrder.codStatus === 'CLEARED_TO_ADMIN' ? 'Mark Pending' : 'Mark Cash Received'}
+                      </button>
                     </div>
                   </div>
                 </div>

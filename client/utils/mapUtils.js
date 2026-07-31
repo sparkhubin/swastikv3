@@ -12,7 +12,7 @@
  */
 export function getGoogleMapsEmbedUrl(contactSettings) {
   if (!contactSettings) {
-    return "https://maps.google.com/maps?q=Plot%20No%2046%2C%20Block-B%2C%20Sector%2018%2C%20Noida&z=15&output=embed";
+    return "https://maps.google.com/maps?q=Survey%20no.%20100%20Sanjit%20road%20opposite%20of%20Saraswati%20school%20%2C%20Mandsaur%2C%20India%2C%20Madhya%20Pradesh&z=15&output=embed";
   }
 
   const { googleMaps, address, latitude, longitude } = contactSettings;
@@ -75,6 +75,6 @@ export function getGoogleMapsEmbedUrl(contactSettings) {
   }
 
   // 6. Last fallback to physical address
-  const queryAddress = address || "Plot No 46, Block-B, Sector 18, Noida, Uttar Pradesh 201301";
+  const queryAddress = address || "Survey no. 100 Sanjit road opposite of Saraswati school , Mandsaur, India, Madhya Pradesh";
   return `https://maps.google.com/maps?q=${encodeURIComponent(queryAddress)}&z=15&output=embed`;
 }

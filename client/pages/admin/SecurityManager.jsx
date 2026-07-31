@@ -270,6 +270,7 @@ export default function SecurityManager({ userRole, setUserRole }) {
           <div className="space-y-2.5">
             {[
               { id: 'customer', label: isHindi ? 'सुरक्षित ग्राहक' : 'Secure Customer (Read-Only)', desc: "View lists and products, manage shopping cart." },
+              { id: 'delivery', label: isHindi ? '🛵 डिलीवरी एग्जीक्यूटिव' : '🛵 Delivery Executive (Rider View)', desc: "Restricted portal to view assigned orders, track GPS navigation, and clear COD cash to admin." },
               { id: 'manager', label: isHindi ? 'ऑर्डर मैनेजर' : 'Order Dispatch Manager', desc: "Moderate dispatch tracks and SLA times." },
               { id: 'admin', label: isHindi ? 'सुपर एडमिन' : 'Super Admin (Full CRUD)', desc: "Full database WRITE/DELETE authorization and gateway configuration." }
             ].map(r => (

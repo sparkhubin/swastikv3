@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import { products as initialProducts } from '../data/products';
+import { isOrder1HourLocked } from '../utils/orderLock';
 
 const DataContext = createContext();
 
@@ -14,9 +15,9 @@ const initialCategories = [
 
 // Coupon structures
 const initialOffers = [
-  { id: 1, code: 'SWASTIK50', discountType: 'fixed', value: 50, minOrder: 299, bannerEn: 'Get ₹50 flat discount on your next order!', bannerHi: 'अपने अगले ऑर्डर पर ₹50 की फ्लैट छूट पाएं!', descriptionEn: 'Applicable for cart value above ₹299.', descriptionHi: '₹299 से अधिक के कार्ट मूल्य पर लागू।' },
-  { id: 2, code: 'FREESHIP', discountType: 'percentage', value: 10, minOrder: 499, bannerEn: 'Unlock 10% off & Free Delivery above ₹499!', bannerHi: '₹499 से ऊपर 10% की छूट और मुफ्त डिलीवरी!', descriptionEn: 'Maximum discount ₹100.', descriptionHi: 'अधिकतम छूट ₹100।' },
-  { id: 3, code: 'ORGANICNEW', discountType: 'percentage', value: 15, minOrder: 199, bannerEn: 'Flat 15% discount for organic growers trial!', bannerHi: 'जैविक किसानों के परीक्षण के लिए फ्लैट 15% छूट!', descriptionEn: 'Valid for new buyers block.', descriptionHi: 'नए खरीदारों के लिए माननीय।' }
+  { id: 1, code: 'SWASTIK50', discountType: 'fixed', value: 50, minOrder: 299, startDate: '2026-01-01', endDate: '2026-12-31', maxUsesPerCustomer: 1, bannerEn: 'Get ₹50 flat discount on your next order!', bannerHi: 'अपने अगले ऑर्डर पर ₹50 की फ्लैट छूट पाएं!', descriptionEn: 'Applicable for cart value above ₹299. Max 1 use per user.', descriptionHi: '₹299 से अधिक के कार्ट मूल्य पर लागू। प्रति ग्राहक 1 बार।' },
+  { id: 2, code: 'FREESHIP', discountType: 'percentage', value: 10, minOrder: 499, startDate: '2026-05-01', endDate: '2026-12-31', maxUsesPerCustomer: 2, bannerEn: 'Unlock 10% off & Free Delivery above ₹499!', bannerHi: '₹499 से ऊपर 10% की छूट और मुफ्त डिलीवरी!', descriptionEn: 'Maximum discount ₹100. Max 2 uses per user.', descriptionHi: 'अधिकतम छूट ₹100। प्रति ग्राहक 2 बार।' },
+  { id: 3, code: 'ORGANICNEW', discountType: 'percentage', value: 15, minOrder: 199, startDate: '2026-06-01', endDate: '2026-12-31', maxUsesPerCustomer: 1, bannerEn: 'Flat 15% discount for organic growers trial!', bannerHi: 'जैविक किसानों के परीक्षण के लिए फ्लैट 15% छूट!', descriptionEn: 'Valid for new buyers block. Max 1 use per user.', descriptionHi: 'नए खरीदारों के लिए माननीय। प्रति ग्राहक 1 बार।' }
 ];
 
 // Submission messages from customers
@@ -45,16 +46,18 @@ const initialAboutSettings = {
 // Unified dynamic contact address block
 const initialContactSettings = {
   brandName: 'Swastik Supermarket',
-  address: 'Plot No 46, Block-B, Sector 18, Noida, Uttar Pradesh 201301',
-  phone: '+91 11 2345 6789',
-  email: 'support@swastik.com',
-  website: 'https://www.swastik.com',
-  gst: '09AAAAA1111A1Z1',
+  tagline: 'Aapka Apna Bazaar',
+  subtitle: 'Drop us a line if you have queries regarding bulk orders, delay offsets, or partnership propositions.',
+  address: 'Survey no. 100 Sanjit road opposite of Saraswati school , Mandsaur, India, Madhya Pradesh',
+  phone: '094845 40001',
+  email: 'info.swastiksupermarket@gmail.com',
+  website: 'https://www.swastiksupermarket.com',
+  gst: '23AAAAA1111A1Z1',
   license: 'FSSAI-12345678901234',
-  logo: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDv2ZdOSR9KLEzLcZVGWsNkBTngtLGT26IQCQWq93J-uLA3bPOzxkydefmZCZQ60tQe318BOWnckBRWqIZQ7FZLvdH5euGw-_PISU3A9yaqhNEtWYidSGykYNRmWgUY8aveTL1477O03YQ2DlFWzNJkCAREaZNJkz9JJ7cbxEjc-XCWutXsrxoSHGCxuJD6zR-gJqekMIbgK96KhrW5tYzH6aGYhWzmySNS_NQsnkY_gDCp51uANNWLwsYN69CO8VlnLuHuFTL0MibC',
+  logo: '/swastik-logo.svg',
   banner: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD7zupgGDM4rLNPqaVUDi49IYYmDPm8we0M1paGQ0P1xQM4TgUKOW1hAxsPwEJYVlslYIGGelWSHP2AbAsD6tdQUi8psCrpIgqLdnWEBRUvnn1y3phC3GMAX5nlBQrVq6HZdqDsrg-Fo2h5dwMQoYw6-xL1HRXQIkTg089XtLVzO2aMDTUftCLWp9Y9HDjOsAaK-LlpwxMS7n2AnfWSjTjC__z4UeTSYCXxEQDyAmshwnbevNh58O6yJ3J52NXWKXYTarHYA5spvG5C',
-  latitude: 28.5708,
-  longitude: 77.3259,
+  latitude: 24.0723,
+  longitude: 75.0698,
   deliveryChargeNear: 0,
   deliveryChargeMedium: 25,
   deliveryChargeFar: 45,
@@ -225,6 +228,37 @@ const initialTermsSections = [
   }
 ];
 
+const initialRefundSections = [
+  {
+    id: 1,
+    titleEn: "1. Order Cancellation Policy",
+    titleHi: "1. ऑर्डर रद्दीकरण नीति",
+    descEn: "Orders can be canceled free of charge within 10 minutes of placement or before dispatch from our local hub. Once the delivery rider is en route, cancellations may incur a nominal fee.",
+    descHi: "ऑर्डर देने के 10 मिनट के भीतर या हमारे हब से डिस्पैच होने से पहले बिना किसी शुल्क के रद्द किए जा सकते हैं। राइडर के रवाना होने के बाद रद्दीकरण पर नाममात्र शुल्क लग सकता है।"
+  },
+  {
+    id: 2,
+    titleEn: "2. Fresh Produce & Doorstep Inspection Guarantee",
+    titleHi: "2. ताज़ा उपज और डोरस्टेप निरीक्षण गारंटी",
+    descEn: "Please inspect all fruits, vegetables, dairy, and perishables upon delivery. If any item is damaged, spoiled, or missing, inform our delivery partner at the doorstep or file a claim in the app within 2 hours for instant refund or replacement.",
+    descHi: "कृपया डिलीवरी के समय सभी फलों, सब्जियों, डेयरी और जल्द खराब होने वाले सामान का निरीक्षण करें। यदि कोई आइटम क्षतिग्रस्त, खराब या गायब है, तो तुरंत डिलीवरी पार्टनर को बताएं या 2 घंटे के भीतर ऐप पर क्लेम करें।"
+  },
+  {
+    id: 3,
+    titleEn: "3. Refund Processing & Credit Timeline",
+    titleHi: "3. रिफंड प्रोसेसिंग और क्रेडिट समयसीमा",
+    descEn: "Prepaid online payments (UPI, Credit/Debit Cards, Net Banking) are refunded to the original payment method within 24–48 working hours. Cash on Delivery (COD) refunds are instantly credited to your Swastik Loyalty Wallet.",
+    descHi: "प्रीपेड ऑनलाइन भुगतान (यूपीआई, कार्ड, नेट बैंकिंग) 24-48 कार्य घंटों के भीतर मूल भुगतान खाते में वापस जमा कर दिए जाते हैं। कैश ऑन डिलीवरी रिफंड तुरंत आपके स्वास्तिक वॉलेट में जमा किए जाते हैं।"
+  },
+  {
+    id: 4,
+    titleEn: "4. Non-Refundable Categories & Exceptions",
+    titleHi: "4. गैर-वापसी योग्य श्रेणियां और अपवाद",
+    descEn: "Personal hygiene items, unsealed cosmetics, opened packaged foods, and items stored improperly after delivery are non-refundable unless verified defective upon arrival.",
+    descHi: "व्यक्तिगत स्वच्छता के उत्पाद, सील खुले सौंदर्य प्रसाधन, खुले पैकेज्ड खाद्य पदार्थ और डिलीवरी के बाद अनुचित तरीके से रखे गए सामान रिफंडेबल नहीं हैं।"
+  }
+];
+
 const initialLocationGroups = [
   { id: 1, name: "Noida Sector 62 & 63", normalDelivery: 30, primeDelivery: 0, locations: "Sector 62, Sector 63, Shatabdi Vihar, Rajat Vihar", deliveryStartTime: "09:00", deliveryEndTime: "21:00", minFreeDeliveryAmount: 499 },
   { id: 2, name: "Indirapuram & Vasundhara", normalDelivery: 45, primeDelivery: 15, locations: "Ahimsa Khand, Vaibhav Khand, Vasundhara Sec 10, Gyan Khand", deliveryStartTime: "07:00", deliveryEndTime: "22:00", minFreeDeliveryAmount: 599 },
@@ -355,7 +389,12 @@ export function DataProvider({ children }) {
     try {
       const saved = localStorage.getItem('swastik_contact_settings');
       if (saved) {
-        return { ...initialContactSettings, ...JSON.parse(saved) };
+        const parsed = JSON.parse(saved);
+        if (!parsed.address || parsed.address.includes('Noida') || parsed.email?.includes('support@swastik.com') || parsed.logo?.includes('lh3.googleusercontent')) {
+          localStorage.removeItem('swastik_contact_settings');
+          return initialContactSettings;
+        }
+        return { ...initialContactSettings, ...parsed };
       }
     } catch (e) {
       console.warn("Error parsing swastik_contact_settings:", e);
@@ -400,6 +439,7 @@ export function DataProvider({ children }) {
 
   const [primeSettings, setPrimeSettings] = useState(() => {
     const defaultVal = {
+      isMembershipEnabled: true,
       primePlanFee: 299,
       primeBenefit1En: "Free / Reduced Delivery",
       primeBenefitDesc1En: "Maximum relief on all location groups",
@@ -530,6 +570,9 @@ export function DataProvider({ children }) {
           if (settingsData.swastik_customers) setCustomers(settingsData.swastik_customers);
           if (settingsData.swastik_about_settings) setAboutSettings(settingsData.swastik_about_settings);
           if (settingsData.swastik_contact_settings) setContactSettings(settingsData.swastik_contact_settings);
+          if (settingsData.swastik_refund_sections && Array.isArray(settingsData.swastik_refund_sections)) setRefundSections(settingsData.swastik_refund_sections);
+          if (settingsData.swastik_privacy_sections && Array.isArray(settingsData.swastik_privacy_sections)) setPrivacySections(settingsData.swastik_privacy_sections);
+          if (settingsData.swastik_terms_sections && Array.isArray(settingsData.swastik_terms_sections)) setTermsSections(settingsData.swastik_terms_sections);
         }
       }
     } catch (e) {
@@ -894,19 +937,35 @@ export function DataProvider({ children }) {
 
   const updateOrder = async (id, updated) => {
     try {
+      const existingOrder = orders.find(o => String(o.id) === String(id));
+      if (existingOrder && isOrder1HourLocked(existingOrder)) {
+        const keys = Object.keys(updated);
+        const allowedPaymentKeys = [
+          'paymentStatus', 'paymentMethod', 'codStatus', 'codNotes', 
+          'codCollectedAt', 'adminCollectedConfirm', 'adminCollectedAt', 
+          'isSettled', 'settledAt', 'settlementStatus', 'settledAmount', 'id'
+        ];
+        const hasRestrictedChanges = keys.some(k => !allowedPaymentKeys.includes(k) && JSON.stringify(existingOrder[k]) !== JSON.stringify(updated[k]));
+        if (hasRestrictedChanges) {
+          console.warn(`Order #${id} is locked (delivered > 1 hour ago). Non-payment updates blocked.`);
+          const sanitizedPayload = {};
+          allowedPaymentKeys.forEach(k => {
+            if (updated[k] !== undefined) sanitizedPayload[k] = updated[k];
+          });
+          if (Object.keys(sanitizedPayload).length === 0) return;
+          updated = sanitizedPayload;
+        }
+      }
+
       const res = await fetch(`/api/orders/${id}/transit`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
       });
-      if (res.ok) {
-        setOrders(prev => prev.map(o => o.id === id ? { ...o, ...updated } : o));
-      } else {
-        setOrders(prev => prev.map(o => o.id === id ? { ...o, ...updated } : o));
-      }
+      setOrders(prev => prev.map(o => String(o.id) === String(id) ? { ...o, ...updated } : o));
     } catch (e) {
       console.error(e);
-      setOrders(prev => prev.map(o => o.id === id ? { ...o, ...updated } : o));
+      setOrders(prev => prev.map(o => String(o.id) === String(id) ? { ...o, ...updated } : o));
     }
   };
 
@@ -988,7 +1047,7 @@ export function DataProvider({ children }) {
       name: "Sanjay Kumar (Admin)",
       mobile: "9999999999",
       password: "admin123",
-      permissions: ["dashboard", "products", "categories", "orders", "offers", "customers", "partners", "reviews", "pages", "staff"]
+      permissions: ["dashboard", "products", "categories", "orders", "offers", "customers", "partners", "reviews", "pages", "staff", "delivery"]
     },
     {
       id: 2,
@@ -1003,6 +1062,20 @@ export function DataProvider({ children }) {
       mobile: "9123456789",
       password: "staff123",
       permissions: ["orders"]
+    },
+    {
+      id: 4,
+      name: "Pradeep Kumar (Delivery Executive)",
+      mobile: "9540012099",
+      password: "delivery123",
+      permissions: ["delivery"]
+    },
+    {
+      id: 5,
+      name: "Rakesh Pilot (Delivery Rider)",
+      mobile: "9999988888",
+      password: "delivery123",
+      permissions: ["delivery"]
     }
   ];
 
@@ -1053,7 +1126,7 @@ export function DataProvider({ children }) {
     }
   };
 
-  // Dynamic Privacy and Terms state
+  // Dynamic Privacy, Terms and Refund state
   const [privacySections, setPrivacySections] = useState(() => {
     return safeJsonParse('swastik_privacy_sections', initialPrivacySections);
   });
@@ -1062,13 +1135,24 @@ export function DataProvider({ children }) {
     return safeJsonParse('swastik_terms_sections', initialTermsSections);
   });
 
+  const [refundSections, setRefundSections] = useState(() => {
+    return safeJsonParse('swastik_refund_sections', initialRefundSections);
+  });
+
   useEffect(() => {
     localStorage.setItem('swastik_privacy_sections', JSON.stringify(privacySections));
+    saveSettingToDb('swastik_privacy_sections', privacySections);
   }, [privacySections]);
 
   useEffect(() => {
     localStorage.setItem('swastik_terms_sections', JSON.stringify(termsSections));
+    saveSettingToDb('swastik_terms_sections', termsSections);
   }, [termsSections]);
+
+  useEffect(() => {
+    localStorage.setItem('swastik_refund_sections', JSON.stringify(refundSections));
+    saveSettingToDb('swastik_refund_sections', refundSections);
+  }, [refundSections]);
 
   const addPrivacySection = (sect) => {
     const newId = privacySections.length > 0 ? Math.max(...privacySections.map(s => s.id)) + 1 : 1;
@@ -1090,6 +1174,17 @@ export function DataProvider({ children }) {
   };
   const deleteTermsSection = (id) => {
     setTermsSections(prev => prev.filter(s => s.id !== Number(id)));
+  };
+
+  const addRefundSection = (sect) => {
+    const newId = refundSections.length > 0 ? Math.max(...refundSections.map(s => s.id)) + 1 : 1;
+    setRefundSections(prev => [...prev, { ...sect, id: newId }]);
+  };
+  const updateRefundSection = (id, updated) => {
+    setRefundSections(prev => prev.map(s => s.id === Number(id) ? { ...s, ...updated } : s));
+  };
+  const deleteRefundSection = (id) => {
+    setRefundSections(prev => prev.filter(s => s.id !== Number(id)));
   };
 
   // Dynamic Slider/Banner CRUD Actions
@@ -1120,6 +1215,11 @@ export function DataProvider({ children }) {
       addTermsSection,
       updateTermsSection,
       deleteTermsSection,
+      refundSections,
+      setRefundSections,
+      addRefundSection,
+      updateRefundSection,
+      deleteRefundSection,
       products,
       setProducts,
       addProduct,

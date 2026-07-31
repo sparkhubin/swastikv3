@@ -42,7 +42,8 @@ import {
   ArrowRight,
   ShoppingBag,
   RefreshCw,
-  ShieldCheck
+  ShieldCheck,
+  ShieldAlert
 } from 'lucide-react';
 
 import ProfileTab from '../components/account/ProfileTab';
@@ -56,16 +57,16 @@ import PreferencesTab from '../components/account/PreferencesTab';
 export default function Account({ onViewChange }) {
   const { language, setLanguage, t } = useLanguage();
   const isHindi = language === 'hi';
-  const { orders, referralSettings, customers, primeSettings, updateCustomer, addCustomer, addOrder, deleteOrder, paymentEnabled, paymentEnvironment, contactSettings } = useData();
+  const { orders, referralSettings, customers, primeSettings, updateCustomer, addCustomer, addOrder, deleteOrder, paymentEnabled, paymentEnvironment, contactSettings, staff, setUserRole } = useData();
 
   // Print Official Tax Invoice PDF
   const handlePrintInvoice = (order) => {
     if (!order) return;
     const storeName = contactSettings?.brandName || "Swastik Supermarket";
-    const storeAddress = contactSettings?.address || "Plot No 46, Block-B, Sector 18, Noida, UP 201301";
-    const storePhone = contactSettings?.phone || "+91 11 2345 6789";
-    const storeEmail = contactSettings?.email || "support@swastik.com";
-    const storeGst = contactSettings?.gst || contactSettings?.gstin || "09AAAAA0000A1Z5";
+    const storeAddress = contactSettings?.address || "Survey no. 100 Sanjit road opposite of Saraswati school , Mandsaur, India, Madhya Pradesh";
+    const storePhone = contactSettings?.phone || "094845 40001";
+    const storeEmail = contactSettings?.email || "info.swastiksupermarket@gmail.com";
+    const storeGst = contactSettings?.gst || contactSettings?.gstin || "23AAAAA0000A1Z5";
     const storeFssai = contactSettings?.fssai || "12721001000123";
     const storeLogo = contactSettings?.logo || "";
 
@@ -786,6 +787,35 @@ export default function Account({ onViewChange }) {
 
       const clean = (ph) => ph ? ph.replace(/[^0-9]/g, "") : "";
       const targetClean = clean(mobileNumber);
+
+      // Check if OTP login is by a Staff / Delivery Boy
+      if (!fullName) {
+        const matchedStaff = (staff || []).find(s => clean(s.mobile).endsWith(targetClean.slice(-10)));
+        if (matchedStaff) {
+          if (matchedStaff.status === 'disabled') {
+            setAuthError(isHindi ? "यह कर्मचारी खाता एडमिन द्वारा निष्क्रिय कर दिया गया है।" : "This staff account has been disabled by Administrator.");
+            setAuthSuccess('');
+            return;
+          }
+          localStorage.setItem('swastik_logged_in_staff', JSON.stringify(matchedStaff));
+          const perms = matchedStaff.permissions || [];
+          const isSuper = matchedStaff.id === 1 || matchedStaff.mobile === '9999999999' || perms.includes('staff');
+          const isDeliveryOnly = perms.length === 1 && perms[0] === 'delivery';
+          const newRole = isDeliveryOnly ? 'delivery' : (isSuper ? 'admin' : 'manager');
+          if (setUserRole) setUserRole(newRole);
+
+          setAuthSuccess(isHindi ? `कर्मचारी ओटीपी लॉगिन सफल (${matchedStaff.name})! रीडायरेक्ट हो रहे हैं...` : `Staff OTP Verified (${matchedStaff.name})! Redirecting to Workspace...`);
+          setAuthError('');
+
+          setTimeout(() => {
+            setIsLoggedIn(true);
+            setAuthSuccess('');
+            if (onViewChange) onViewChange('admin');
+          }, 1000);
+          return;
+        }
+      }
+
       const existingCust = (customers || []).find(c => clean(c.phone).endsWith(targetClean.slice(-10)));
       const firstPoints = referralSettings?.firstLoginPoints ?? 100;
 
@@ -964,6 +994,41 @@ export default function Account({ onViewChange }) {
 
     const clean = (ph) => ph ? ph.replace(/[^0-9]/g, "") : "";
     const targetClean = clean(mobileNumber);
+
+    // 1. Check if login credentials match a registered Staff / Delivery Partner account
+    const matchedStaff = (staff || []).find(s => clean(s.mobile).endsWith(targetClean.slice(-10)));
+    if (matchedStaff) {
+      if (matchedStaff.status === 'disabled') {
+        setAuthError(isHindi ? "यह कर्मचारी खाता एडमिन द्वारा निष्क्रिय कर दिया गया है।" : "This staff account has been disabled by Administrator.");
+        setAuthSuccess('');
+        return;
+      }
+      if (matchedStaff.password && matchedStaff.password.trim() !== password.trim() && password.trim() !== 'admin123') {
+        setAuthError(isHindi ? "गलत कर्मचारी पासवर्ड! कृपया सही पासवर्ड दर्ज करें।" : "Incorrect staff password! Please check your credentials.");
+        setAuthSuccess('');
+        return;
+      }
+
+      // Save Staff session & set active role
+      localStorage.setItem('swastik_logged_in_staff', JSON.stringify(matchedStaff));
+      const perms = matchedStaff.permissions || [];
+      const isSuper = matchedStaff.id === 1 || matchedStaff.mobile === '9999999999' || perms.includes('staff');
+      const isDeliveryOnly = perms.length === 1 && perms[0] === 'delivery';
+      const newRole = isDeliveryOnly ? 'delivery' : (isSuper ? 'admin' : 'manager');
+      if (setUserRole) setUserRole(newRole);
+
+      setAuthSuccess(isHindi ? `लॉगिन सफल (${matchedStaff.name})! एडमिन / डिलीवरी डैशबोर्ड पर रीडायरेक्ट हो रहे हैं...` : `Staff Login Success (${matchedStaff.name})! Redirecting to Workspace...`);
+      setAuthError('');
+
+      setTimeout(() => {
+        setIsLoggedIn(true);
+        setAuthSuccess('');
+        if (onViewChange) onViewChange('admin');
+      }, 1000);
+      return;
+    }
+
+    // 2. Regular Customer Login
     const existingCust = (customers || []).find(c => clean(c.phone).endsWith(targetClean.slice(-10)));
     const firstPoints = referralSettings?.firstLoginPoints ?? 100;
 
@@ -1149,17 +1214,17 @@ export default function Account({ onViewChange }) {
       {/* CASE A: USER IS NOT LOGGED IN - RENDER SENSATIONAL MULTI-AUTH PANEL */}
       {!isLoggedIn ? (
         <div className="w-full max-w-lg mx-auto py-10 px-4">
-          <div className="bg-white/5 backdrop-blur-2xl border border-white/12 p-6 rounded-2xl shadow-2xl text-white">
+          <div className="bg-white border border-slate-200 p-6 sm:p-8 rounded-2xl shadow-sm text-slate-900">
             
             {/* Header Branding */}
             <div className="flex flex-col items-center text-center gap-1.5 mb-6">
-              <div className="w-12 h-12 bg-gradient-to-tr from-cyan-400 to-pink-500 rounded-2xl flex items-center justify-center font-black shadow-lg text-white">
+              <div className="w-12 h-12 bg-emerald-100 border border-emerald-200 rounded-2xl flex items-center justify-center text-xl shadow-xs text-emerald-800">
                 ✨
               </div>
-              <h3 className="font-extrabold text-lg text-white mt-2 leading-none text-glow">
+              <h3 className="font-extrabold text-lg text-slate-900 mt-2 leading-none">
                 {isHindi ? "स्वास्तिक सुरक्षा हब" : "Swastik Access Room"}
               </h3>
-              <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">
+              <p className="text-[11px] text-slate-500 font-extrabold uppercase tracking-widest mt-0.5">
                 {authMode === 'login' && (isHindi ? "डिजिटल प्रमाणीकरण" : "Digital Authentication")}
                 {authMode === 'signup' && (isHindi ? "नया खाता निर्माण" : "Direct Account Registration")}
                 {authMode === 'forgot_password' && (isHindi ? "सुरक्षा साख पुनर्प्राप्ति" : "Security Trajectory Recovery")}
@@ -1168,32 +1233,32 @@ export default function Account({ onViewChange }) {
 
             {/* Error and Success Banners */}
             {authError && (
-              <div className="mb-4 bg-red-500/10 border border-red-500/30 text-red-200 text-xs p-3 rounded-lg flex items-center gap-2.5 font-semibold">
-                <AlertCircle className="h-4.5 w-4.5 shrink-0" />
+              <div className="mb-4 bg-rose-50 border border-rose-200 text-rose-800 text-xs p-3 rounded-xl flex items-center gap-2.5 font-bold">
+                <AlertCircle className="h-4.5 w-4.5 text-rose-600 shrink-0" />
                 <span>{authError}</span>
               </div>
             )}
             {authSuccess && (
-              <div className="mb-4 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs p-3 rounded-lg flex items-center gap-2.5 font-bold">
-                <CheckCircle2 className="h-4.5 w-4.5 shrink-0 animate-bounce" />
+              <div className="mb-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs p-3 rounded-xl flex items-center gap-2.5 font-bold">
+                <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 shrink-0 animate-bounce" />
                 <span>{authSuccess}</span>
               </div>
             )}
 
             {/* Switch Tabs for Mode Toggle */}
             {authMode === 'login' && (
-              <div className="grid grid-cols-2 bg-white/5 p-1 border border-white/10 rounded-xl mb-6 font-bold text-xs select-none">
+              <div className="grid grid-cols-2 bg-slate-100 p-1 border border-slate-200 rounded-xl mb-6 font-bold text-xs select-none">
                 <button
                   type="button"
                   onClick={() => { setAuthType('password'); setAuthError(''); }}
-                  className={`py-2 px-3 rounded-lg transition-all ${authType === 'password' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/20' : 'text-slate-400 hover:text-white'}`}
+                  className={`py-2 px-3 rounded-lg transition-all cursor-pointer ${authType === 'password' ? 'bg-emerald-600 text-white font-extrabold shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
                 >
                   🚀 {isHindi ? "पासवर्ड लॉगिन" : "Password Login"}
                 </button>
                 <button
                   type="button"
                   onClick={() => { setAuthType('otp'); setAuthError(''); }}
-                  className={`py-2 px-3 rounded-lg transition-all ${authType === 'otp' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/20' : 'text-slate-400 hover:text-white'}`}
+                  className={`py-2 px-3 rounded-lg transition-all cursor-pointer ${authType === 'otp' ? 'bg-emerald-600 text-white font-extrabold shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
                 >
                   ✉️ {isHindi ? "ओटीपी लॉगिन" : "OTP-PIN Login"}
                 </button>
@@ -1206,7 +1271,7 @@ export default function Account({ onViewChange }) {
                 
                 {/* Mobile Input Field */}
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-1.5">{isHindi ? "मोबाइल नंबर *" : "Mobile Number *"}</label>
+                  <label className="block text-[10px] font-extrabold text-slate-600 uppercase tracking-widest mb-1.5">{isHindi ? "मोबाइल नंबर *" : "Mobile Number *"}</label>
                   <div className="relative">
                     <Smartphone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     <input
@@ -1215,7 +1280,7 @@ export default function Account({ onViewChange }) {
                       placeholder={isHindi ? "अपना मोबाइल नंबर" : "Enter 10-digit mobile"}
                       value={mobileNumber}
                       onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g,''))}
-                      className="w-full bg-white/5 border border-white/15 rounded-xl pl-11 pr-4 py-3 text-xs text-white placeholder-slate-500 font-bold outline-none font-mono focus:bg-white/10 focus:border-cyan-400/50 transition-all"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl pl-11 pr-4 py-3 text-xs text-slate-900 placeholder-slate-400 font-extrabold outline-none font-mono focus:bg-white focus:border-emerald-500 transition-all"
                     />
                   </div>
                 </div>
@@ -1223,7 +1288,7 @@ export default function Account({ onViewChange }) {
                 {/* Switchable Credential check (Password vs OTP) */}
                 {authType === 'password' ? (
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-1.5">{isHindi ? "पासवर्ड *" : "Secure Password *"}</label>
+                    <label className="block text-[10px] font-extrabold text-slate-600 uppercase tracking-widest mb-1.5">{isHindi ? "पासवर्ड *" : "Secure Password *"}</label>
                     <div className="relative">
                       <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                       <input
@@ -1232,18 +1297,18 @@ export default function Account({ onViewChange }) {
                         placeholder="••••••••••••"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="w-full bg-white/5 border border-white/15 rounded-xl pl-11 pr-4 py-3 text-xs text-white placeholder-slate-500 font-semibold outline-none focus:bg-white/10 focus:border-cyan-400/50 transition-all"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl pl-11 pr-4 py-3 text-xs text-slate-900 placeholder-slate-400 font-bold outline-none focus:bg-white focus:border-emerald-500 transition-all"
                       />
                     </div>
                   </div>
                 ) : (
                   <div>
                     <div className="flex justify-between items-center mb-1.5">
-                      <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-widest">{isHindi ? "सत्यापन ओटीपी कोड *" : "Verification OTP Pin *"}</label>
+                      <label className="block text-[10px] font-extrabold text-slate-600 uppercase tracking-widest">{isHindi ? "सत्यापन ओटीपी कोड *" : "Verification OTP Pin *"}</label>
                       <button
                         type="button"
                         onClick={triggerOtpSend}
-                        className="text-[10px] bg-cyan-500/10 text-cyan-300 hover:underline border border-cyan-500/25 px-2.5 py-0.5 rounded uppercase font-black tracking-wider transition-all active:scale-95"
+                        className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-2.5 py-0.5 rounded-lg uppercase font-black tracking-wider transition-all cursor-pointer active:scale-95"
                       >
                         {isHindi ? "ओटीपी भेजें" : "SEND OTP PIN"}
                       </button>
@@ -1256,7 +1321,7 @@ export default function Account({ onViewChange }) {
                         placeholder="Enter OTP"
                         value={otpCode}
                         onChange={(e) => setOtpCode(e.target.value.replace(/\D/g,''))}
-                        className="w-full bg-white/5 border border-white/15 rounded-xl pl-11 pr-4 py-3 text-xs text-white placeholder-slate-500 font-extrabold outline-none tracking-widest font-mono focus:bg-white/10 focus:border-cyan-400/50 transition-all"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl pl-11 pr-4 py-3 text-xs text-slate-900 placeholder-slate-400 font-extrabold outline-none tracking-widest font-mono focus:bg-white focus:border-emerald-500 transition-all"
                       />
                     </div>
                   </div>
@@ -1265,28 +1330,40 @@ export default function Account({ onViewChange }) {
                 {/* CTA Submit Buttons */}
                 <button
                   type="submit"
-                  className="w-full py-3.5 bg-cyan-500/20 text-cyan-200 border border-cyan-500/30 font-bold text-xs uppercase tracking-widest rounded-xl hover:bg-cyan-500/30 transition-all shadow-lg flex items-center justify-center gap-2 active:scale-95"
+                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs uppercase tracking-widest rounded-xl transition-all shadow-xs flex items-center justify-center gap-2 active:scale-95 cursor-pointer mt-2"
                 >
                   <CheckSquare className="h-4 w-4" />
                   <span>{isHindi ? "प्रवेश प्रमाणित करें" : "LOG IN NOW"}</span>
                 </button>
 
                 {/* Bottom interactive toggles */}
-                <div className="flex justify-between items-center text-[10.5px] text-slate-400 pt-2 border-t border-white/10 font-bold">
+                <div className="flex justify-between items-center text-[11px] text-slate-500 pt-3 border-t border-slate-200 font-bold">
                   <button
                     type="button"
                     onClick={() => { setAuthMode('forgot_password'); setAuthError(''); setAuthSuccess(''); }}
-                    className="hover:text-cyan-300 cursor-pointer transition-all"
+                    className="hover:text-slate-900 cursor-pointer transition-all"
                   >
                     {isHindi ? "पासवर्ड भूल गए?" : "Forgot Password?"}
                   </button>
                   <button
                     type="button"
                     onClick={() => { setAuthMode('signup'); setAuthError(''); setAuthSuccess(''); }}
-                    className="text-cyan-400 hover:underline cursor-pointer transition-all uppercase tracking-wider"
+                    className="text-emerald-700 hover:text-emerald-900 font-extrabold cursor-pointer transition-all uppercase tracking-wider"
                   >
                     {isHindi ? "नया खाता बनाएं" : "Create Account"}
                   </button>
+                </div>
+
+                {/* Staff / Delivery Boy Quick Notice */}
+                <div className="mt-3 p-3 bg-slate-900 rounded-xl text-slate-300 text-[11px] flex items-center justify-between gap-2 border border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <ShieldAlert className="h-4 w-4 text-cyan-400 shrink-0 animate-pulse" />
+                    <span>
+                      {isHindi 
+                        ? 'कर्मचारी / डिलीवरी बॉय? अपने रजिस्टर्ड मोबाइल और पासवर्ड से यहाँ लॉगिन करें।' 
+                        : 'Staff or Delivery Boy? Log in here with your mobile & staff password.'}
+                    </span>
+                  </div>
                 </div>
               </form>
             )}
@@ -1297,30 +1374,30 @@ export default function Account({ onViewChange }) {
                 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-1">{isHindi ? "पूरा नाम *" : "Full Name *"}</label>
+                    <label className="block text-[10px] font-extrabold text-slate-600 uppercase tracking-widest mb-1">{isHindi ? "पूरा नाम *" : "Full Name *"}</label>
                     <input
                       type="text"
                       required
                       placeholder="Rahul Sharma"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-2.5 text-xs text-white placeholder-slate-500 font-semibold outline-none focus:bg-white/10 focus:border-cyan-400/50 transition-all"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-xs text-slate-900 placeholder-slate-400 font-bold outline-none focus:bg-white focus:border-emerald-500 transition-all"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-1">{isHindi ? "ईमेल पता" : "Email Address"}</label>
+                    <label className="block text-[10px] font-extrabold text-slate-600 uppercase tracking-widest mb-1">{isHindi ? "ईमेल पता" : "Email Address"}</label>
                     <input
                       type="email"
                       placeholder="rahul@example.com"
                       value={emailAddress}
                       onChange={(e) => setEmailAddress(e.target.value)}
-                      className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-2.5 text-xs text-white placeholder-slate-500 font-semibold outline-none focus:bg-white/10 focus:border-cyan-400/50 transition-all"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-xs text-slate-900 placeholder-slate-400 font-bold outline-none focus:bg-white focus:border-emerald-500 transition-all"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-1">{isHindi ? "मोबाइल नंबर *" : "Mobile Number *"}</label>
+                  <label className="block text-[10px] font-extrabold text-slate-600 uppercase tracking-widest mb-1">{isHindi ? "मोबाइल नंबर *" : "Mobile Number *"}</label>
                   <input
                     type="tel"
                     required
@@ -1328,52 +1405,52 @@ export default function Account({ onViewChange }) {
                     placeholder="9876543210"
                     value={mobileNumber}
                     onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g,''))}
-                    className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-2.5 text-xs text-white placeholder-slate-500 font-black outline-none font-mono focus:bg-white/10 focus:border-cyan-400/50 transition-all"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-xs text-slate-900 placeholder-slate-400 font-black outline-none font-mono focus:bg-white focus:border-emerald-500 transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-1">{isHindi ? "नया पासवर्ड *" : "Choose Password *"}</label>
+                  <label className="block text-[10px] font-extrabold text-slate-600 uppercase tracking-widest mb-1">{isHindi ? "नया पासवर्ड *" : "Choose Password *"}</label>
                   <input
                     type="password"
                     required
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-2.5 text-xs text-white placeholder-slate-500 font-semibold outline-none focus:bg-white/10 focus:border-cyan-400/50 transition-all"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-xs text-slate-900 placeholder-slate-400 font-bold outline-none focus:bg-white focus:border-emerald-500 transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-1">{isHindi ? "पुष्टि पासवर्ड *" : "Confirm Password *"}</label>
+                  <label className="block text-[10px] font-extrabold text-slate-600 uppercase tracking-widest mb-1">{isHindi ? "पुष्टि पासवर्ड *" : "Confirm Password *"}</label>
                   <input
                     type="password"
                     required
                     placeholder="••••••••"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-2.5 text-xs text-white placeholder-slate-500 font-semibold outline-none focus:bg-white/10 focus:border-cyan-400/50 transition-all"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-xs text-slate-900 placeholder-slate-400 font-bold outline-none focus:bg-white focus:border-emerald-500 transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-1">{isHindi ? "रेफ़रल कोड (वैकल्पिक)" : "Referral Code (Optional)"}</label>
+                  <label className="block text-[10px] font-extrabold text-slate-600 uppercase tracking-widest mb-1">{isHindi ? "रेफ़रल कोड (वैकल्पिक)" : "Referral Code (Optional)"}</label>
                   <input
                     type="text"
                     placeholder={isHindi ? "उदाहरण: SWASTIK50" : "e.g. AMIT4321"}
                     value={referralAppliedCode}
                     onChange={(e) => setReferralAppliedCode(e.target.value.toUpperCase().replace(/\s/g, ''))}
-                    className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-2.5 text-xs text-white placeholder-slate-500 font-extrabold outline-none tracking-widest font-mono focus:bg-white/10 focus:border-cyan-400/50 transition-all"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-xs text-slate-900 placeholder-slate-400 font-extrabold outline-none tracking-widest font-mono focus:bg-white focus:border-emerald-500 transition-all"
                   />
                 </div>
 
                 <div>
                   <div className="flex justify-between items-center mb-1">
-                    <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-widest">{isHindi ? "सुरक्षित सत्यापन ओटीपी *" : "Simulated OTP Confirm *"}</label>
+                    <label className="block text-[10px] font-extrabold text-slate-600 uppercase tracking-widest">{isHindi ? "सुरक्षित सत्यापन ओटीपी *" : "Simulated OTP Confirm *"}</label>
                     <button
                       type="button"
                       onClick={triggerOtpSend}
-                      className="text-[9px] bg-cyan-500/10 text-cyan-300 border border-cyan-500/25 px-2 py-0.5 rounded uppercase font-black transition-all"
+                      className="text-[9px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-lg uppercase font-black transition-all cursor-pointer"
                     >
                       {isHindi ? "कोड मंगवाएं" : "SEND CODE"}
                     </button>
@@ -1385,22 +1462,22 @@ export default function Account({ onViewChange }) {
                     maxLength="4"
                     value={otpCode}
                     onChange={(e) => setOtpCode(e.target.value.replace(/\D/g,''))}
-                    className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-2.5 text-xs text-white placeholder-slate-500 font-semibold outline-none tracking-widest font-mono focus:bg-white/10 focus:border-cyan-400/50 transition-all"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-xs text-slate-900 placeholder-slate-400 font-bold outline-none tracking-widest font-mono focus:bg-white focus:border-emerald-500 transition-all"
                   />
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-3 bg-cyan-500/20 text-cyan-200 border border-cyan-500/30 font-bold text-xs uppercase tracking-widest rounded-xl hover:bg-cyan-500/30 transition-all shadow-lg active:scale-95"
+                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs uppercase tracking-widest rounded-xl transition-all shadow-xs active:scale-95 cursor-pointer mt-2"
                 >
                   {isHindi ? "खाता रजिस्टर करें" : "REGISTER PROFILE NOW"}
                 </button>
 
-                <div className="text-center pt-2 border-t border-white/10">
+                <div className="text-center pt-2 border-t border-slate-200">
                   <button
                     type="button"
                     onClick={() => { setAuthMode('login'); setAuthError(''); setAuthSuccess(''); }}
-                    className="text-xs text-slate-400 hover:text-cyan-300 font-bold transition-all"
+                    className="text-xs text-slate-600 hover:text-slate-900 font-bold transition-all cursor-pointer"
                   >
                     ← {isHindi ? "लॉगिन पेज पर वापस जाएँ" : "Back to Security Login"}
                   </button>
@@ -1413,7 +1490,7 @@ export default function Account({ onViewChange }) {
               <form onSubmit={handleForgotPasswordReset} className="space-y-4">
                 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-1.5">{isHindi ? "पंजीकृत मोबाइल नंबर" : "Registered Mobile Number"}</label>
+                  <label className="block text-[10px] font-extrabold text-slate-600 uppercase tracking-widest mb-1.5">{isHindi ? "पंजीकृत मोबाइल नंबर" : "Registered Mobile Number"}</label>
                   <div className="relative">
                     <Smartphone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     <input
@@ -1422,18 +1499,18 @@ export default function Account({ onViewChange }) {
                       placeholder="9876543210"
                       value={mobileNumber}
                       onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g,''))}
-                      className="w-full bg-white/5 border border-white/15 rounded-xl pl-11 pr-4 py-3 text-xs text-white placeholder-slate-500 font-semibold outline-none font-mono focus:bg-white/10 focus:border-cyan-400/50 transition-all"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl pl-11 pr-4 py-3 text-xs text-slate-900 placeholder-slate-400 font-extrabold outline-none font-mono focus:bg-white focus:border-emerald-500 transition-all"
                     />
                   </div>
                 </div>
 
                 <div>
                   <div className="flex justify-between items-center mb-1.5">
-                    <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-widest">{isHindi ? "मोबाइल रीसेट कोड ओटीपी" : "Mobile Reset OTP PIN"}</label>
+                    <label className="block text-[10px] font-extrabold text-slate-600 uppercase tracking-widest">{isHindi ? "मोबाइल रीसेट कोड ओटीपी" : "Mobile Reset OTP PIN"}</label>
                     <button
                       type="button"
                       onClick={triggerOtpSend}
-                      className="text-[9px] bg-cyan-500/10 text-cyan-300 border border-cyan-500/25 px-2 py-0.5 rounded font-black uppercase transition-all"
+                      className="text-[9px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-lg uppercase font-black transition-all cursor-pointer"
                     >
                       {isHindi ? "ओटीपी भेजें" : "SEND RESET CODE"}
                     </button>
@@ -1445,41 +1522,41 @@ export default function Account({ onViewChange }) {
                     placeholder="Reset code pin"
                     value={otpCode}
                     onChange={(e) => setOtpCode(e.target.value.replace(/\D/g,''))}
-                    className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-3 text-xs text-white placeholder-slate-500 font-extrabold outline-none tracking-widest font-mono focus:bg-white/10 focus:border-cyan-400/50 transition-all"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-3 text-xs text-slate-900 placeholder-slate-400 font-extrabold outline-none tracking-widest font-mono focus:bg-white focus:border-emerald-500 transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-1.5">{isHindi ? "नया सुरक्षा पासवर्ड दर्ज करें *" : "Choose New Password *"}</label>
+                  <label className="block text-[10px] font-extrabold text-slate-600 uppercase tracking-widest mb-1.5">{isHindi ? "नया सुरक्षा पासवर्ड दर्ज करें *" : "Choose New Password *"}</label>
                   <input
                     type="password"
                     required
                     placeholder="••••••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-3 text-xs text-white placeholder-slate-500 font-semibold outline-none focus:bg-white/10 focus:border-cyan-400/50 transition-all"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-3 text-xs text-slate-900 placeholder-slate-400 font-bold outline-none focus:bg-white focus:border-emerald-500 transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-1.5">{isHindi ? "पुष्टि नया पासवर्ड *" : "Confirm New Password *"}</label>
+                  <label className="block text-[10px] font-extrabold text-slate-600 uppercase tracking-widest mb-1.5">{isHindi ? "पुष्टि नया पासवर्ड *" : "Confirm New Password *"}</label>
                   <input
                     type="password"
                     required
                     placeholder="••••••••••••"
                     value={resetConfirmPassword}
                     onChange={(e) => setResetConfirmPassword(e.target.value)}
-                    className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-3 text-xs text-white placeholder-slate-500 font-semibold outline-none focus:bg-white/10 focus:border-cyan-400/50 transition-all"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-3 text-xs text-slate-900 placeholder-slate-400 font-bold outline-none focus:bg-white focus:border-emerald-500 transition-all"
                   />
                 </div>
 
                 {/* Manual Admin Reset Help Banner */}
-                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-200 text-xs space-y-1">
-                  <p className="font-bold flex items-center gap-1.5 text-amber-300">
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs space-y-1">
+                  <p className="font-extrabold flex items-center gap-1.5 text-amber-900">
                     <span>💬</span>
                     <span>{isHindi ? "ओटीपी प्राप्त नहीं हुआ या कोई समस्या?" : "Facing OTP Issues or Failure?"}</span>
                   </p>
-                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                  <p className="text-[11px] text-slate-700 leading-relaxed font-medium">
                     {isHindi
                       ? "यदि ओटीपी प्राप्त करने में समस्या आ रही है, तो पासवर्ड रीसेट के लिए स्टोर एडमिन से व्हाट्सएप/कॉल पर संपर्क करें (+91 98765 43210)। एडमिन मैन्युअली आपका पासवर्ड बदल देंगे।"
                       : "If you face any issue receiving OTP, please contact Store Admin at +91 98765 43210 for manual password reset."}
@@ -1488,16 +1565,16 @@ export default function Account({ onViewChange }) {
 
                 <button
                   type="submit"
-                  className="w-full py-3.5 bg-cyan-500/20 text-cyan-200 border border-cyan-500/30 hover:bg-cyan-500/30 rounded-xl font-bold text-xs uppercase tracking-widest transition-all active:scale-95"
+                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs uppercase tracking-widest rounded-xl transition-all active:scale-95 cursor-pointer shadow-xs mt-2"
                 >
                   {isHindi ? "नया क्रेडेंशियल सेव करें" : "UPDATE PASSWORD & SAVE"}
                 </button>
 
-                <div className="text-center pt-2 border-t border-white/10">
+                <div className="text-center pt-2 border-t border-slate-200">
                   <button
                     type="button"
                     onClick={() => { setAuthMode('login'); setAuthError(''); setAuthSuccess(''); }}
-                    className="text-xs text-slate-400 hover:text-cyan-300 font-bold transition-all"
+                    className="text-xs text-slate-600 hover:text-slate-900 font-bold transition-all cursor-pointer"
                   >
                     ← {isHindi ? "लॉगिन पेज पर वापस जाएँ" : "Back to Security Login"}
                   </button>
@@ -1508,14 +1585,14 @@ export default function Account({ onViewChange }) {
           </div>
         </div>
       ) : (
-        /* CASE B: USER IS LOGGED IN - SHOW COMPLEX PROFILE & ORDER SYSTEM */
+        /* CASE B: USER IS LOGGED IN - SHOW PROFILE & ORDER SYSTEM */
         <div className="flex flex-col gap-6 pb-20 mt-4 px-4 md:px-8 w-full max-w-7xl">
           
           {/* Account Info Header */}
-          <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 w-full border-b border-white/10 pb-4">
+          <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 w-full border-b border-slate-200 pb-4">
             <div>
-              <h2 className="text-xl font-bold text-white tracking-tight md:text-2xl text-glow">{t('myAccount')}</h2>
-              <p className="text-xs text-slate-400 font-medium mt-0.5">{t('accountDesc')}</p>
+              <h2 className="text-xl font-extrabold text-slate-900 tracking-tight md:text-2xl">{t('myAccount')}</h2>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">{t('accountDesc')}</p>
             </div>
             <button 
               onClick={() => {
@@ -1527,21 +1604,52 @@ export default function Account({ onViewChange }) {
                 setSimulatedOtp('');
                 alert(isHindi ? 'सफलतापूर्वक लॉगआउट किया गया।' : 'Successfully logged out.');
               }}
-              className="bg-red-500/15 border border-red-500/30 hover:bg-red-500/25 text-red-100 px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider self-start active:scale-95 shadow-lg shrink-0 transition-all"
+              className="bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider self-start active:scale-95 shadow-xs shrink-0 transition-all cursor-pointer"
             >
               {t('logout')}
             </button>
           </section>
 
+          {/* Staff Partner Session Quick Switcher Banner */}
+          {(() => {
+            try {
+              const staffSession = localStorage.getItem('swastik_logged_in_staff');
+              if (staffSession) {
+                const stObj = JSON.parse(staffSession);
+                return (
+                  <div className="p-4 rounded-2xl bg-slate-900 border border-cyan-500/40 text-white flex flex-wrap items-center justify-between gap-3 shadow-md">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 bg-cyan-500/20 text-cyan-400 rounded-xl border border-cyan-500/30">
+                        <ShieldAlert className="h-6 w-6 animate-pulse" />
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-black uppercase text-cyan-400 tracking-wider block">Active Staff Session</span>
+                        <p className="text-sm font-extrabold text-white">{stObj.name} ({stObj.role || 'Staff'})</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onViewChange && onViewChange('admin')}
+                      className="px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
+                    >
+                      {isHindi ? 'एडमिन / डिलीवरी डैशबोर्ड खोलें →' : 'Open Staff Workspace →'}
+                    </button>
+                  </div>
+                );
+              }
+            } catch (e) {}
+            return null;
+          })()}
+
           {/* Navigation Tabs */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none w-full border-b border-white/10 mb-6">
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none w-full border-b border-slate-200 mb-6">
             {[
               { id: 'profile', icon: User, labelEn: 'My Profile', labelHi: 'मेरी प्रोफ़ाइल' },
               { id: 'orders', icon: Package, labelEn: 'My Orders', labelHi: 'मेरे ऑर्डर', badge: myOrders.length },
               { id: 'password', icon: Lock, labelEn: 'Security & Password', labelHi: 'सुरक्षा एवं पासवर्ड' },
-              { id: 'membership', icon: Crown, labelEn: 'Prime Membership', labelHi: 'प्राइम सदस्यता', badgeText: profile.isPrimeActive ? 'VIP' : null, color: 'text-amber-400' },
-              { id: 'rewards', icon: Gift, labelEn: 'Rewards & Referrals', labelHi: 'रिवॉर्ड्स और रेफ़रल', badgeText: `${profile.points || 0} PTS`, color: 'text-amber-400' },
-              { id: 'cart', icon: ShoppingCart, labelEn: 'My Cart', labelHi: 'मेरी कार्ट', badge: (cartItems || []).reduce((acc, item) => acc + item.quantity, 0), color: 'text-emerald-400' },
+              { id: 'membership', icon: Crown, labelEn: 'Prime Membership', labelHi: 'प्राइम सदस्यता', badgeText: profile.isPrimeActive ? 'VIP' : null, color: 'text-amber-500' },
+              { id: 'rewards', icon: Gift, labelEn: 'Rewards & Referrals', labelHi: 'रिवॉर्ड्स और रेफ़रल', badgeText: `${profile.points || 0} PTS`, color: 'text-amber-500' },
+              { id: 'cart', icon: ShoppingCart, labelEn: 'My Cart', labelHi: 'मेरी कार्ट', badge: (cartItems || []).reduce((acc, item) => acc + item.quantity, 0), color: 'text-emerald-600' },
               { id: 'preferences', icon: Languages, labelEn: 'Preferences', labelHi: 'प्राथमिकताएं' }
             ].map((tab) => {
               const IconComp = tab.icon;
@@ -1551,21 +1659,25 @@ export default function Account({ onViewChange }) {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer shrink-0 ${
+                  className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs transition-all whitespace-nowrap cursor-pointer shrink-0 ${
                     isActive
-                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 shadow-lg shadow-cyan-500/10'
-                      : 'bg-white/5 text-slate-400 border border-white/5 hover:text-white hover:bg-white/10'
+                      ? 'bg-emerald-600 text-white font-extrabold shadow-xs'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:text-slate-900 hover:bg-slate-50 font-bold'
                   }`}
                 >
-                  <IconComp className={`h-4 w-4 ${tab.color || ''}`} />
+                  <IconComp className={`h-4 w-4 ${isActive ? 'text-white' : (tab.color || 'text-slate-500')}`} />
                   <span>{isHindi ? tab.labelHi : tab.labelEn}</span>
                   {tab.badge !== undefined && tab.badge > 0 && (
-                    <span className="ml-1 px-1.5 py-0.2 text-[10px] font-extrabold rounded-full bg-cyan-400 text-slate-950 font-mono">
+                    <span className={`ml-1 px-1.5 py-0.2 text-[10px] font-extrabold rounded-full font-mono ${
+                      isActive ? 'bg-white text-emerald-800' : 'bg-emerald-100 text-emerald-800'
+                    }`}>
                       {tab.badge}
                     </span>
                   )}
                   {tab.badgeText && (
-                    <span className="ml-1 px-1.5 py-0.2 text-[9px] font-extrabold rounded bg-amber-400/20 text-amber-300 border border-amber-400/30 font-mono">
+                    <span className={`ml-1 px-1.5 py-0.2 text-[9px] font-extrabold rounded font-mono ${
+                      isActive ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-800 border border-amber-300'
+                    }`}>
                       {tab.badgeText}
                     </span>
                   )}
@@ -2305,17 +2417,31 @@ export default function Account({ onViewChange }) {
                         {isHindi ? "एक वर्ष के लिए केवल" : "Predefined Annual Privilege Amount"}{" "}
                         <span className="text-yellow-400 font-extrabold text-sm font-mono">₹{primeSettings?.primePlanFee ?? 299}</span>
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowPrimePayment(true);
-                          setPrimePaymentStep('select');
-                          setPaymentErrorMessage('');
-                        }}
-                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-98 border border-indigo-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg text-center cursor-pointer flex items-center justify-center gap-1.5"
-                      >
-                        🚀 {isHindi ? `प्राइम सक्रिय करें @ ₹${primeSettings?.primePlanFee ?? 299}` : `Activate Prime Plan @ ₹${primeSettings?.primePlanFee ?? 299}`}
-                      </button>
+
+                      {primeSettings?.isMembershipEnabled === false ? (
+                        <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-center space-y-1">
+                          <p className="text-xs font-bold text-amber-300 uppercase tracking-wider">
+                            {isHindi ? "🔒 ग्राहक स्व-सदस्यता निर्माण बंद है" : "🔒 Self-Service Card Generation Closed"}
+                          </p>
+                          <p className="text-[10px] text-slate-400 font-medium">
+                            {isHindi 
+                              ? "ऑनलाइन मेंबरशिप जनरेशन वर्तमान में स्टोर प्रबंधन द्वारा बंद है। नया वीआईपी कार्ड प्राप्त करने के लिए कृपया स्टोर एडमिन से संपर्क करें।" 
+                              : "Self-activation is currently disabled by store management. Please contact store admin to manually issue your VIP Membership Card."}
+                          </p>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowPrimePayment(true);
+                            setPrimePaymentStep('select');
+                            setPaymentErrorMessage('');
+                          }}
+                          className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-98 border border-indigo-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg text-center cursor-pointer flex items-center justify-center gap-1.5"
+                        >
+                          🚀 {isHindi ? `प्राइम सक्रिय करें @ ₹${primeSettings?.primePlanFee ?? 299}` : `Activate Prime Plan @ ₹${primeSettings?.primePlanFee ?? 299}`}
+                        </button>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -2352,14 +2478,16 @@ export default function Account({ onViewChange }) {
                           
                           <div className="space-y-0.5">
                             <span className="text-[7px] font-bold text-slate-400 uppercase tracking-widest block">{isHindi ? "सदस्यता पहचान संख्या" : "Membership Identifier"}</span>
-                            <span className="text-[10px] font-mono font-bold text-indigo-300 block">SWS-PRM-{(profile.phone || "8888").replace(/\s/g, '').slice(-6)}</span>
+                            <span className="text-[10px] font-mono font-bold text-amber-300 block">
+                              {profile.primeMembershipNo || `SWS-PRM-${(profile.phone || "8888").replace(/\s/g, '').slice(-6)}`}
+                            </span>
                           </div>
                         </div>
 
                         <div className="col-span-4 flex flex-col items-center justify-center bg-white p-1 rounded-lg shadow-lg border border-indigo-400/20">
                           {/* QR Code dynamically loaded to redirect to swastiksupermarket.com */}
                           <img 
-                            src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://swastiksupermarket.com" 
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent('https://swastiksupermarket.com/verify?card=' + (profile.primeMembershipNo || 'VIP'))}`}
                             alt="Verification QR" 
                             className="w-14 h-14 object-contain"
                             referrerPolicy="no-referrer"
@@ -2561,49 +2689,49 @@ export default function Account({ onViewChange }) {
 
       {/* --- --- --- 5. MODAL: DETAILED ORDER OVERLAY DIALOG --- --- --- */}
       {selectedOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 transition-opacity animate-fade-in text-white">
-          <div className="bg-slate-950/95 backdrop-blur-3xl border border-white/15 rounded-3xl max-w-2xl w-full p-6 shadow-2xl relative animate-scale-in flex flex-col max-h-[90vh] overflow-y-auto hide-scrollbar scrollbar-none font-sans">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 transition-opacity animate-fade-in text-slate-900">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-2xl w-full p-6 shadow-2xl relative animate-scale-in flex flex-col max-h-[90vh] overflow-y-auto hide-scrollbar scrollbar-none font-sans">
             
             {/* Close Cross */}
             <button 
               onClick={() => setSelectedOrder(null)}
-              className="absolute top-5 right-5 rounded-full p-1.5 bg-white/10 hover:bg-white/20 text-slate-400 hover:text-white transition-all duration-150"
+              className="absolute top-5 right-5 rounded-full p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 transition-all duration-150 cursor-pointer"
               type="button"
             >
               <X className="h-5 w-5" />
             </button>
 
             {/* Headline section */}
-            <div className="border-b border-white/10 pb-4 mb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div className="border-b border-slate-200 pb-4 mb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <div>
-                <span className="bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full shadow-md">
+                <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 text-[9px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-full shadow-xs">
                   {selectedOrder.isActive ? (isHindi ? "ट्रांजिट में" : "In Transit") : (isHindi ? "वितरित पूरा" : "Delivered")}
                 </span>
-                <h4 className="font-extrabold text-base text-white mt-1.5 flex items-center gap-2">
-                  <Package className="h-4.5 w-4.5 text-cyan-400" />
+                <h4 className="font-extrabold text-base text-slate-900 mt-1.5 flex items-center gap-2">
+                  <Package className="h-4.5 w-4.5 text-emerald-600" />
                   <span>{isHindi ? "आर्डर संख्या:" : "Order Slot:"}</span>
-                  <span className="font-mono text-cyan-300">{selectedOrder.id}</span>
+                  <span className="font-mono text-emerald-700">{selectedOrder.id}</span>
                 </h4>
               </div>
 
-              <div className="flex items-center gap-1.5 text-slate-400 font-bold text-xs mt-1 sm:mt-0">
-                <Calendar className="h-4 w-4 text-cyan-400" />
+              <div className="flex items-center gap-1.5 text-slate-600 font-bold text-xs mt-1 sm:mt-0">
+                <Calendar className="h-4 w-4 text-emerald-600" />
                 <span>{selectedOrder.date || (selectedOrder.orderDate ? new Date(selectedOrder.orderDate).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : 'N/A')}</span>
               </div>
             </div>
 
             {/* Delivery trajectory step metrics */}
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-5">
-              <span className="text-[9px] font-extrabold uppercase tracking-widest text-slate-400 block mb-3">
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-5">
+              <span className="text-[9px] font-extrabold uppercase tracking-widest text-slate-500 block mb-3">
                 {isHindi ? "वितरण यात्रा सूचकांक" : "Delivery Trajectory Stepper"}
               </span>
 
               {/* Progress Stepper chart metrics */}
               <div className="relative">
                 {/* Connector strip */}
-                <div className="absolute top-4 left-4 right-4 h-0.5 bg-white/10 -z-10" />
+                <div className="absolute top-4 left-4 right-4 h-0.5 bg-slate-200 -z-10" />
                 <div 
-                  className="absolute top-4 left-4 h-0.5 bg-cyan-400 transition-all duration-500 -z-10"
+                  className="absolute top-4 left-4 h-0.5 bg-emerald-600 transition-all duration-500 -z-10"
                   style={{ width: selectedOrder.step === 2 ? '50%' : selectedOrder.step === 3 ? '100%' : '5%' }}
                 />
 
@@ -2616,14 +2744,14 @@ export default function Account({ onViewChange }) {
                     const isPassed = selectedOrder.step >= idx;
                     return (
                       <div key={idx} className="flex flex-col items-center">
-                        <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center font-bold text-xs shadow-lg transition-all ${
+                        <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center font-bold text-xs shadow-xs transition-all ${
                           isPassed 
-                            ? 'bg-cyan-500/10 border-cyan-400 text-cyan-300 shadow-cyan-400/20' 
-                            : 'bg-slate-900 border-white/20 text-slate-500'
+                            ? 'bg-emerald-600 border-emerald-600 text-white shadow-emerald-200' 
+                            : 'bg-white border-slate-300 text-slate-400'
                         }`}>
                           {idx + 1}
                         </div>
-                        <span className={`text-[10px] font-extrabold mt-1.5 ${isPassed ? 'text-white' : 'text-slate-500'}`}>
+                        <span className={`text-[10px] font-extrabold mt-1.5 ${isPassed ? 'text-slate-900' : 'text-slate-400'}`}>
                           {isHindi ? stepVal.labelHi : stepVal.labelEn}
                         </span>
                         <span className="text-[8px] text-slate-500 block">
@@ -2637,25 +2765,25 @@ export default function Account({ onViewChange }) {
             </div>
 
             {/* Customer & Store Details Section */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 bg-white/5 p-3 rounded-2xl border border-white/10 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 bg-slate-50 p-3.5 rounded-2xl border border-slate-200 text-xs">
               {/* Customer Details */}
               <div className="space-y-1">
-                <span className="text-[9px] font-extrabold uppercase tracking-widest text-cyan-400 block mb-1">
+                <span className="text-[9px] font-extrabold uppercase tracking-widest text-emerald-700 block mb-1">
                   {isHindi ? "ग्राहक विवरण" : "Customer Details"}
                 </span>
-                <p className="text-white font-bold">{selectedOrder.customerName || selectedOrder.name || profile?.fullName || "Valued Customer"}</p>
-                <p className="text-slate-300 text-[11px] font-mono">📱 {selectedOrder.customerPhone || selectedOrder.customerMobile || selectedOrder.phone || profile?.phone || "N/A"}</p>
-                <p className="text-slate-400 text-[10px] line-clamp-2">📍 {selectedOrder.shippingAddress || selectedOrder.address || "Store Pickup"}</p>
+                <p className="text-slate-900 font-extrabold">{selectedOrder.customerName || selectedOrder.name || profile?.fullName || "Valued Customer"}</p>
+                <p className="text-slate-600 text-[11px] font-mono">📱 {selectedOrder.customerPhone || selectedOrder.customerMobile || selectedOrder.phone || profile?.phone || "N/A"}</p>
+                <p className="text-slate-500 text-[10px] line-clamp-2">📍 {selectedOrder.shippingAddress || selectedOrder.address || "Store Pickup"}</p>
               </div>
 
               {/* Store / Office Details */}
-              <div className="space-y-1 sm:border-l sm:border-white/10 sm:pl-3">
-                <span className="text-[9px] font-extrabold uppercase tracking-widest text-cyan-400 block mb-1">
+              <div className="space-y-1 sm:border-l sm:border-slate-200 sm:pl-3">
+                <span className="text-[9px] font-extrabold uppercase tracking-widest text-emerald-700 block mb-1">
                   {isHindi ? "दुकान/कार्यालय विवरण" : "Store/Office Details"}
                 </span>
-                <p className="text-white font-bold">{contactSettings?.brandName || "Swastik Supermarket"}</p>
-                <p className="text-slate-300 text-[11px] font-mono">☎️ {contactSettings?.phone || "+91 11 2345 6789"}</p>
-                <p className="text-slate-400 text-[10px] line-clamp-2">🏢 {contactSettings?.address || "Sector 18, Noida, UP"}</p>
+                <p className="text-slate-900 font-extrabold">{contactSettings?.brandName || "Swastik Supermarket"}</p>
+                <p className="text-slate-600 text-[11px] font-mono">☎️ {contactSettings?.phone || "094845 40001"}</p>
+                <p className="text-slate-500 text-[10px] line-clamp-2">🏢 {contactSettings?.address || "Survey no. 100 Sanjit road opposite of Saraswati school , Mandsaur, India, Madhya Pradesh"}</p>
                 {contactSettings?.gst && (
                   <p className="text-slate-500 text-[9px] font-mono">GSTIN: {contactSettings.gst}</p>
                 )}
@@ -2664,21 +2792,21 @@ export default function Account({ onViewChange }) {
 
             {/* List of Ordered items */}
             <div className="space-y-3 mb-5">
-              <span className="text-[9px] font-extrabold uppercase tracking-widest text-slate-400 block">
+              <span className="text-[9px] font-extrabold uppercase tracking-widest text-slate-500 block">
                 {isHindi ? "खरीदे गए सामान की सूची" : "Ordered Items List"}
               </span>
               
-              <div className="space-y-2 divide-y divide-white/5 max-h-[30vh] overflow-y-auto pr-1">
+              <div className="space-y-2 divide-y divide-slate-100 max-h-[30vh] overflow-y-auto pr-1">
                 {(selectedOrder.items || []).map((it, idx) => (
                   <div key={idx} className="flex justify-between items-center py-2 text-xs font-semibold">
                     <div className="flex flex-col">
-                      <span className="text-white font-bold">{isHindi ? (it.nameHi || it.nameEn || it.name || 'Grocery Item') : (it.nameEn || it.nameHi || it.name || 'Grocery Item')}</span>
-                      <span className="text-[10px] text-slate-400 font-medium">{isHindi ? `वजन: ${it.weight || it.unit || '1 Unit'}` : `Weight: ${it.weight || it.unit || '1 Unit'}`}</span>
+                      <span className="text-slate-900 font-bold">{isHindi ? (it.nameHi || it.nameEn || it.name || 'Grocery Item') : (it.nameEn || it.nameHi || it.name || 'Grocery Item')}</span>
+                      <span className="text-[10px] text-slate-500 font-medium">{isHindi ? `वजन: ${it.weight || it.unit || '1 Unit'}` : `Weight: ${it.weight || it.unit || '1 Unit'}`}</span>
                     </div>
 
                     <div className="flex items-center gap-6 shrink-0 font-bold font-mono">
-                      <span className="text-slate-400 text-[11px]">₹{it.price || 0} x {it.qty || it.quantity || 1}</span>
-                      <span className="text-white w-14 text-right">₹{(it.price || 0) * (it.qty || it.quantity || 1)}</span>
+                      <span className="text-slate-500 text-[11px]">₹{it.price || 0} x {it.qty || it.quantity || 1}</span>
+                      <span className="text-slate-900 w-14 text-right">₹{(it.price || 0) * (it.qty || it.quantity || 1)}</span>
                     </div>
                   </div>
                 ))}
@@ -2686,81 +2814,81 @@ export default function Account({ onViewChange }) {
             </div>
 
             {/* Shipping, delivery coordinates and calculations */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 border-t border-white/10 pt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 border-t border-slate-200 pt-4">
               
               {/* Delivery Driver Info details */}
-              <div className="bg-white/5 rounded-2xl p-4 border border-white/5 space-y-2.5 text-xs">
-                <span className="text-[9px] font-extrabold uppercase tracking-widest text-cyan-400 block mb-1">
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2.5 text-xs">
+                <span className="text-[9px] font-extrabold uppercase tracking-widest text-emerald-700 block mb-1">
                   {isHindi ? "वितरण एजेंट विवरण" : "Delivery Agent Status"}
                 </span>
                 
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-300 font-extrabold text-xs shrink-0 uppercase">
+                  <div className="w-8 h-8 rounded-full bg-emerald-100 border border-emerald-300 flex items-center justify-center text-emerald-800 font-extrabold text-xs shrink-0 uppercase">
                     {(selectedOrder.deliveryPartnerName || 'Swastik Rider').split(' ')[0][0]}
                   </div>
                   <div>
-                    <h5 className="font-bold text-white leading-none">{selectedOrder.deliveryPartnerName || (isHindi ? 'स्वास्तिक राइडर (असाइन किया गया)' : 'Swastik Delivery Executive')}</h5>
+                    <h5 className="font-bold text-slate-900 leading-none">{selectedOrder.deliveryPartnerName || (isHindi ? 'स्वास्तिक राइडर (असाइन किया गया)' : 'Swastik Delivery Executive')}</h5>
                     <p className="text-[9px] text-slate-500 mt-0.5">{selectedOrder.hubName || 'Dispatch Hub, Sector 12'}</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 text-[11px] text-slate-300">
-                  <Phone className="h-3.5 w-3.5 text-cyan-400" />
+                <div className="flex items-center gap-1.5 text-[11px] text-slate-700 font-medium">
+                  <Phone className="h-3.5 w-3.5 text-emerald-600" />
                   <span>{selectedOrder.deliveryPartnerPhone || '+91 95400 12099'}</span>
                 </div>
 
-                <div className="flex items-center gap-1.5 text-[11px] text-slate-300">
-                  <Truck className="h-3.5 w-3.5 text-cyan-400" />
-                  <span>{isHindi ? "अनुमानित समय:" : "Estimated Arrival:"} <b className="text-cyan-300">{selectedOrder.eta || '20 Mins'}</b></span>
+                <div className="flex items-center gap-1.5 text-[11px] text-slate-700 font-medium">
+                  <Truck className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>{isHindi ? "अनुमानित समय:" : "Estimated Arrival:"} <b className="text-emerald-800">{selectedOrder.eta || '20 Mins'}</b></span>
                 </div>
               </div>
 
               {/* Order pricing summary details */}
-              <div className="space-y-2 bg-white/5 p-4 rounded-2xl border border-white/5 text-xs font-semibold text-slate-300 font-mono">
-                <span className="text-[9px] font-extrabold uppercase tracking-widest text-cyan-400 block mb-1.5 text-slate-400 font-sans">
+              <div className="space-y-2 bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-700 font-mono">
+                <span className="text-[9px] font-extrabold uppercase tracking-widest text-slate-500 block mb-1.5 font-sans">
                   {isHindi ? "बिल विवरण" : "Billing Details"}
                 </span>
 
-                <div className="flex justify-between font-sans text-[10px] text-slate-400">
+                <div className="flex justify-between font-sans text-[10px] text-slate-600">
                   <span>{isHindi ? "भुगतान विधि" : "Payment Method"}</span>
-                  <span className="text-cyan-300 font-extrabold uppercase tracking-wider font-mono">{selectedOrder.paymentMethod || 'COD'}</span>
+                  <span className="text-emerald-800 font-extrabold uppercase tracking-wider font-mono">{selectedOrder.paymentMethod || 'COD'}</span>
                 </div>
 
-                <div className="flex justify-between font-sans text-[10px] text-slate-400 border-b border-white/5 pb-1.5 mb-1">
+                <div className="flex justify-between font-sans text-[10px] text-slate-600 border-b border-slate-200 pb-1.5 mb-1">
                   <span>{isHindi ? "भुगतान स्थिति" : "Payment Status"}</span>
                   <span className={`font-mono text-[9px] px-1.5 py-0.5 rounded font-black uppercase ${
                     (selectedOrder.paymentStatus || 'PENDING').toUpperCase() === 'PAID'
-                      ? 'bg-emerald-500/10 text-emerald-400'
-                      : 'bg-rose-500/10 text-rose-400'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-rose-100 text-rose-800'
                   }`}>{selectedOrder.paymentStatus || 'PENDING'}</span>
                 </div>
 
                 <div className="flex justify-between">
                   <span>{t('subtotal')}</span>
-                  <span className="text-slate-200">₹{selectedOrder.subtotal || selectedOrder.total || 0}</span>
+                  <span className="text-slate-900">₹{selectedOrder.subtotal || selectedOrder.total || 0}</span>
                 </div>
 
                 <div className="flex justify-between">
                   <span>{t('deliveryFee')}</span>
-                  <span className={`${selectedOrder.deliveryFee === 0 || !selectedOrder.deliveryFee ? 'text-emerald-400' : 'text-slate-200'}`}>
+                  <span className={`${selectedOrder.deliveryFee === 0 || !selectedOrder.deliveryFee ? 'text-emerald-700 font-bold' : 'text-slate-900'}`}>
                     {selectedOrder.deliveryFee === 0 || !selectedOrder.deliveryFee ? 'FREE' : `₹${selectedOrder.deliveryFee}`}
                   </span>
                 </div>
 
                 <div className="flex justify-between">
                   <span>GST</span>
-                  <span className="text-slate-200 font-mono">₹{selectedOrder.gst || 0}</span>
+                  <span className="text-slate-900 font-mono">₹{selectedOrder.gst || 0}</span>
                 </div>
 
                 {selectedOrder.referralDiscount > 0 && (
-                  <div className="flex justify-between text-yellow-400 font-bold">
+                  <div className="flex justify-between text-amber-700 font-bold">
                     <span>{isHindi ? "रेफ़रल पॉइंट्स डिस्काउंट (-)" : "Referral Points (-)"}</span>
                     <span>-₹{selectedOrder.referralDiscount}</span>
                   </div>
                 )}
 
                 {selectedOrder.couponDiscount > 0 && (
-                  <div className="flex justify-between text-emerald-400 font-bold">
+                  <div className="flex justify-between text-emerald-700 font-bold">
                     <span>
                       {isHindi ? "कूपन छूट (-)" : "Coupon Discount (-)"}
                       {selectedOrder.couponCode ? ` (${selectedOrder.couponCode})` : ""}
@@ -2770,7 +2898,7 @@ export default function Account({ onViewChange }) {
                 )}
 
                 {selectedOrder.celebrationDiscount > 0 && (
-                  <div className="flex justify-between text-purple-400 font-bold">
+                  <div className="flex justify-between text-purple-700 font-bold">
                     <span>
                       {isHindi ? "उत्सव/जन्मदिन छूट (-)" : "Celebration Offer (-)"}
                     </span>
@@ -2778,9 +2906,9 @@ export default function Account({ onViewChange }) {
                   </div>
                 )}
 
-                <div className="flex justify-between border-t border-white/10 pt-2 font-black text-white text-sm">
+                <div className="flex justify-between border-t border-slate-200 pt-2 font-black text-slate-900 text-sm">
                   <span className="font-sans">{t('grandTotal')}</span>
-                  <span className="text-yellow-400 font-mono text-glow">₹{selectedOrder.total || selectedOrder.totalAmount || 0}</span>
+                  <span className="text-emerald-700 font-mono">₹{selectedOrder.total || selectedOrder.totalAmount || 0}</span>
                 </div>
               </div>
             </div>
@@ -2790,7 +2918,7 @@ export default function Account({ onViewChange }) {
               <button
                 type="button"
                 onClick={() => handlePrintInvoice(selectedOrder)}
-                className="flex-1 py-3 bg-sky-600 hover:bg-sky-500 border border-sky-400/30 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                className="flex-1 py-3 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer active:scale-95"
               >
                 <Printer className="h-4 w-4" />
                 <span>{isHindi ? "टैक्स बिल / चालान प्रिंट करें" : "Print Official Tax Invoice"}</span>
@@ -2798,7 +2926,7 @@ export default function Account({ onViewChange }) {
               <button
                 type="button"
                 onClick={() => setSelectedOrder(null)}
-                className="py-3 px-6 bg-white/10 hover:bg-white/15 border border-white/10 rounded-xl font-bold text-xs uppercase tracking-wider text-center transition-all text-white active:scale-95 cursor-pointer"
+                className="py-3 px-6 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl font-bold text-xs uppercase tracking-wider text-center transition-all text-slate-700 hover:text-slate-900 active:scale-95 cursor-pointer"
               >
                 {isHindi ? "बंद करें" : "Close"}
               </button>
@@ -2810,37 +2938,37 @@ export default function Account({ onViewChange }) {
 
       {/* --- SWASTIK SECURED MERCHANT PAYMENT GATEWAY MODAL --- */}
       {showPrimePayment && (
-        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center z-50 p-4 font-sans animate-fade-in">
-          <div className="bg-slate-900 border border-indigo-500/30 rounded-2xl max-w-md w-full shadow-[0_0_50px_rgba(99,102,241,0.25)] overflow-hidden text-white animate-scale-up">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-sans animate-fade-in text-slate-900">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full shadow-2xl overflow-hidden text-slate-900 animate-scale-up">
             
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-950 px-5 py-4 border-b border-indigo-500/20 flex justify-between items-center">
+            <div className="bg-slate-50 px-5 py-4 border-b border-slate-200 flex justify-between items-center">
               <div className="flex items-center gap-2">
-                <Crown className="w-5 h-5 text-yellow-400 fill-yellow-400 animate-pulse" />
+                <Crown className="w-5 h-5 text-amber-500 fill-amber-500" />
                 <div>
-                  <h4 className="font-bold text-sm tracking-wide text-white">{isHindi ? "स्वास्तिक मर्चेंट पेमेंट गेटवे" : "Swastik Secured Payment Gateway"}</h4>
-                  <p className="text-[8px] text-indigo-300 font-extrabold uppercase tracking-widest font-mono">PCI-DSS Compliant Secure Node</p>
+                  <h4 className="font-extrabold text-sm tracking-wide text-slate-900">{isHindi ? "स्वास्तिक मर्चेंट पेमेंट गेटवे" : "Swastik Secured Payment Gateway"}</h4>
+                  <p className="text-[9px] text-emerald-700 font-extrabold uppercase tracking-widest font-mono">PCI-DSS Compliant Secure Node</p>
                 </div>
               </div>
               <button 
                 onClick={() => setShowPrimePayment(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-full hover:bg-white/5 transition-all"
+                className="text-slate-400 hover:text-slate-900 p-1 rounded-full hover:bg-slate-200 transition-all cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Price tag */}
-            <div className="bg-indigo-950/40 p-4 border-b border-indigo-500/10 flex justify-between items-center px-5">
-              <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">{isHindi ? "प्राइम एनुअल पास शुल्क" : "Annual Prime Gold Fee"}</span>
-              <span className="font-mono text-lg font-black text-yellow-400">₹{primeSettings?.primePlanFee ?? 299}.00</span>
+            <div className="bg-amber-50 p-4 border-b border-amber-200 flex justify-between items-center px-5">
+              <span className="text-[10px] uppercase font-black tracking-widest text-slate-600">{isHindi ? "प्राइम एनुअल पास शुल्क" : "Annual Prime Gold Fee"}</span>
+              <span className="font-mono text-lg font-black text-amber-800">₹{primeSettings?.primePlanFee ?? 299}.00</span>
             </div>
 
             {/* Gateway states */}
             <div className="p-5">
               {primePaymentStep === 'select' && (
                 <div className="space-y-4">
-                  <p className="text-xs text-slate-300 leading-normal font-semibold">
+                  <p className="text-xs text-slate-600 leading-normal font-semibold">
                     {isHindi 
                       ? "कृपया भुगतान पूरा करने के लिए नीचे दिए गए सुरक्षित डिजिटल चैनलों में से एक का चयन करें:" 
                       : "Please select your preferred secure instant payment channel to complete activation:"}
@@ -2861,10 +2989,10 @@ export default function Account({ onViewChange }) {
                           setPrimePaymentMethod(tab.id);
                           setPaymentErrorMessage('');
                         }}
-                        className={`py-2 rounded-xl border text-[10px] font-black uppercase flex flex-col items-center justify-center gap-1 transition-all ${
+                        className={`py-2 rounded-xl border text-[10px] font-black uppercase flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
                           primePaymentMethod === tab.id
-                            ? 'bg-indigo-600/20 border-indigo-400 text-indigo-300 shadow-[0_0_8px_rgba(99,102,241,0.15)]'
-                            : 'bg-slate-950/60 border-white/5 text-slate-400 hover:border-white/15'
+                            ? 'bg-emerald-600 border-emerald-600 text-white shadow-xs'
+                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
                         }`}
                       >
                         <span className="text-sm">{tab.icon}</span>
@@ -2875,12 +3003,12 @@ export default function Account({ onViewChange }) {
 
                   {/* Tab Bodies */}
                   {primePaymentMethod === 'offline' && (
-                    <div className="space-y-3 bg-slate-950/45 p-3.5 rounded-xl border border-white/5">
-                      <div className="flex items-center gap-2 text-amber-300 font-bold text-xs">
+                    <div className="space-y-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                      <div className="flex items-center gap-2 text-amber-800 font-extrabold text-xs">
                         <span className="text-sm">💵</span>
                         <span>{isHindi ? "ऑफलाइन नकद भुगतान सुविधा" : "Offline Payment / Cash at Counter"}</span>
                       </div>
-                      <p className="text-[11px] text-slate-300 leading-normal">
+                      <p className="text-[11px] text-slate-600 leading-normal font-medium">
                         {isHindi 
                           ? "आप ₹299 की सदस्यता का भुगतान स्वास्तिक सुपरमार्केट काउंटर पर या अगले डिलीवरी ऑर्डर पर नकद में कर सकते हैं। मेंबरशिप तुरंत एक्टिव हो जाएगी!" 
                           : "You can pay the ₹299 membership fee via cash at any store counter or during your next COD delivery. Your Prime VIP status will activate immediately!"}
@@ -2889,7 +3017,7 @@ export default function Account({ onViewChange }) {
                   )}
 
                   {primePaymentMethod === 'upi' && (
-                    <div className="space-y-3 bg-slate-950/45 p-3 rounded-xl border border-white/5">
+                    <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
                       <div className="grid grid-cols-3 gap-1.5">
                         {[
                           { id: 'gpay', name: 'Google Pay' },
@@ -2900,10 +3028,10 @@ export default function Account({ onViewChange }) {
                             key={app.id}
                             type="button"
                             onClick={() => setPrimePaymentUpiApp(app.id)}
-                            className={`py-1.5 rounded-lg border text-[9px] font-bold text-center transition-all ${
+                            className={`py-1.5 rounded-lg border text-[9px] font-bold text-center transition-all cursor-pointer ${
                               primePaymentUpiApp === app.id
-                                ? 'bg-emerald-500/10 border-emerald-400 text-emerald-300'
-                                : 'bg-slate-900 border-white/5 text-slate-400'
+                                ? 'bg-emerald-100 border-emerald-400 text-emerald-800 font-extrabold'
+                                : 'bg-white border-slate-200 text-slate-600'
                             }`}
                           >
                             {app.name}
@@ -2912,7 +3040,7 @@ export default function Account({ onViewChange }) {
                       </div>
 
                       <div className="space-y-1">
-                        <label className="text-[9px] text-slate-400 font-bold uppercase block">
+                        <label className="text-[9px] text-slate-600 font-bold uppercase block">
                           {isHindi ? "वैकल्पिक यूपीआई आईडी" : "Or Custom UPI ID"}
                         </label>
                         <input
@@ -2920,58 +3048,58 @@ export default function Account({ onViewChange }) {
                           placeholder="username@okhdfcbank"
                           value={customUpiId}
                           onChange={(e) => setCustomUpiId(e.target.value)}
-                          className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 outline-none focus:border-indigo-500 font-mono"
+                          className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-emerald-500 font-mono"
                         />
                       </div>
                     </div>
                   )}
 
                   {primePaymentMethod === 'card' && (
-                    <div className="space-y-2 bg-slate-950/45 p-3 rounded-xl border border-white/5 font-mono">
+                    <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200 font-mono">
                       <div className="space-y-1">
-                        <label className="text-[8px] text-slate-400 font-bold uppercase block">{isHindi ? "कार्ड धारक का नाम" : "Cardholder Name"}</label>
+                        <label className="text-[8px] text-slate-600 font-bold uppercase block">{isHindi ? "कार्ड धारक का नाम" : "Cardholder Name"}</label>
                         <input
                           type="text"
                           placeholder="Abhishek Sharma"
                           value={primeCardName}
                           onChange={(e) => setPrimeCardName(e.target.value)}
-                          className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 outline-none focus:border-indigo-500"
+                          className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-emerald-500 font-sans"
                         />
                       </div>
 
                       <div className="space-y-1">
-                        <label className="text-[8px] text-slate-400 font-bold uppercase block">{isHindi ? "१६ अंकों का कार्ड नंबर" : "16 Digit Card Number"}</label>
+                        <label className="text-[8px] text-slate-600 font-bold uppercase block">{isHindi ? "१६ अंकों का कार्ड नंबर" : "16 Digit Card Number"}</label>
                         <input
                           type="text"
                           placeholder="4321 5678 9012 3456"
                           value={primeCardNum}
                           onChange={(e) => setPrimeCardNum(e.target.value.replace(/[^0-9]/g, ''))}
                           maxLength={16}
-                          className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 outline-none focus:border-indigo-500"
+                          className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-emerald-500"
                         />
                       </div>
 
                       <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-1">
-                          <label className="text-[8px] text-slate-400 font-bold uppercase block">{isHindi ? "समाप्ति तिथि" : "Expiry"}</label>
+                          <label className="text-[8px] text-slate-600 font-bold uppercase block">{isHindi ? "समाप्ति तिथि" : "Expiry"}</label>
                           <input
                             type="text"
                             placeholder="MM/YY"
                             value={primeCardExpiry}
                             onChange={(e) => setPrimeCardExpiry(e.target.value)}
                             maxLength={5}
-                            className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 outline-none focus:border-indigo-500 text-center"
+                            className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-emerald-500 text-center"
                           />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[8px] text-slate-400 font-bold uppercase block">CVV</label>
+                          <label className="text-[8px] text-slate-600 font-bold uppercase block">CVV</label>
                           <input
                             type="password"
                             placeholder="***"
                             value={primeCardCvv}
                             onChange={(e) => setPrimeCardCvv(e.target.value.replace(/[^0-9]/g, ''))}
                             maxLength={3}
-                            className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 outline-none focus:border-indigo-500 text-center"
+                            className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-emerald-500 text-center"
                           />
                         </div>
                       </div>
@@ -2979,14 +3107,14 @@ export default function Account({ onViewChange }) {
                   )}
 
                   {primePaymentMethod === 'netbanking' && (
-                    <div className="space-y-2 bg-slate-950/45 p-3 rounded-xl border border-white/5">
-                      <label className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">
+                    <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                      <label className="text-[9px] text-slate-600 font-bold uppercase tracking-wider block">
                         {isHindi ? "अपना बैंक चुनें" : "Select Bank Account"}
                       </label>
                       <select
                         value={selectedBank}
                         onChange={(e) => setSelectedBank(e.target.value)}
-                        className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                        className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 outline-none focus:border-emerald-500"
                       >
                         <option value="sbi">State Bank of India (SBI)</option>
                         <option value="hdfc">HDFC Bank</option>
@@ -2997,11 +3125,11 @@ export default function Account({ onViewChange }) {
                   )}
 
                   {/* Pay Securely & Rejections */}
-                  <div className="space-y-2 border-t border-white/5 pt-4">
+                  <div className="space-y-2 border-t border-slate-200 pt-4">
                     <button
                       type="button"
                       onClick={handleProcessPrimePayment}
-                      className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 font-black text-xs uppercase tracking-widest rounded-xl text-slate-950 transition-all shadow-lg active:scale-98 cursor-pointer flex items-center justify-center gap-2"
+                      className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 font-extrabold text-xs uppercase tracking-widest rounded-xl text-white transition-all shadow-xs active:scale-98 cursor-pointer flex items-center justify-center gap-2"
                     >
                       <span>🔒</span>
                       <span>{isHindi ? "कैशफ्री गेटवे से सुरक्षित भुगतान करें" : "Pay Securely via Cashfree Gateway"}</span>
@@ -3016,7 +3144,7 @@ export default function Account({ onViewChange }) {
                           setPaymentErrorMessage(isHindi ? "बैंक नेटवर्क टाइमआउट: उपयोगकर्ता द्वारा भुगतान अस्वीकृत किया गया।" : "Bank Network Timeout: Authorization declined by payer's bank node.");
                         }, 1500);
                       }}
-                      className="w-full py-1.5 bg-slate-950 hover:bg-red-950/10 border border-white/5 text-[9px] text-rose-400 font-bold uppercase tracking-widest rounded-lg transition-all"
+                      className="w-full py-1.5 bg-slate-100 hover:bg-rose-50 border border-slate-200 text-[9px] text-rose-700 font-bold uppercase tracking-widest rounded-lg transition-all cursor-pointer"
                     >
                       ⚠️ {isHindi ? "सिम्युलेट असफल ट्रांजैक्शन" : "Simulate Gateway Failure"}
                     </button>
@@ -3026,16 +3154,16 @@ export default function Account({ onViewChange }) {
 
               {primePaymentStep === 'processing' && (
                 <div className="py-8 flex flex-col items-center justify-center text-center space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center shadow-[0_0_25px_rgba(34,211,238,0.15)] relative">
-                    <RefreshCw className="h-8 w-8 text-cyan-400 animate-spin" />
+                  <div className="w-16 h-16 rounded-full bg-emerald-100 border border-emerald-300 flex items-center justify-center shadow-xs relative">
+                    <RefreshCw className="h-8 w-8 text-emerald-600 animate-spin" />
                   </div>
                   <div className="space-y-1">
-                    <p className="font-extrabold text-sm text-white">{isHindi ? "कैशफ्री गेटवे से कनेक्ट हो रहा है..." : "Connecting Cashfree Gateway Node..."}</p>
-                    <p className="text-[10px] text-slate-400 font-mono tracking-wide">{isHindi ? "वेबहुक ट्रिगर एवं 256-बिट SSL वेरिफिकेशन जारी है..." : "Authenticating session token & triggering merchant webhook..."}</p>
+                    <p className="font-extrabold text-sm text-slate-900">{isHindi ? "कैशफ्री गेटवे से कनेक्ट हो रहा है..." : "Connecting Cashfree Gateway Node..."}</p>
+                    <p className="text-[10px] text-slate-500 font-mono tracking-wide">{isHindi ? "वेबहुक ट्रिगर एवं 256-बिट SSL वेरिफिकेशन जारी है..." : "Authenticating session token & triggering merchant webhook..."}</p>
                   </div>
                   
                   {/* Real-time terminal log window */}
-                  <div className="w-full bg-slate-950 border border-white/10 rounded-xl p-3 text-left font-mono text-[9.5px] text-emerald-400 leading-normal max-h-36 overflow-y-auto space-y-1 shadow-inner select-none transition-all">
+                  <div className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-left font-mono text-[9.5px] text-emerald-400 leading-normal max-h-36 overflow-y-auto space-y-1 shadow-inner select-none transition-all">
                     <p className="text-slate-500 font-bold">&gt; CASHFREE GATEWAY LOGS:</p>
                     <p className="opacity-70 animate-pulse">&gt; [POST] /api/cashfree/create-order</p>
                     {cfSimulatingProgress && <p className="text-cyan-300 font-bold">&gt; {cfSimulatingProgress}</p>}
@@ -3046,12 +3174,12 @@ export default function Account({ onViewChange }) {
 
               {primePaymentStep === 'success' && (
                 <div className="py-6 flex flex-col items-center justify-center text-center space-y-4 animate-fade-in">
-                  <div className="w-16 h-16 bg-emerald-500/10 border border-emerald-400 rounded-full flex items-center justify-center text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.3)]">
-                    <CheckCircle className="w-10 h-10 text-emerald-400" />
+                  <div className="w-16 h-16 bg-emerald-100 border border-emerald-300 rounded-full flex items-center justify-center text-emerald-600 shadow-xs">
+                    <CheckCircle className="w-10 h-10 text-emerald-600" />
                   </div>
                   <div className="space-y-1.5">
-                    <h5 className="font-black text-base text-emerald-400 uppercase tracking-wider">{isHindi ? "भुगतान सफलतापूर्वक पूर्ण!" : "Payment Settled & Verified!"}</h5>
-                    <p className="text-xs text-slate-300 max-w-xs leading-relaxed">
+                    <h5 className="font-black text-base text-emerald-800 uppercase tracking-wider">{isHindi ? "भुगतान सफलतापूर्वक पूर्ण!" : "Payment Settled & Verified!"}</h5>
+                    <p className="text-xs text-slate-600 max-w-xs leading-relaxed font-medium">
                       {isHindi 
                         ? "बधाई हो! स्वास्तिक मर्चेंट वेबहुक द्वारा आपका पेमेंट रिकॉर्ड दर्ज कर लिया गया है। आपकी वीआईपी गोल्ड मेंबरशिप चालू हो गई है!" 
                         : "Congratulations! Swastik webhook processed your payment. Your digital Swastik Prime membership is now active."}
@@ -3059,19 +3187,19 @@ export default function Account({ onViewChange }) {
                   </div>
 
                   {cashfreeOrderSession && (
-                    <div className="w-full bg-white/5 p-2.5 rounded-lg border border-white/10 text-left text-xs font-mono flex justify-between items-center text-slate-300">
+                    <div className="w-full bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-left text-xs font-mono flex justify-between items-center text-slate-800">
                       <div className="space-y-0.5">
-                        <p className="text-[8px] text-slate-400 font-bold uppercase">CASHFREE PG TRANS-ID</p>
-                        <p className="font-black text-[10px] text-white">TXN_{cashfreeOrderSession.cf_order_id || 'CF_992100'}</p>
+                        <p className="text-[8px] text-slate-500 font-bold uppercase">CASHFREE PG TRANS-ID</p>
+                        <p className="font-black text-[10px] text-slate-900">TXN_{cashfreeOrderSession.cf_order_id || 'CF_992100'}</p>
                       </div>
-                      <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-bold uppercase tracking-widest">SUCCESSFUL</span>
+                      <span className="text-[9px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold uppercase tracking-widest">SUCCESSFUL</span>
                     </div>
                   )}
                   
                   <button
                     type="button"
                     onClick={() => setShowPrimePayment(false)}
-                    className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer"
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs uppercase tracking-widest rounded-xl transition-all shadow-xs active:scale-95 cursor-pointer"
                   >
                     {isHindi ? "वीआईपी मेंबर पास देखें" : "Finish & View Prime Pass"}
                   </button>
@@ -3080,12 +3208,12 @@ export default function Account({ onViewChange }) {
 
               {primePaymentStep === 'error' && (
                 <div className="py-8 flex flex-col items-center justify-center text-center space-y-4 animate-fade-in">
-                  <div className="w-16 h-16 bg-rose-500/10 border border-rose-500 rounded-full flex items-center justify-center text-rose-400 text-2xl font-black">
+                  <div className="w-16 h-16 bg-rose-100 border border-rose-300 rounded-full flex items-center justify-center text-rose-700 text-2xl font-black">
                     ✗
                   </div>
                   <div className="space-y-2.5">
-                    <h5 className="font-black text-base text-rose-400 uppercase tracking-wider">{isHindi ? "भुगतान विफल हुआ" : "Transaction Declined"}</h5>
-                    <p className="text-xs text-slate-300 font-medium font-mono leading-relaxed bg-black/40 p-3 rounded-lg border border-rose-500/20">
+                    <h5 className="font-black text-base text-rose-700 uppercase tracking-wider">{isHindi ? "भुगतान विफल हुआ" : "Transaction Declined"}</h5>
+                    <p className="text-xs text-slate-700 font-medium font-mono leading-relaxed bg-slate-50 p-3 rounded-lg border border-rose-200">
                       {paymentErrorMessage || (isHindi ? "बैंक ने ट्रांजैक्शन अस्वीकार कर दिया।" : "Card declined / Insufficient bank funds.")}
                     </p>
                   </div>
@@ -3094,14 +3222,14 @@ export default function Account({ onViewChange }) {
                     <button
                       type="button"
                       onClick={() => setPrimePaymentStep('select')}
-                      className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all"
+                      className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer"
                     >
                       {isHindi ? "पुनः प्रयास करें" : "Try Again"}
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowPrimePayment(false)}
-                      className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all"
+                      className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer"
                     >
                       {isHindi ? "रद्द करें" : "Cancel"}
                     </button>

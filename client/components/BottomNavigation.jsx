@@ -17,7 +17,7 @@ export default function BottomNavigation({ currentView, onViewChange }) {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 z-40 flex w-full justify-around border-t border-white/10 bg-slate-950/85 backdrop-blur-xl py-3 px-2 shadow-2xl md:hidden">
+    <nav className="fixed bottom-0 left-0 z-40 flex w-full justify-around border-t border-slate-200/80 bg-white/95 backdrop-blur-md py-2.5 px-2 shadow-lg md:hidden">
       {navItems.map((item) => {
         const Icon = item.icon;
         const isActive = currentView === item.id;
@@ -28,15 +28,15 @@ export default function BottomNavigation({ currentView, onViewChange }) {
             onClick={() => onViewChange(item.id)}
             className={`relative flex flex-col items-center justify-center transition-all duration-200 active:scale-90 ${
               isActive
-                ? 'bg-white/15 text-white border border-white/10 rounded-2xl px-5 py-1.5 font-bold'
-                : 'text-slate-400 hover:text-white px-3 py-1.5'
+                ? 'bg-emerald-50 text-emerald-700 rounded-2xl px-5 py-1.5 font-extrabold'
+                : 'text-slate-500 hover:text-slate-800 px-3 py-1.5'
             }`}
             id={`nav-item-${item.id}`}
           >
             <div className="relative">
-              <Icon className={`h-5 w-5 ${isActive ? 'text-cyan-400' : 'text-slate-400'}`} />
+              <Icon className={`h-5 w-5 ${isActive ? 'text-emerald-600' : 'text-slate-500'}`} />
               {item.badge > 0 && (
-                <span className="absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-pink-500 px-1 text-[9px] font-bold text-white shadow-md animate-pulse">
+                <span className="absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-600 px-1 text-[9px] font-bold text-white shadow-md animate-pulse">
                   {item.badge}
                 </span>
               )}

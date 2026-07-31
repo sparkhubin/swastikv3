@@ -116,12 +116,12 @@ export default function LocationGroupsManager({ userRole }) {
         <div>
           <h3 className="text-base font-black uppercase tracking-wider flex items-center gap-2 text-glow text-cyan-400">
             <MapPin className="h-4.5 w-4.5" />
-            <span>{isHindi ? "परिवहन स्थान समूह" : "Logistics & Location Groups"}</span>
+            <span>{isHindi ? "डिलीवरी एरिया व उप-क्षेत्र प्रबंधन" : "Delivery Areas & Sub-Areas"}</span>
           </h3>
           <p className="text-[10px] text-slate-400 font-medium">
             {isHindi 
-              ? "विभिन्न सेक्टरों के अनुसार सामान्य और प्राइम मेंबर्स के लिए डिलीवरी शुल्क निर्धारित करें।" 
-              : "Group postal locations and direct delivery sectors to manage separate shipment rates of Standard vs Prime users."}
+              ? "विभिन्न सेक्टरों व उप-क्षेत्रों के अनुसार डिलीवरी पिनकोड एवं शुल्क निर्धारित करें।" 
+              : "Map specific sectors, sub-areas, and pin-codes to configure delivery rates and free shipping rules for Standard & VIP Prime members."}
           </p>
         </div>
 

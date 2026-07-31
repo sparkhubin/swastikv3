@@ -16,8 +16,14 @@ router.get("/notifications", async (req, res) => {
     }
 
     if (phone) {
-      sql += ' AND (recipient_phone = ? OR recipient_phone = "" OR recipient_phone IS NULL)';
-      params.push(phone);
+      const cleanPhone = String(phone).replace(/\D/g, '').slice(-10);
+      if (cleanPhone) {
+        sql += ' AND (recipient_phone = ? OR recipient_phone = "" OR recipient_phone IS NULL OR REPLACE(REPLACE(REPLACE(recipient_phone, " ", ""), "+91", ""), "-", "") LIKE ?)';
+        params.push(phone, `%${cleanPhone}`);
+      } else {
+        sql += ' AND (recipient_phone = ? OR recipient_phone = "" OR recipient_phone IS NULL)';
+        params.push(phone);
+      }
     }
 
     sql += ' ORDER BY created_at DESC LIMIT ?';
@@ -33,8 +39,14 @@ router.get("/notifications", async (req, res) => {
       countParams.push(role);
     }
     if (phone) {
-      countSql += ' AND (recipient_phone = ? OR recipient_phone = "" OR recipient_phone IS NULL)';
-      countParams.push(phone);
+      const cleanPhone = String(phone).replace(/\D/g, '').slice(-10);
+      if (cleanPhone) {
+        countSql += ' AND (recipient_phone = ? OR recipient_phone = "" OR recipient_phone IS NULL OR REPLACE(REPLACE(REPLACE(recipient_phone, " ", ""), "+91", ""), "-", "") LIKE ?)';
+        countParams.push(phone, `%${cleanPhone}`);
+      } else {
+        countSql += ' AND (recipient_phone = ? OR recipient_phone = "" OR recipient_phone IS NULL)';
+        countParams.push(phone);
+      }
     }
     
     const countRes = await db.query(countSql, countParams);
@@ -120,8 +132,14 @@ router.put("/notifications/read-all", async (req, res) => {
       params.push(role);
     }
     if (phone) {
-      sql += ' AND (recipient_phone = ? OR recipient_phone = "" OR recipient_phone IS NULL)';
-      params.push(phone);
+      const cleanPhone = String(phone).replace(/\D/g, '').slice(-10);
+      if (cleanPhone) {
+        sql += ' AND (recipient_phone = ? OR recipient_phone = "" OR recipient_phone IS NULL OR REPLACE(REPLACE(REPLACE(recipient_phone, " ", ""), "+91", ""), "-", "") LIKE ?)';
+        params.push(phone, `%${cleanPhone}`);
+      } else {
+        sql += ' AND (recipient_phone = ? OR recipient_phone = "" OR recipient_phone IS NULL)';
+        params.push(phone);
+      }
     }
 
     await db.execute(sql, params);

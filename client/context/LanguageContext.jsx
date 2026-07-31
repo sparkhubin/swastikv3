@@ -128,6 +128,7 @@ const translations = {
     contactUs: "Contact Us",
     privacyPolicy: "Privacy Policy",
     termsOfService: "Terms of Service",
+    refundPolicy: "Refund & Cancellation Policy",
     storeLocator: "Store Locator",
     deliveryDetails: "Delivery Details",
     priority: "Priority",

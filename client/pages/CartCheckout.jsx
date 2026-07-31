@@ -128,8 +128,8 @@ const CartItemImage = ({ product, r2PublicUrl, className }) => {
 };
 
 export default function CartCheckout({ onViewChange }) {
-  const { t, language } = useLanguage();
-  const { addOrder, offers, contactSettings, products, referralSettings, locationGroups, celebrationSettings, customers, addCustomer, updateCustomer, r2PublicUrl, paymentEnabled, paymentEnvironment } = useData();
+  const { t, language, isHindi } = useLanguage();
+  const { orders, addOrder, offers, contactSettings, products, referralSettings, locationGroups, celebrationSettings, customers, addCustomer, updateCustomer, r2PublicUrl, paymentEnabled, paymentEnvironment } = useData();
 
   const {
     cartItems,
@@ -692,6 +692,7 @@ export default function CartCheckout({ onViewChange }) {
   };
 
   const [couponCodeField, setCouponCodeField] = useState('');
+  const [couponError, setCouponError] = useState('');
   const [showOrderSuccess, setShowOrderSuccess] = useState(false);
   const [successInfo, setSuccessInfo] = useState('');
   const [isPlacing, setIsPlacing] = useState(false);
@@ -708,7 +709,80 @@ export default function CartCheckout({ onViewChange }) {
   const [cfSimulatingProgress, setCfSimulatingProgress] = useState('');
 
 
+  // Helper to check date validity of a coupon
+  const getCouponDateStatus = (coupon) => {
+    if (!coupon) return { isValid: true };
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    if (coupon.startDate && todayStr < coupon.startDate) {
+      return {
+        isValid: false,
+        isUpcoming: true,
+        reasonEn: `This coupon code is valid starting from ${coupon.startDate}!`,
+        reasonHi: `यह कूपन कोड ${coupon.startDate} से ही मान्य होगा!`
+      };
+    }
+
+    if (coupon.endDate && todayStr > coupon.endDate) {
+      return {
+        isValid: false,
+        isExpired: true,
+        reasonEn: `This coupon code expired on ${coupon.endDate}!`,
+        reasonHi: `यह कूपन कोड ${coupon.endDate} को समाप्त हो चुका है!`
+      };
+    }
+
+    return { isValid: true };
+  };
+
+  // Helper to count how many times current customer used a coupon code
+  const getCustomerCouponUsageCount = (couponCode) => {
+    if (!couponCode || !orders || orders.length === 0) return 0;
+    const targetCode = couponCode.toUpperCase().trim();
+
+    const userPhoneDigits = (profile?.phone || shippingInfo?.phone || "").replace(/[^0-9]/g, "");
+    const userEmail = (profile?.email || customerEmail || "").toLowerCase().trim();
+
+    let count = 0;
+    orders.forEach(o => {
+      const oCode = (o.couponCode || "").toUpperCase().trim();
+      if (oCode === targetCode) {
+        const orderPhoneDigits = (o.customerPhone || o.phone || "").replace(/[^0-9]/g, "");
+        const orderEmail = (o.customerEmail || o.email || "").toLowerCase().trim();
+
+        const phoneMatch = userPhoneDigits && orderPhoneDigits && (userPhoneDigits === orderPhoneDigits || userPhoneDigits.endsWith(orderPhoneDigits.slice(-10)) || orderPhoneDigits.endsWith(userPhoneDigits.slice(-10)));
+        const emailMatch = userEmail && orderEmail && (userEmail === orderEmail);
+
+        if (phoneMatch || emailMatch) {
+          count++;
+        }
+      }
+    });
+
+    return count;
+  };
+
+  // Helper to check per-customer usage limit
+  const checkCouponCustomerLimit = (coupon) => {
+    if (!coupon || coupon.maxUsesPerCustomer === undefined || coupon.maxUsesPerCustomer === null || Number(coupon.maxUsesPerCustomer) <= 0) {
+      return { isLimitReached: false, usedCount: 0, maxLimit: 0 };
+    }
+    const maxLimit = Number(coupon.maxUsesPerCustomer);
+    const usedCount = getCustomerCouponUsageCount(coupon.code);
+    if (usedCount >= maxLimit) {
+      return {
+        isLimitReached: true,
+        usedCount,
+        maxLimit,
+        reasonEn: `You have reached the maximum limit of ${maxLimit} use(s) for this coupon! (Used ${usedCount}/${maxLimit})`,
+        reasonHi: `आप इस कूपन की अधिकतम ${maxLimit} उपयोग सीमा तक पहुँच चुके हैं! (${usedCount}/${maxLimit} प्रयुक्त)`
+      };
+    }
+    return { isLimitReached: false, usedCount, maxLimit };
+  };
+
   const handleApplyCoupon = () => {
+    setCouponError('');
     const code = couponCodeField.trim().toUpperCase();
     if (code === '') {
       setAppliedCoupon(null);
@@ -723,16 +797,37 @@ export default function CartCheckout({ onViewChange }) {
     const matchedCoupon = offers?.find(o => o.code.toUpperCase() === code);
     if (matchedCoupon) {
       if (matchedCoupon.minOrder && subtotal < matchedCoupon.minOrder) {
-        alert(language === 'hi' 
-          ? `न्यूनतम ऑर्डर मूल्य ₹${matchedCoupon.minOrder} होना चाहिए!` 
-          : `Minimum order value of ₹${matchedCoupon.minOrder} is required to apply this coupon!`);
+        const needsMore = matchedCoupon.minOrder - subtotal;
+        const msg = language === 'hi' 
+          ? `कूपन '${matchedCoupon.code}' लागू करने के लिए कार्ट में ₹${needsMore} का सामान और जोड़ें! (न्यूनतम ₹${matchedCoupon.minOrder})` 
+          : `Add items worth ₹${needsMore} more to unlock '${matchedCoupon.code}'! (Min Order: ₹${matchedCoupon.minOrder})`;
+        setCouponError(msg);
         return;
       }
+
+      // Check date validity
+      const dateStatus = getCouponDateStatus(matchedCoupon);
+      if (!dateStatus.isValid) {
+        const msg = language === 'hi' ? dateStatus.reasonHi : dateStatus.reasonEn;
+        setCouponError(msg);
+        return;
+      }
+
+      // Check customer usage limit
+      const limitStatus = checkCouponCustomerLimit(matchedCoupon);
+      if (limitStatus.isLimitReached) {
+        const msg = language === 'hi' ? limitStatus.reasonHi : limitStatus.reasonEn;
+        setCouponError(msg);
+        return;
+      }
+
       setAppliedCoupon(matchedCoupon);
+      setCouponError('');
     } else {
-      alert(language === 'hi' 
+      const msg = language === 'hi' 
         ? 'अमान्य कूपन कोड! कृपया वैध कूपन कोड दर्ज करें।' 
-        : 'Invalid Coupon Code! Please enter a valid one.');
+        : 'Invalid Coupon Code! Please check and try again.';
+      setCouponError(msg);
     }
   };
 
@@ -1167,15 +1262,15 @@ export default function CartCheckout({ onViewChange }) {
   if (cartItems.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] max-w-lg mx-auto w-full px-4 py-12 text-center animate-fadeIn" id="cart-view">
-        <div className="bg-white/10 backdrop-blur-xl border border-white/15 rounded-3xl p-8 md:p-12 shadow-2xl space-y-6 text-white w-full">
-          <div className="w-24 h-24 mx-auto rounded-3xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-5xl shadow-inner shadow-cyan-500/20">
+        <div className="bg-white border border-slate-200 rounded-3xl p-8 md:p-12 shadow-xl space-y-6 text-slate-900 w-full">
+          <div className="w-24 h-24 mx-auto rounded-3xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-5xl shadow-inner">
             🛒
           </div>
           <div className="space-y-2">
-            <h2 className="text-2xl font-black text-white tracking-tight">
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight">
               {language === 'hi' ? 'आपकी कार्ट खाली है' : 'Your Cart is Empty'}
             </h2>
-            <p className="text-xs text-slate-300 font-medium leading-relaxed max-w-sm mx-auto">
+            <p className="text-xs text-slate-600 font-medium leading-relaxed max-w-sm mx-auto">
               {language === 'hi'
                 ? 'आपकी कार्ट में अभी कोई उत्पाद नहीं है। खरीदारी शुरू करने के लिए नीचे बटन पर क्लिक करें!'
                 : 'Your shopping cart is currently empty. Explore our store and add items to get started!'}
@@ -1184,7 +1279,7 @@ export default function CartCheckout({ onViewChange }) {
           <button
             type="button"
             onClick={() => onViewChange('shop')}
-            className="w-full py-3.5 px-6 bg-gradient-to-r from-cyan-400 to-emerald-400 hover:from-cyan-300 hover:to-emerald-300 text-slate-950 font-black text-sm uppercase tracking-wider rounded-2xl shadow-xl shadow-cyan-500/20 active:scale-95 transition-all cursor-pointer"
+            className="w-full py-3.5 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm uppercase tracking-wider rounded-2xl shadow-lg active:scale-95 transition-all cursor-pointer"
           >
             {language === 'hi' ? 'शॉपिंग जारी रखें' : 'Continue Shopping'}
           </button>
@@ -1198,27 +1293,27 @@ export default function CartCheckout({ onViewChange }) {
       
       {/* STEP PROGRESS HEADER */}
       <div className="max-w-4xl mx-auto w-full px-4">
-        <div className="flex items-center justify-between bg-white/10 border border-white/15 rounded-2xl p-3 md:p-4 text-xs font-bold text-white shadow-xl backdrop-blur-md">
-          <div className={`flex items-center gap-2.5 ${!isLoggedIn ? 'text-cyan-300 font-black' : 'text-emerald-400 font-bold'}`}>
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${!isLoggedIn ? 'bg-cyan-400 text-slate-950 shadow-md shadow-cyan-400/20' : 'bg-emerald-500 text-slate-950'}`}>
+        <div className="flex items-center justify-between bg-white border border-slate-200 rounded-2xl p-3 md:p-4 text-xs font-bold text-slate-800 shadow-sm">
+          <div className={`flex items-center gap-2.5 ${!isLoggedIn ? 'text-emerald-700 font-black' : 'text-emerald-700 font-bold'}`}>
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${!isLoggedIn ? 'bg-emerald-600 text-white shadow-xs' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'}`}>
               {isLoggedIn ? '✓' : '1'}
             </div>
             <span className="truncate">{language === 'hi' ? 'स्टेप 1: लॉगिन / अकाउंट' : 'Step 1: Account Login'}</span>
           </div>
           
-          <div className="h-0.5 flex-1 bg-white/15 mx-2 md:mx-4"></div>
+          <div className="h-0.5 flex-1 bg-slate-200 mx-2 md:mx-4"></div>
 
-          <div className={`flex items-center gap-2.5 ${isLoggedIn ? 'text-cyan-300 font-black' : 'text-slate-400'}`}>
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${isLoggedIn ? 'bg-cyan-400 text-slate-950 shadow-md shadow-cyan-400/20' : 'bg-white/10 text-slate-400'}`}>
+          <div className={`flex items-center gap-2.5 ${isLoggedIn ? 'text-emerald-700 font-black' : 'text-slate-500'}`}>
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${isLoggedIn ? 'bg-emerald-600 text-white shadow-xs' : 'bg-slate-100 text-slate-500 border border-slate-200'}`}>
               2
             </div>
             <span className="truncate">{language === 'hi' ? 'स्टेप 2: कार्ट और डिलीवरी' : 'Step 2: Cart & Delivery'}</span>
           </div>
 
-          <div className="h-0.5 flex-1 bg-white/15 mx-2 md:mx-4 hidden sm:block"></div>
+          <div className="h-0.5 flex-1 bg-slate-200 mx-2 md:mx-4 hidden sm:block"></div>
 
-          <div className={`hidden sm:flex items-center gap-2.5 ${isLoggedIn ? 'text-cyan-300 font-black' : 'text-slate-400'}`}>
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${isLoggedIn ? 'bg-cyan-400 text-slate-950 shadow-md shadow-cyan-400/20' : 'bg-white/10 text-slate-400'}`}>
+          <div className={`hidden sm:flex items-center gap-2.5 ${isLoggedIn ? 'text-emerald-700 font-black' : 'text-slate-500'}`}>
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${isLoggedIn ? 'bg-emerald-600 text-white shadow-xs' : 'bg-slate-100 text-slate-500 border border-slate-200'}`}>
               3
             </div>
             <span className="truncate">{language === 'hi' ? 'स्टेप 3: भुगतान और ऑर्डर' : 'Step 3: Payment & Order'}</span>
@@ -1231,21 +1326,21 @@ export default function CartCheckout({ onViewChange }) {
         /* STEP 1: Unified Default Theme Login Screen */
         <div className="max-w-xl mx-auto w-full px-4 space-y-5 animate-fadeIn">
           {/* Cart Summary Banner */}
-          <div className="bg-white/10 border border-white/15 backdrop-blur-md rounded-2xl p-4 text-white flex items-center justify-between shadow-lg">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 text-slate-900 flex items-center justify-between shadow-sm">
             <div className="flex items-center gap-3">
               <span className="text-2xl">🛒</span>
               <div>
-                <h4 className="text-[11px] font-extrabold uppercase text-slate-300 tracking-wider">
+                <h4 className="text-[11px] font-extrabold uppercase text-slate-500 tracking-wider">
                   {language === 'hi' ? 'आपकी कार्ट समीक्षा' : 'Cart Summary'}
                 </h4>
-                <p className="text-sm font-black text-cyan-300">
+                <p className="text-sm font-black text-emerald-700">
                   {cartItems.reduce((acc, item) => acc + item.quantity, 0)} {language === 'hi' ? 'वस्तुएं' : (cartItems.reduce((acc, item) => acc + item.quantity, 0) === 1 ? 'Item' : 'Items')} • ₹{subtotal}
                 </p>
               </div>
             </div>
             <button 
               onClick={() => onViewChange('shop')}
-              className="text-xs font-bold text-cyan-400 hover:text-cyan-300 uppercase underline transition-all"
+              className="text-xs font-bold text-emerald-600 hover:text-emerald-700 uppercase underline transition-all cursor-pointer"
             >
               {language === 'hi' ? 'सामान बदलें' : 'View Items'}
             </button>
@@ -1262,22 +1357,22 @@ export default function CartCheckout({ onViewChange }) {
           <section className="lg:col-span-7 space-y-6">
             
             {/* Step 1 Account Verified Banner */}
-            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 flex items-center justify-between text-white shadow-lg">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between text-slate-900 shadow-sm">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-bold shrink-0">
                   <CheckCircle className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-xs font-extrabold text-white flex items-center gap-2 flex-wrap">
+                  <p className="text-xs font-extrabold text-slate-900 flex items-center gap-2 flex-wrap">
                     <span>{language === 'hi' ? 'सत्यापित खाता:' : 'Logged in Account:'}</span>
-                    <span className="text-emerald-300 font-black">{profile?.fullName || 'Valued Member'}</span>
+                    <span className="text-emerald-700 font-black">{profile?.fullName || 'Valued Member'}</span>
                     {isPrime && (
-                      <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full uppercase font-black">
+                      <span className="text-[9px] bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full uppercase font-black">
                         ⭐ Prime
                       </span>
                     )}
                   </p>
-                  <p className="text-[10px] text-slate-300 mt-0.5 font-mono">
+                  <p className="text-[10px] text-slate-600 mt-0.5 font-mono">
                     {profile?.phone || profile?.email || ''}
                   </p>
                 </div>
@@ -1290,19 +1385,19 @@ export default function CartCheckout({ onViewChange }) {
                   setIsLoggedIn(false);
                   window.dispatchEvent(new Event('storage'));
                 }}
-                className="text-[10px] text-slate-300 hover:text-red-300 font-bold uppercase tracking-wider border border-white/10 hover:border-red-500/30 px-3 py-1.5 rounded-lg bg-white/5 transition-all shrink-0 ml-2"
+                className="text-[10px] text-slate-700 hover:text-red-700 font-bold uppercase tracking-wider border border-slate-300 hover:border-red-300 px-3 py-1.5 rounded-lg bg-white transition-all shrink-0 ml-2 shadow-xs"
               >
                 {language === 'hi' ? 'खाता बदलें' : 'Switch Account'}
               </button>
             </div>
 
             {/* Cart Header */}
-            <div className="flex items-center justify-between text-white">
-              <h2 className="text-xl font-bold text-white tracking-tight md:text-2xl text-glow flex items-center gap-2">
-                <span className="text-cyan-400">Step 2:</span>
+            <div className="flex items-center justify-between text-slate-900">
+              <h2 className="text-xl font-bold text-slate-900 tracking-tight md:text-2xl flex items-center gap-2">
+                <span className="text-emerald-700">Step 2:</span>
                 <span>{t('yourCart')}</span>
               </h2>
-              <span className="text-xs font-bold text-cyan-300 uppercase tracking-wildest bg-white/10 border border-white/10 px-3 py-1 rounded-full">
+              <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
                 {cartItems.length} {t('itemsCount')}
               </span>
             </div>
@@ -1320,36 +1415,36 @@ export default function CartCheckout({ onViewChange }) {
                   return (
                     <div 
                       key={`${item.product.id}-${item.selectedUnit || idx}`}
-                      className={`backdrop-blur-md border p-4 flex gap-4 rounded-xl shadow-lg transition-all ${
+                      className={`border p-4 flex gap-4 rounded-xl shadow-xs transition-all ${
                         hasStockIssue
-                          ? 'border-red-500/30 bg-red-500/5 hover:bg-red-500/10'
-                          : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
+                          ? 'border-red-300 bg-red-50'
+                          : 'bg-white border-slate-200 hover:border-slate-300'
                       }`}
                     >
                       <CartItemImage 
                         product={item.product} 
                         r2PublicUrl={r2PublicUrl}
-                        className={`w-20 h-20 md:w-24 md:h-24 object-cover rounded-lg border bg-white/5 shrink-0 ${
-                          hasStockIssue ? 'border-red-500/20' : 'border-white/10'
+                        className={`w-20 h-20 md:w-24 md:h-24 object-cover rounded-lg border bg-slate-50 shrink-0 ${
+                          hasStockIssue ? 'border-red-300' : 'border-slate-200'
                         }`}
                       />
 
                       {/* Content Area */}
-                      <div className="flex-grow flex flex-col justify-between overflow-hidden text-white">
+                      <div className="flex-grow flex flex-col justify-between overflow-hidden text-slate-900">
                         <div>
-                          <h3 className="font-bold text-sm leading-snug text-slate-100 truncate">
+                          <h3 className="font-extrabold text-sm leading-snug text-slate-900 truncate">
                             {name}
                           </h3>
                           <div className="flex flex-col gap-1 mt-0.5">
-                            <p className="text-xs text-slate-400 font-medium">
+                            <p className="text-xs text-slate-500 font-medium">
                               {pack}
                             </p>
                             {hasStockIssue && (
                               <div className="mt-1 flex flex-col gap-1 items-start">
-                                <span className="px-1.5 py-0.5 rounded text-[8.5px] bg-red-500/20 text-red-300 font-extrabold animate-pulse uppercase tracking-wide">
+                                <span className="px-1.5 py-0.5 rounded text-[8.5px] bg-red-100 text-red-700 font-extrabold uppercase tracking-wide border border-red-200">
                                   {language === 'hi' ? 'अपर्याप्त स्टॉक!' : 'INSUFFICIENT STOCK!'}
                                 </span>
-                                <p className="text-[10px] text-red-300 font-semibold leading-normal bg-red-950/20 p-1.5 rounded border border-red-500/10">
+                                <p className="text-[10px] text-red-700 font-bold leading-normal bg-red-50 p-1.5 rounded border border-red-200">
                                   {language === 'hi' 
                                     ? `केवल ${maxStock} इकाइयाँ उपलब्ध हैं। कृपया कार्ट की मात्रा समायोजित करें।` 
                                     : `Only ${maxStock} units available. Please adjust your cart quantity.`}
@@ -1361,26 +1456,26 @@ export default function CartCheckout({ onViewChange }) {
 
                         {/* Quantity Toggles */}
                         <div className="flex items-center justify-between mt-2">
-                          <div className="flex items-center border border-white/15 rounded-lg overflow-hidden bg-white/5">
+                          <div className="flex items-center border border-slate-300 rounded-lg overflow-hidden bg-slate-50">
                             <button 
                               onClick={() => updateQuantity(item.product.id, item.selectedUnit, -1)}
-                              className="px-3 py-1 font-bold text-slate-300 hover:bg-white/10 active:scale-90 transition-all font-mono text-sm"
+                              className="px-3 py-1 font-bold text-slate-700 hover:bg-slate-200 active:scale-90 transition-all font-mono text-sm"
                             >
                               -
                             </button>
-                            <span className="px-3 font-extrabold text-xs text-cyan-400 font-mono">
+                            <span className="px-3 font-black text-xs text-slate-900 font-mono">
                               {item.quantity}
                             </span>
                             <button 
                               onClick={() => updateQuantity(item.product.id, item.selectedUnit, 1)}
-                              className="px-3 py-1 font-bold text-slate-300 hover:bg-white/10 active:scale-90 transition-all font-mono text-sm"
+                              className="px-3 py-1 font-bold text-slate-700 hover:bg-slate-200 active:scale-90 transition-all font-mono text-sm"
                             >
                               +
                             </button>
                           </div>
 
                           {/* Price Display */}
-                          <span className="text-base font-extrabold text-white text-glow font-mono">
+                          <span className="text-base font-black text-slate-900 font-mono">
                             ₹{getUnitPrice(item.product, item.selectedUnit) * item.quantity}
                           </span>
                         </div>
@@ -1388,7 +1483,7 @@ export default function CartCheckout({ onViewChange }) {
 
                       <button 
                         onClick={() => removeFromCart(item.product.id, item.selectedUnit)}
-                        className="text-red-400 bg-red-500/10 border border-red-500/20 hover:bg-red-500/25 p-2 rounded-lg transition-all h-fit shrink-0 self-start active:scale-90"
+                        className="text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 p-2 rounded-lg transition-all h-fit shrink-0 self-start active:scale-90"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -1397,76 +1492,74 @@ export default function CartCheckout({ onViewChange }) {
                 })}
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center p-12 text-center bg-white/5 backdrop-blur-md border border-dashed border-white/15 rounded-2xl text-white">
-                <p className="font-bold text-sm text-slate-300">Your cart is empty</p>
+              <div className="flex flex-col items-center justify-center p-12 text-center bg-white border border-dashed border-slate-300 rounded-2xl text-slate-700">
+                <p className="font-bold text-sm text-slate-700">Your cart is empty</p>
                 <button 
                   onClick={() => onViewChange('shop')}
-                  className="mt-4 px-6 py-2.5 bg-cyan-500/20 text-cyan-200 border border-cyan-500/30 hover:bg-cyan-500/30 rounded-xl text-xs font-bold uppercase tracking-wider transition-all"
+                  className="mt-4 px-6 py-2.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all shadow-sm"
                 >
                   Go to Shop
                 </button>
               </div>
             )}
 
-
-
           {/* Shipping / Distances panel matching Image 6 */}
-          <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-5 shadow-lg text-white">
-            <div className="flex items-center gap-2 mb-4 text-cyan-400">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm text-slate-900">
+            <div className="flex items-center gap-2 mb-4 text-emerald-700">
               <MapPin className="h-5 w-5" />
-              <h3 className="font-bold text-sm uppercase tracking-wider">
+              <h3 className="font-extrabold text-sm uppercase tracking-wider">
                 {t('shippingInfo')}
               </h3>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">
+                <label className="text-[10px] font-extrabold text-slate-600 uppercase tracking-wider block">
                   {t('fullName')}
                 </label>
                 <input 
                   type="text" 
                   value={shippingInfo.fullName}
                   onChange={(e) => setShippingInfo({...shippingInfo, fullName: e.target.value})}
-                  className="w-full bg-white/5 border border-white/15 rounded-lg p-3 text-xs text-white font-semibold outline-none focus:bg-white/10 focus:border-cyan-400/50 transition-all font-sans"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-900 font-bold outline-none focus:bg-white focus:border-emerald-500 transition-all font-sans"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">
+                <label className="text-[10px] font-extrabold text-slate-600 uppercase tracking-wider block">
                   {t('phoneNumber')}
                 </label>
                 <input 
                   type="text" 
                   value={shippingInfo.phoneNumber}
                   onChange={(e) => setShippingInfo({...shippingInfo, phoneNumber: e.target.value})}
-                  className="w-full bg-white/5 border border-white/15 rounded-lg p-3 text-xs text-white font-semibold outline-none focus:bg-white/10 focus:border-cyan-400/50 transition-all font-sans"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-900 font-bold outline-none focus:bg-white focus:border-emerald-500 transition-all font-sans"
                 />
               </div>
 
               <div className="md:col-span-2 space-y-1">
-                <label className="text-[10px] font-extrabold text-cyan-400 uppercase tracking-wider block flex justify-between">
+                <label className="text-[10px] font-extrabold text-slate-700 uppercase tracking-wider block flex justify-between">
                   <span>{language === 'hi' ? 'ईमेल पता (कैशफ्री के लिए आवश्यक)' : 'Email Address (Required for Cashfree PG)'}</span>
-                  <span className="text-[9px] text-slate-400">test environment</span>
+                  <span className="text-[9px] text-slate-500">test environment</span>
                 </label>
                 <input 
                   type="email" 
                   value={customerEmail}
                   onChange={(e) => setCustomerEmail(e.target.value)}
                   placeholder="name@example.com"
-                  className="w-full bg-white/5 border border-white/15 rounded-lg p-3 text-xs text-white font-semibold outline-none focus:bg-white/10 focus:border-cyan-400/50 transition-all font-mono"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-900 font-bold outline-none focus:bg-white focus:border-emerald-500 transition-all font-mono"
                   required
                 />
               </div>
 
               {/* Delivery Location Group Select (Requirement 2 & 3) */}
-              <div className="md:col-span-2 bg-cyan-950/15 p-4 border border-cyan-500/20 rounded-xl space-y-2.5">
+              <div className="md:col-span-2 bg-emerald-50/70 p-4 border border-emerald-200 rounded-xl space-y-2.5">
                 <div className="flex justify-between items-center">
-                  <label className="text-[10px] font-black text-cyan-400 uppercase tracking-widest block">
+                  <label className="text-[10px] font-black text-emerald-800 uppercase tracking-widest block">
                     📍 {language === 'hi' ? 'वितरण क्षेत्र का चयन (अनिवार्य)' : 'Select Delivery Area (Mandatory) *'}
                   </label>
                   {isPrime && (
-                    <span className="text-[9px] bg-amber-500/20 text-indigo-300 border border-amber-500/35 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-widest flex items-center gap-1 shrink-0">
+                    <span className="text-[9px] bg-amber-100 text-amber-800 border border-amber-300 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-widest flex items-center gap-1 shrink-0">
                       ⭐ Prime Member
                     </span>
                   )}
@@ -1479,9 +1572,9 @@ export default function CartCheckout({ onViewChange }) {
                     setSelectedLocationGroupId(e.target.value);
                     setSelectedSubLocation("");
                   }}
-                  className="w-full bg-slate-950 border border-cyan-500/30 rounded-lg p-3 text-xs text-white font-semibold outline-none focus:border-cyan-400 cursor-pointer"
+                  className="w-full bg-white border border-slate-300 rounded-lg p-3 text-xs text-slate-900 font-bold outline-none focus:border-emerald-500 cursor-pointer shadow-xs"
                 >
-                  <option value="" className="text-slate-500 bg-slate-950">
+                  <option value="" className="text-slate-500 bg-white">
                     -- {language === 'hi' ? 'यहाँ अपना वितरण क्षेत्र चुनें' : 'CHOOSE YOUR SHIPPING SECTOR'} --
                   </option>
                   {locationGroups && locationGroups.map(g => {
@@ -1489,7 +1582,7 @@ export default function CartCheckout({ onViewChange }) {
                     const willBeFree = subtotal >= threshold;
                     const charge = isPrime ? g.primeDelivery : g.normalDelivery;
                     return (
-                      <option key={g.id} value={g.id} className="text-white bg-slate-950 font-sans font-semibold">
+                      <option key={g.id} value={g.id} className="text-slate-900 bg-white font-sans font-semibold">
                         {g.name} &rarr; ({willBeFree ? (language === 'hi' ? 'फ्री डिलीवरी 🎉' : 'FREE Shipping 🎉') : `₹${charge} Charge`})
                       </option>
                     );
@@ -1498,20 +1591,20 @@ export default function CartCheckout({ onViewChange }) {
 
                 {selectedLocationGroup && selectedLocationGroup.locations && (
                   <div className="space-y-1.5 pt-1">
-                    <label className="text-[10px] font-black text-cyan-400 uppercase tracking-widest block">
+                    <label className="text-[10px] font-black text-emerald-800 uppercase tracking-widest block">
                       🏢 {language === 'hi' ? 'विशेष स्थान / सेक्टर का चयन (अनिवार्य)' : 'Select Specific Location / Sector *'}
                     </label>
                     <select
                       required
                       value={selectedSubLocation}
                       onChange={(e) => setSelectedSubLocation(e.target.value)}
-                      className="w-full bg-slate-950 border border-cyan-500/30 rounded-lg p-3 text-xs text-white font-semibold outline-none focus:border-cyan-400 cursor-pointer"
+                      className="w-full bg-white border border-slate-300 rounded-lg p-3 text-xs text-slate-900 font-bold outline-none focus:border-emerald-500 cursor-pointer shadow-xs"
                     >
-                      <option value="" className="text-slate-500 bg-slate-950">
+                      <option value="" className="text-slate-500 bg-white">
                         -- {language === 'hi' ? 'अपना विशेष स्थान/सेक्टर चुनें' : 'CHOOSE YOUR SPECIFIC SECTOR'} --
                       </option>
                       {selectedLocationGroup.locations.split(',').map(l => l.trim()).filter(Boolean).map((loc, idx) => (
-                        <option key={idx} value={loc} className="text-white bg-slate-950 font-sans font-semibold">
+                        <option key={idx} value={loc} className="text-slate-900 bg-white font-sans font-semibold">
                           {loc}
                         </option>
                       ))}
@@ -1521,32 +1614,32 @@ export default function CartCheckout({ onViewChange }) {
 
                 {selectedLocationGroup ? (
                   <div className="space-y-2">
-                    <div className="text-[9.5px] text-slate-300 bg-slate-950/40 p-2.5 rounded-lg border border-white/5 space-y-1">
-                      <p className="font-extrabold text-cyan-200">
+                    <div className="text-[9.5px] text-slate-700 bg-slate-50 p-2.5 rounded-lg border border-slate-200 space-y-1">
+                      <p className="font-extrabold text-emerald-800">
                         🚚 {language === 'hi' ? 'संबद्ध क्षेत्र' : 'Covered Sectors / Landmarks'}:
                       </p>
-                      <p className="text-slate-400 leading-normal font-sans text-[9px] font-medium">
+                      <p className="text-slate-600 leading-normal font-sans text-[9px] font-medium">
                         {selectedLocationGroup.locations}
                       </p>
-                      <div className="flex justify-between text-[8px] uppercase tracking-widest text-slate-500 font-extrabold pt-1">
+                      <div className="flex justify-between text-[8px] uppercase tracking-widest text-slate-600 font-extrabold pt-1">
                         <span>{language === 'hi' ? 'सामान्य शुल्क' : 'Standard Delivery'}: ₹{selectedLocationGroup.normalDelivery}</span>
-                        <span className="text-amber-400">{language === 'hi' ? 'प्राइम शुल्क' : 'Prime Delivery'}: ₹{selectedLocationGroup.primeDelivery}</span>
+                        <span className="text-amber-800">{language === 'hi' ? 'प्राइम शुल्क' : 'Prime Delivery'}: ₹{selectedLocationGroup.primeDelivery}</span>
                       </div>
 
                       {/* Dynamic Free Shipping Threshold Tracker Widget */}
-                      <div className="flex flex-col gap-1.5 pt-1.5 border-t border-white/5 mt-1.5">
+                      <div className="flex flex-col gap-1.5 pt-1.5 border-t border-slate-200 mt-1.5">
                         <div className="flex justify-between text-[9px] uppercase tracking-widest font-black">
-                          <span className="text-slate-400">{language === 'hi' ? 'फ्री डिलीवरी न्यूनतम आर्डर' : 'Free Delivery threshold'}: ₹{minFreeDeliveryAmount}</span>
+                          <span className="text-slate-600">{language === 'hi' ? 'फ्री डिलीवरी न्यूनतम आर्डर' : 'Free Delivery threshold'}: ₹{minFreeDeliveryAmount}</span>
                           {isFreeDeliveryApplied ? (
-                            <span className="text-emerald-400 animate-pulse">🎉 {language === 'hi' ? 'मुफ़्त डिलीवरी लागू!' : 'FREE SHIPPING APPLIED!'}</span>
+                            <span className="text-emerald-700 font-extrabold">🎉 {language === 'hi' ? 'मुफ़्त डिलीवरी लागू!' : 'FREE SHIPPING APPLIED!'}</span>
                           ) : (
-                            <span className="text-rose-400 font-bold">{language === 'hi' ? `₹${minFreeDeliveryAmount - subtotal} और जोड़ें` : `Add ₹${minFreeDeliveryAmount - subtotal} more for FREE`}</span>
+                            <span className="text-rose-700 font-bold">{language === 'hi' ? `₹${minFreeDeliveryAmount - subtotal} और जोड़ें` : `Add ₹${minFreeDeliveryAmount - subtotal} more for FREE`}</span>
                           )}
                         </div>
                         {/* Threshold Visual Progress Bar */}
-                        <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                        <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
                           <div 
-                            className={`h-full transition-all duration-300 ${isFreeDeliveryApplied ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]' : 'bg-gradient-to-r from-cyan-500 to-rose-400'}`}
+                            className={`h-full transition-all duration-300 ${isFreeDeliveryApplied ? 'bg-emerald-600' : 'bg-emerald-500'}`}
                             style={{ width: `${Math.min(100, (subtotal / minFreeDeliveryAmount) * 100)}%` }}
                           ></div>
                         </div>
@@ -1561,8 +1654,8 @@ export default function CartCheckout({ onViewChange }) {
                       return (
                         <div className={`p-2.5 rounded-lg border text-[10px] space-y-1 transition-all ${
                           isActive 
-                            ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-200' 
-                            : 'bg-rose-500/10 border-rose-500/30 text-rose-200'
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-900' 
+                            : 'bg-rose-50 border-rose-200 text-rose-900'
                         }`}>
                           <div className="flex items-center justify-between font-extrabold uppercase tracking-wide">
                             <span className="flex items-center gap-1.5">
@@ -1570,24 +1663,24 @@ export default function CartCheckout({ onViewChange }) {
                                 <>
                                   <span className="flex h-2 w-2 relative">
                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
                                   </span>
                                   <span>{language === 'hi' ? 'वितरण चालू है' : 'DELIVERIES OPERATIONAL'}</span>
                                 </>
                               ) : (
                                 <>
                                   <span className="flex h-2 w-2 relative">
-                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-600"></span>
                                   </span>
                                   <span>{language === 'hi' ? 'वितरण अभी उपलब्ध नहीं' : 'DELIVERIES OFFLINE'}</span>
                                 </>
                               )}
                             </span>
-                            <span className="font-mono bg-black/30 px-1.5 py-0.5 rounded text-[9.5px]">
+                            <span className="font-mono bg-white border border-slate-200 px-1.5 py-0.5 rounded text-[9.5px] font-bold">
                               ⏰ {formatTimeSlot(startTime)} - {formatTimeSlot(endTime)}
                             </span>
                           </div>
-                          <p className="text-[9px] text-slate-400 leading-normal">
+                          <p className="text-[9px] text-slate-600 leading-normal font-medium">
                             {isActive 
                               ? (language === 'hi' 
                                   ? `✓ इस क्षेत्र में डिलीवरी चालू है। आप अभी ऑर्डर दे सकते हैं।`
@@ -1602,7 +1695,7 @@ export default function CartCheckout({ onViewChange }) {
                     })()}
                   </div>
                 ) : (
-                  <p className="text-[9px] text-cyan-300/80 italic font-semibold">
+                  <p className="text-[9px] text-emerald-800 italic font-bold">
                     * {language === 'hi' 
                        ? 'ऑर्डर पूरा करने और शिपिंग शुल्क की गणना करने के लिए क्षेत्र चुनना अनिवार्य है।' 
                        : 'Please choose your designated shipping sector. Selection is required to check out.'}
@@ -1612,7 +1705,7 @@ export default function CartCheckout({ onViewChange }) {
 
               <div className="md:col-span-2 space-y-2">
                 <div className="flex flex-wrap justify-between items-center gap-2">
-                  <label className="text-[10px] font-black text-amber-400 uppercase tracking-wider block">
+                  <label className="text-[10px] font-black text-slate-800 uppercase tracking-wider block">
                     {t('deliveryAddress')} * ({language === 'hi' ? 'अनिवार्य' : 'Required'})
                   </label>
                   
@@ -1621,9 +1714,9 @@ export default function CartCheckout({ onViewChange }) {
                     type="button"
                     onClick={handleDetectLiveGpsLocation}
                     disabled={isDetectingGps}
-                    className="px-3 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-lg border border-emerald-400/30 flex items-center gap-1.5 shadow-md active:scale-95 cursor-pointer disabled:opacity-50"
+                    className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-lg border border-emerald-600 flex items-center gap-1.5 shadow-xs active:scale-95 cursor-pointer disabled:opacity-50"
                   >
-                    <Compass className={`h-3.5 w-3.5 ${isDetectingGps ? 'animate-spin text-amber-300' : 'animate-pulse text-emerald-200'}`} />
+                    <Compass className={`h-3.5 w-3.5 ${isDetectingGps ? 'animate-spin text-amber-200' : 'text-emerald-100'}`} />
                     <span>
                       {isDetectingGps 
                         ? (language === 'hi' ? 'GPS लाइव लोकेशन खोजी जा रही है...' : 'Detecting Live GPS...') 
@@ -1639,18 +1732,18 @@ export default function CartCheckout({ onViewChange }) {
                   value={shippingInfo.address}
                   onChange={(e) => setShippingInfo({...shippingInfo, address: e.target.value})}
                   placeholder={language === 'hi' ? "मकान नंबर, स्ट्रीट/गली, लैंडमार्क या लाइव जीपीएस पता दर्ज करें *" : "Enter House No, Street/Locality, Landmark, or Live GPS Address *"}
-                  className={`w-full bg-white/5 border rounded-lg p-3 text-xs text-white font-semibold outline-none transition-all font-sans ${
+                  className={`w-full bg-slate-50 border rounded-lg p-3 text-xs text-slate-900 font-bold outline-none transition-all font-sans ${
                     !shippingInfo.address?.trim() 
-                      ? 'border-rose-500/50 focus:border-rose-400 bg-rose-500/5' 
-                      : 'border-white/15 focus:border-cyan-400/50 focus:bg-white/10'
+                      ? 'border-rose-300 focus:border-rose-500 bg-rose-50' 
+                      : 'border-slate-200 focus:border-emerald-500 focus:bg-white'
                   }`}
                 />
 
                 {/* GPS Pin Badge & Free Google Maps Navigation Link */}
                 {liveGpsCoords && (
-                  <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex flex-wrap items-center justify-between gap-2 text-[10px] text-emerald-300 font-sans">
-                    <div className="flex items-center gap-1.5 font-bold">
-                      <MapPin className="h-4 w-4 text-emerald-400 shrink-0 animate-bounce" />
+                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex flex-wrap items-center justify-between gap-2 text-[10px] text-emerald-900 font-sans">
+                    <div className="flex items-center gap-1.5 font-extrabold">
+                      <MapPin className="h-4 w-4 text-emerald-700 shrink-0 animate-bounce" />
                       <span>
                         {language === 'hi'
                           ? `GPS निर्देशांक दर्ज: ${liveGpsCoords.lat.toFixed(5)}° N, ${liveGpsCoords.lng.toFixed(5)}° E`
@@ -1662,7 +1755,7 @@ export default function CartCheckout({ onViewChange }) {
                       href={`https://www.google.com/maps/search/?api=1&query=${liveGpsCoords.lat},${liveGpsCoords.lng}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 rounded-lg text-emerald-200 font-extrabold flex items-center gap-1 transition"
+                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-emerald-50 font-extrabold flex items-center gap-1 transition shadow-xs"
                     >
                       <MapIcon className="h-3 w-3" />
                       <span>{language === 'hi' ? 'मैप नेविगेशन खोलें' : 'Open Navigation Map'}</span>
@@ -1670,7 +1763,7 @@ export default function CartCheckout({ onViewChange }) {
                   </div>
                 )}
 
-                <p className="text-[9.5px] text-slate-400 italic font-medium leading-tight">
+                <p className="text-[9.5px] text-slate-500 italic font-medium leading-tight">
                   💡 {language === 'hi' 
                     ? "नोट: आप किसी भी समय ऊपर दिए गए पते के टेक्स्ट को बदल सकते हैं यदि आप किसी अन्य स्थान (जैसे ऑफिस, रिश्तेदार के घर) पर डिलीवरी चाहते हैं।" 
                     : "Note: You can edit or change the address text above at any time if you want delivery at another location (e.g. office, friend's home)."
@@ -1689,13 +1782,13 @@ export default function CartCheckout({ onViewChange }) {
             
             {/* Delecatable Birthday / Anniversary Alert */}
             {(isBirthdayToday || isAnniversaryToday) && (
-              <div className="bg-gradient-to-r from-pink-500/20 via-purple-600/20 to-indigo-500/20 border border-pink-500/35 rounded-2xl p-4 shadow-xl space-y-3 relative overflow-hidden">
+              <div className="bg-pink-50 border border-pink-200 rounded-2xl p-4 shadow-sm space-y-3 relative overflow-hidden text-slate-900">
                 {/* Visual sparkles */}
                 <div className="absolute right-2 top-2 text-2xl animate-bounce">
                   {isBirthdayToday ? "🎂" : "💍"}
                 </div>
                 <div>
-                  <h4 className="text-xs font-black uppercase tracking-widest text-pink-300 flex items-center gap-1.5">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-pink-800 flex items-center gap-1.5">
                     <span>🎉</span>
                     <span>
                       {isBirthdayToday 
@@ -1704,45 +1797,45 @@ export default function CartCheckout({ onViewChange }) {
                       }
                     </span>
                   </h4>
-                  <p className="text-[10px] text-slate-300 font-semibold leading-relaxed mt-1">
+                  <p className="text-[10px] text-slate-700 font-semibold leading-relaxed mt-1">
                     {language === 'hi' 
                       ? "स्वास्तिक सुपरमार्केट की ओर से ढेर सारी शुभकामनाएं! आपके लिए विशेष रूप से निम्नलिखित लाभ सक्रिय कर दिया गया है:" 
                       : "Swastik Supermarket sends warm greetings on your celebration! The following automatic benefit has been enabled for you:"}
                   </p>
                 </div>
 
-                <div className="bg-slate-950/60 p-3 rounded-xl border border-white/5 space-y-2">
+                <div className="bg-white p-3 rounded-xl border border-pink-100 space-y-2">
                   <div className="flex justify-between items-center">
-                    <span className="text-[10px] uppercase font-bold text-slate-400">
+                    <span className="text-[10px] uppercase font-bold text-slate-500">
                       {language === 'hi' ? 'विशेष लाभ' : 'Personalized Offer'}
                     </span>
-                    <span className="text-[10px] font-black uppercase text-pink-400 bg-pink-500/10 border border-pink-500/30 px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] font-black uppercase text-pink-700 bg-pink-100 border border-pink-300 px-2 py-0.5 rounded-full">
                       {isBirthdayToday ? `${bPercent}% DISCOUNT` : `${aPercent}% DISCOUNT`}
                     </span>
                   </div>
                   
-                  <p className="text-xs font-black text-rose-300">
+                  <p className="text-xs font-black text-pink-900">
                     {language === 'hi' 
                       ? (isBirthdayToday ? cSettings.birthdayOfferDetailsHi : cSettings.anniversaryOfferDetailsHi) 
                       : (isBirthdayToday ? cSettings.birthdayOfferDetails : cSettings.anniversaryOfferDetails)
                     }
                   </p>
 
-                  <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider flex justify-between">
+                  <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider flex justify-between">
                     <span>
                       {language === 'hi' ? `न्यूनतम शॉपिंग राशि: ₹${isBirthdayToday ? bMin : aMin}` : `Min shopping value: ₹${isBirthdayToday ? bMin : aMin}`}
                     </span>
                     {language === 'hi' ? (
                       subtotal >= (isBirthdayToday ? bMin : aMin) ? (
-                        <span className="text-emerald-400">लागू (₹{celebrationDiscountValue} की सीधी बचत!) 🎉</span>
+                        <span className="text-emerald-700 font-bold">लागू (₹{celebrationDiscountValue} की सीधी बचत!) 🎉</span>
                       ) : (
-                        <span className="text-rose-400 font-extrabold">₹{Math.max(0, (isBirthdayToday ? bMin : aMin) - subtotal)} का और सामान जोड़ें</span>
+                        <span className="text-rose-700 font-extrabold">₹{Math.max(0, (isBirthdayToday ? bMin : aMin) - subtotal)} का और सामान जोड़ें</span>
                       )
                     ) : (
                       subtotal >= (isBirthdayToday ? bMin : aMin) ? (
-                        <span className="text-emerald-400">APPLIED (Saved ₹{celebrationDiscountValue}!) 🎉</span>
+                        <span className="text-emerald-700 font-bold">APPLIED (Saved ₹{celebrationDiscountValue}!) 🎉</span>
                       ) : (
-                        <span className="text-rose-400 font-extrabold">Add ₹{Math.max(0, (isBirthdayToday ? bMin : aMin) - subtotal)} more to unlock</span>
+                        <span className="text-rose-700 font-extrabold">Add ₹{Math.max(0, (isBirthdayToday ? bMin : aMin) - subtotal)} more to unlock</span>
                       )
                     )}
                   </div>
@@ -1751,25 +1844,25 @@ export default function CartCheckout({ onViewChange }) {
             )}
 
             {/* Loyalty points redeemer box */}
-            <div className="bg-gradient-to-br from-amber-500/10 to-slate-900 border border-amber-500/20 p-4 rounded-2xl shadow-lg text-white space-y-3">
+            <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl shadow-sm text-slate-900 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-sm">🪙</span>
-                  <h3 className="font-bold text-xs uppercase tracking-wider text-slate-100">
+                  <h3 className="font-extrabold text-xs uppercase tracking-wider text-amber-900">
                     {language === 'hi' ? 'रेफ़र और कमाएं पॉइंट्स' : 'Referral Points Reward'}
                   </h3>
                 </div>
-                <span className="text-[9px] bg-amber-400 text-slate-950 font-black px-2 py-0.5 rounded uppercase">
+                <span className="text-[9px] bg-amber-200 text-amber-900 border border-amber-300 font-black px-2 py-0.5 rounded uppercase">
                   {userPointsAvailable} PTS Available
                 </span>
               </div>
               
-              <div className="flex items-center justify-between bg-white/5 p-3 rounded-xl border border-white/5">
+              <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-amber-200">
                 <div className="flex-1 shrink-0">
-                  <p className="text-[11px] font-bold text-white flex items-center gap-1">
+                  <p className="text-[11px] font-bold text-slate-900 flex items-center gap-1">
                     <span>{language === 'hi' ? 'शॉपिंग के लिए अंक उपयोग करें' : 'Redeem Points for Shopping'}</span>
                   </p>
-                  <p className="text-[9.5px] text-zinc-400 font-semibold leading-relaxed mt-0.5 select-none">
+                  <p className="text-[9.5px] text-slate-500 font-semibold leading-relaxed mt-0.5 select-none">
                     {language === 'hi' 
                       ? `1 पॉइंट = ₹${pointsRateInINR} | कम से कम आवश्यक: ${minPointsRedeem} PTS` 
                       : `1 PTS = ₹${pointsRateInINR} INR | Min limit: ${minPointsRedeem} PTS`
@@ -1780,14 +1873,14 @@ export default function CartCheckout({ onViewChange }) {
                 {/* Custom toggle slider switch of amber color */}
                 <div 
                   onClick={() => handleToggleRedeemPoints(!redeemPointsChecked)}
-                  className={`w-11 h-6 rounded-full relative transition-all duration-300 cursor-pointer shrink-0 ml-4 ${redeemPointsChecked ? 'bg-amber-400' : 'bg-white/15'}`}
+                  className={`w-11 h-6 rounded-full relative transition-all duration-300 cursor-pointer shrink-0 ml-4 ${redeemPointsChecked ? 'bg-amber-500' : 'bg-slate-200'}`}
                 >
-                  <div className={`absolute top-1 w-4 h-4 bg-slate-950 rounded-full transition-all duration-300 shadow ${redeemPointsChecked ? 'right-1' : 'left-1'}`} />
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 shadow ${redeemPointsChecked ? 'right-1' : 'left-1'}`} />
                 </div>
               </div>
               
               {redeemPointsChecked && appliedPoints > 0 && (
-                <p className="text-[10px] text-green-300 font-semibold text-center bg-green-500/10 border border-green-500/20 py-1.5 rounded-lg animate-pulse">
+                <p className="text-[10px] text-emerald-800 font-extrabold text-center bg-emerald-100 border border-emerald-300 py-1.5 rounded-lg animate-pulse">
                   🎉 {language === 'hi' 
                     ? `बधाई हो! ${appliedPoints} पॉइंट्स के साथ ₹${pointsDiscountValue} की सीधी छूट लागू की गई!` 
                     : `Slashed flat ₹${pointsDiscountValue} off from subtotal via ${appliedPoints} points!`}
@@ -1795,30 +1888,30 @@ export default function CartCheckout({ onViewChange }) {
               )}
             </div>
 
-            {/* Dark Styled Summary Box */}
-            <div className="bg-gradient-to-br from-pink-500/10 via-purple-500/5 to-cyan-500/15 backdrop-blur-xl text-white rounded-2xl p-6 shadow-xl border border-white/15 overflow-hidden relative">
-              <h3 className="font-black text-base uppercase tracking-widest text-center border-b border-white/10 pb-4 mb-4 text-glow">
+            {/* Light Styled Summary Box */}
+            <div className="bg-white text-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 overflow-hidden relative">
+              <h3 className="font-extrabold text-base uppercase tracking-widest text-center border-b border-slate-200 pb-4 mb-4 text-slate-900">
                 {t('orderSummary')}
               </h3>
 
               <div className="space-y-3 text-xs font-medium">
-                <div className="flex justify-between text-slate-300">
+                <div className="flex justify-between text-slate-700">
                   <span>{t('subtotal')}</span>
-                  <span className="font-mono">₹{subtotal}</span>
+                  <span className="font-mono font-bold">₹{subtotal}</span>
                 </div>
-                <div className="flex justify-between text-slate-300">
+                <div className="flex justify-between text-slate-700">
                   <span>{t('deliveryFee')}</span>
-                  <span className="text-cyan-300 font-bold uppercase">
+                  <span className="text-emerald-800 font-extrabold uppercase">
                     {deliveryFee > 0 ? `₹${deliveryFee}` : 'FREE'}
                   </span>
                 </div>
-                <div className="flex justify-between text-slate-300">
+                <div className="flex justify-between text-slate-700">
                   <span>{t('gst')}</span>
-                  <span className="font-mono">₹{gst}</span>
+                  <span className="font-mono font-bold">₹{gst}</span>
                 </div>
 
                 {couponDiscount > 0 && (
-                  <div className="flex justify-between text-emerald-400 font-bold transition-all">
+                  <div className="flex justify-between text-emerald-800 font-extrabold transition-all">
                     <span>
                       {language === 'hi' ? 'कूपन छूट' : 'Coupon Discount'} 
                       {appliedCoupon && ` (${appliedCoupon.code})`}
@@ -1828,7 +1921,7 @@ export default function CartCheckout({ onViewChange }) {
                 )}
 
                 {appliedPoints > 0 && (
-                  <div className="flex justify-between text-yellow-400 font-bold transition-all">
+                  <div className="flex justify-between text-amber-800 font-extrabold transition-all">
                     <span>
                       {language === 'hi' ? 'रेफ़रल पॉइंट्स डिस्काउंट (-)' : 'Referral Reward Points (-)'}
                     </span>
@@ -1837,7 +1930,7 @@ export default function CartCheckout({ onViewChange }) {
                 )}
 
                 {celebrationDiscountValue > 0 && (
-                  <div className="flex justify-between text-pink-400 font-bold transition-all animate-pulse">
+                  <div className="flex justify-between text-pink-800 font-extrabold transition-all">
                     <span>
                       {isBirthdayToday 
                         ? (language === 'hi' ? '🎁 जन्मदिन विशेष छूट (-)' : '🎁 Special Birthday Discount (-)')
@@ -1848,15 +1941,15 @@ export default function CartCheckout({ onViewChange }) {
                   </div>
                 )}
 
-                <div className="pt-4 mt-2 border-t border-white/10 flex justify-between items-center transition-all">
-                  <span className="text-sm font-bold">{t('grandTotal')}</span>
+                <div className="pt-4 mt-2 border-t border-slate-200 flex justify-between items-center transition-all">
+                  <span className="text-sm font-extrabold text-slate-900">{t('grandTotal')}</span>
                   <div className="text-right">
                     {(pointsDiscountValue > 0 || celebrationDiscountValue > 0) && (
                       <span className="text-[10px] line-through text-slate-400 block font-mono">
                         ₹{Math.max(0, Math.round((subtotal + deliveryFee + gst - couponDiscount) * 100) / 100)}
                       </span>
                     )}
-                    <span className="block text-2xl font-black text-white leading-none text-glow font-mono">
+                    <span className="block text-2xl font-black text-slate-900 leading-none font-mono">
                       ₹{finalGrandTotal}
                     </span>
                   </div>
@@ -1865,10 +1958,10 @@ export default function CartCheckout({ onViewChange }) {
             </div>
 
             {/* Promo & Campaign Coupon Section */}
-            <div className="bg-white/5 backdrop-blur-md border border-white/10 p-5 rounded-2xl shadow-lg space-y-4 text-white">
-              <div className="flex items-center gap-2 text-cyan-400">
+            <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm space-y-4 text-slate-900">
+              <div className="flex items-center gap-2 text-emerald-700">
                 <Ticket className="h-4 w-4" />
-                <h3 className="font-bold text-xs uppercase tracking-wider text-slate-200">
+                <h3 className="font-extrabold text-xs uppercase tracking-wider text-slate-800">
                   {language === 'hi' ? 'विशेष ऑफर और कूपन' : 'Offers & Coupons'}
                 </h3>
               </div>
@@ -1879,9 +1972,12 @@ export default function CartCheckout({ onViewChange }) {
                   <input
                     type="text"
                     value={couponCodeField}
-                    onChange={(e) => setCouponCodeField(e.target.value)}
+                    onChange={(e) => {
+                      setCouponCodeField(e.target.value);
+                      if (couponError) setCouponError('');
+                    }}
                     placeholder={language === 'hi' ? 'कूपन कोड दर्ज करें' : 'Enter Coupon Code'}
-                    className="w-full bg-black/20 border border-white/10 px-3 py-2 rounded-xl text-xs font-mono tracking-wider focus:outline-none focus:border-cyan-400 placeholder:text-slate-500 text-white uppercase"
+                    className="w-full bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs font-mono tracking-wider focus:outline-none focus:border-emerald-500 placeholder:text-slate-400 text-slate-900 uppercase font-bold"
                   />
                   {appliedCoupon && (
                     <button
@@ -1889,8 +1985,9 @@ export default function CartCheckout({ onViewChange }) {
                       onClick={() => {
                         setAppliedCoupon(null);
                         setCouponCodeField('');
+                        setCouponError('');
                       }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-pink-400 hover:text-pink-350 text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 hover:bg-white/5 rounded"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-rose-600 hover:text-rose-700 text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 hover:bg-rose-50 rounded"
                     >
                       {language === 'hi' ? 'हटाएं' : 'Remove'}
                     </button>
@@ -1899,31 +1996,48 @@ export default function CartCheckout({ onViewChange }) {
                 <button
                   type="button"
                   onClick={handleApplyCoupon}
-                  className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs px-4 py-2 rounded-xl transition-all duration-200 active:scale-95 whitespace-nowrap shadow-[0_0_15px_rgba(34,211,238,0.2)]"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-4 py-2 rounded-xl transition-all duration-200 active:scale-95 whitespace-nowrap shadow-xs cursor-pointer"
                 >
                   {language === 'hi' ? 'लागू करें' : 'APPLY'}
                 </button>
               </div>
 
+              {/* Coupon Error Alert */}
+              {couponError && (
+                <div className="bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-3 text-xs font-bold flex items-start justify-between gap-2 shadow-xs">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+                    <span>{couponError}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCouponError('')}
+                    className="text-rose-400 hover:text-rose-600 font-black text-xs px-1 cursor-pointer shrink-0"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
               {/* Applied Coupon Info Alert */}
               {appliedCoupon && (
-                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 flex items-start gap-2.5">
-                  <span className="text-emerald-400 mt-0.5 shrink-0">✓</span>
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-start gap-2.5">
+                  <span className="text-emerald-700 mt-0.5 shrink-0 font-bold">✓</span>
                   <div className="flex-1">
                     <div className="flex justify-between items-center">
-                      <span className="font-mono text-xs font-black text-emerald-300">{appliedCoupon.code}</span>
-                      <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-full">
+                      <span className="font-mono text-xs font-black text-emerald-900">{appliedCoupon.code}</span>
+                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full">
                         {appliedCoupon.discountType === 'percentage' 
                           ? `${appliedCoupon.value}% OFF` 
                           : `₹${appliedCoupon.value} OFF`}
                       </span>
                     </div>
-                    <p className="text-[10px] text-slate-300 font-medium mt-1">
+                    <p className="text-[10px] text-slate-700 font-medium mt-1">
                       {language === 'hi' 
                         ? (appliedCoupon.descriptionHi || 'कूपन सफलतापूर्वक लागू किया गया!') 
                         : (appliedCoupon.descriptionEn || 'Coupon code applied successfully!')}
                     </p>
-                    <p className="text-[9px] text-emerald-400 font-bold mt-1">
+                    <p className="text-[9px] text-emerald-800 font-extrabold mt-1">
                       {language === 'hi' ? 'आपकी कुल ₹' : 'You save ₹'}{couponDiscount} {language === 'hi' ? 'बची!' : 'with this coupon!'}
                     </p>
                   </div>
@@ -1932,56 +2046,99 @@ export default function CartCheckout({ onViewChange }) {
 
               {/* Available Coupons list */}
               {offers && offers.length > 0 && (
-                <div className="space-y-2 pt-1 border-t border-white/5">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                <div className="space-y-2 pt-1 border-t border-slate-200">
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">
                     {language === 'hi' ? 'उपलब्ध कूपन' : 'Available Offers'}
                   </p>
-                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                  <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
                     {offers.map((coupon) => {
                       const isCurrentlyApplied = appliedCoupon?.code === coupon.code;
                       const needsMore = coupon.minOrder && subtotal < coupon.minOrder ? (coupon.minOrder - subtotal) : 0;
+                      const dateStatus = getCouponDateStatus(coupon);
+                      const limitStatus = checkCouponCustomerLimit(coupon);
+                      const isInvalid = !dateStatus.isValid || limitStatus.isLimitReached;
+
                       return (
                         <div
                           key={coupon.id}
                           onClick={() => {
                             setCouponCodeField(coupon.code);
+                            setCouponError('');
+                            if (!dateStatus.isValid) {
+                              const msg = language === 'hi' ? dateStatus.reasonHi : dateStatus.reasonEn;
+                              setCouponError(msg);
+                              return;
+                            }
+                            if (limitStatus.isLimitReached) {
+                              const msg = language === 'hi' ? limitStatus.reasonHi : limitStatus.reasonEn;
+                              setCouponError(msg);
+                              return;
+                            }
+                            if (needsMore > 0) {
+                              const msg = language === 'hi' 
+                                ? `कूपन '${coupon.code}' के लिए कार्ट में ₹${needsMore} का सामान और जोड़ें! (न्यूनतम ₹${coupon.minOrder})` 
+                                : `Add items worth ₹${needsMore} more to unlock '${coupon.code}'! (Min Order: ₹${coupon.minOrder})`;
+                              setCouponError(msg);
+                              return;
+                            }
                             setAppliedCoupon(coupon);
+                            setCouponError('');
                           }}
-                          className={`group p-2 flex justify-between items-center text-left transition-all duration-200 border rounded-xl cursor-pointer ${
+                          className={`group p-2.5 flex justify-between items-center text-left transition-all duration-200 border rounded-xl cursor-pointer ${
                             isCurrentlyApplied
-                              ? 'bg-emerald-500/10 border-emerald-500/40 text-white shadow-[0_0_15px_rgba(16,185,129,0.1)]'
-                              : 'bg-white/5 border-white/10 hover:bg-white/10 text-slate-200 hover:border-cyan-500/30'
+                              ? 'bg-emerald-50 border-emerald-400 text-slate-900 shadow-xs'
+                              : isInvalid
+                              ? 'bg-slate-50 border-rose-200 opacity-75 hover:bg-slate-100'
+                              : 'bg-slate-50/80 border-slate-200 hover:bg-slate-100 hover:border-emerald-300 text-slate-800'
                           }`}
                         >
-                          <div className="space-y-0.5 flex-1 pr-2">
+                          <div className="space-y-1 flex-1 pr-2">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className={`font-mono text-[11px] font-black tracking-wide ${
+                              <span className={`font-mono text-xs font-black tracking-wide ${
                                 isCurrentlyApplied 
-                                  ? 'text-emerald-300' 
-                                  : 'text-cyan-300 group-hover:text-cyan-200'
+                                  ? 'text-emerald-700' 
+                                  : isInvalid
+                                  ? 'text-rose-500 line-through'
+                                  : 'text-emerald-700 group-hover:text-emerald-800'
                               }`}>
                                 {coupon.code}
                               </span>
                               {coupon.minOrder > 0 && (
-                                <span className="text-[8px] font-bold px-1.5 py-0.2 rounded text-slate-300 bg-white/10">
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded text-slate-600 bg-slate-200">
                                   Min: ₹{coupon.minOrder}
                                 </span>
                               )}
+                              {(coupon.startDate || coupon.endDate) && (
+                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                                  !dateStatus.isValid ? 'bg-rose-100 text-rose-700 border border-rose-200' : 'bg-slate-200 text-slate-700'
+                                }`}>
+                                  📅 {dateStatus.isExpired ? (language === 'hi' ? 'समाप्त' : 'Expired') : dateStatus.isUpcoming ? (language === 'hi' ? `मान्य: ${coupon.startDate}` : `Starts: ${coupon.startDate}`) : (coupon.endDate ? `Till: ${coupon.endDate}` : `From: ${coupon.startDate}`)}
+                                </span>
+                              )}
+                              {coupon.maxUsesPerCustomer > 0 && (
+                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                                  limitStatus.isLimitReached ? 'bg-rose-100 text-rose-700 border border-rose-200' : 'bg-amber-100 text-amber-800 border border-amber-200'
+                                }`}>
+                                  👤 {limitStatus.isLimitReached ? (language === 'hi' ? 'सीमा समाप्त' : 'Limit Reached') : (language === 'hi' ? `सीमा: ${coupon.maxUsesPerCustomer} बार` : `Max: ${coupon.maxUsesPerCustomer} use(s)`)}
+                                </span>
+                              )}
                               {needsMore > 0 && (
-                                <span className="text-[8px] font-bold px-1.5 py-0.2 rounded text-amber-300 bg-amber-500/10 border border-amber-500/20">
+                                <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full text-amber-900 bg-amber-100 border border-amber-300">
                                   {language === 'hi' ? `+₹${needsMore} और जोड़ें` : `Add +₹${needsMore} more`}
                                 </span>
                               )}
                             </div>
-                            <p className="text-[9px] font-medium leading-tight text-slate-400">
+                            <p className="text-[10px] font-medium leading-tight text-slate-600">
                               {language === 'hi' ? coupon.descriptionHi : coupon.descriptionEn}
                             </p>
                           </div>
                           <div className="text-right shrink-0">
-                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-lg ${
+                            <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-lg shadow-2xs ${
                               isCurrentlyApplied
-                                ? 'bg-emerald-500/20 text-emerald-300'
-                                : 'bg-cyan-500/10 text-cyan-300 group-hover:bg-cyan-500/20'
+                                ? 'bg-emerald-600 text-white'
+                                : isInvalid
+                                ? 'bg-rose-100 text-rose-600'
+                                : 'bg-emerald-100 text-emerald-800 border border-emerald-200 group-hover:bg-emerald-200'
                             }`}>
                               {coupon.discountType === 'percentage' ? `${coupon.value}% OFF` : `₹${coupon.value} OFF`}
                             </span>
@@ -1995,12 +2152,12 @@ export default function CartCheckout({ onViewChange }) {
             </div>
 
             {/* Payment Method Selector */}
-            <div className="bg-white/5 backdrop-blur-md border border-white/10 p-5 rounded-2xl shadow-lg space-y-4 text-white">
+            <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm space-y-4 text-slate-900">
               <div className="flex items-center justify-between">
-                <h3 className="font-bold text-xs uppercase tracking-wider text-slate-200">
+                <h3 className="font-extrabold text-xs uppercase tracking-wider text-slate-800">
                   {t('paymentMethod')}
                 </h3>
-                <span className="text-[9px] bg-cyan-500/20 text-cyan-300 font-extrabold px-2 py-0.5 rounded border border-cyan-500/30 uppercase tracking-widest">
+                <span className="text-[9px] bg-emerald-100 text-emerald-800 font-extrabold px-2 py-0.5 rounded border border-emerald-200 uppercase tracking-widest">
                   Secure Checkout
                 </span>
               </div>
@@ -2010,8 +2167,8 @@ export default function CartCheckout({ onViewChange }) {
                 <label 
                   className={`flex items-center gap-3 p-3.5 border rounded-xl cursor-pointer transition-all duration-200 ${
                     paymentMethod === 'cod' 
-                      ? 'border-cyan-400/50 bg-white/10 shadow-[0_0_15px_rgba(34,211,238,0.05)]' 
-                      : 'border-white/10 hover:bg-white/5'
+                      ? 'border-emerald-500 bg-emerald-50 shadow-xs' 
+                      : 'border-slate-200 hover:bg-slate-50'
                   }`}
                 >
                   <input 
@@ -2021,21 +2178,21 @@ export default function CartCheckout({ onViewChange }) {
                     onChange={() => setPaymentMethod('cod')}
                     className="hidden"
                   />
-                  <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/15 flex items-center justify-center text-cyan-400 shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
                     <Smartphone className="h-4 w-4" />
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-white">
+                    <p className="text-xs font-bold text-slate-900">
                       {language === 'hi' ? 'नकद भुगतान (COD)' : 'Cash On Delivery (COD)'}
                     </p>
-                    <p className="text-[10px] text-slate-400 font-medium">
+                    <p className="text-[10px] text-slate-500 font-medium">
                       {language === 'hi' ? 'सामान मिलने पर नकद या UPI द्वारा भुगतान करें' : 'Pay via cash/UPI during physical delivery'}
                     </p>
                   </div>
                   <div className={`ml-auto w-4 h-4 rounded-full border flex items-center justify-center ${
-                    paymentMethod === 'cod' ? 'border-cyan-400' : 'border-white/30'
+                    paymentMethod === 'cod' ? 'border-emerald-600' : 'border-slate-300'
                   }`}>
-                    {paymentMethod === 'cod' && <div className="w-2.5 h-2.5 bg-cyan-400 rounded-full" />}
+                    {paymentMethod === 'cod' && <div className="w-2.5 h-2.5 bg-emerald-600 rounded-full" />}
                   </div>
                 </label>
 
@@ -2044,8 +2201,8 @@ export default function CartCheckout({ onViewChange }) {
                   <label 
                     className={`flex items-center gap-3 p-3.5 border rounded-xl cursor-pointer transition-all duration-200 ${
                       paymentMethod === 'razorpay' 
-                        ? 'border-cyan-400/50 bg-cyan-500/10 shadow-[0_0_15px_rgba(34,211,238,0.15)]' 
-                        : 'border-white/10 hover:bg-white/5'
+                        ? 'border-emerald-500 bg-emerald-50 shadow-xs' 
+                        : 'border-slate-200 hover:bg-slate-50'
                     }`}
                   >
                     <input 
@@ -2055,24 +2212,24 @@ export default function CartCheckout({ onViewChange }) {
                       onChange={() => setPaymentMethod('razorpay')}
                       className="hidden"
                     />
-                    <div className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-400/30 flex items-center justify-center text-cyan-300 shrink-0">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
                       <CreditCard className="h-4 w-4" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <p className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                         <span>{language === 'hi' ? 'ऑनलाइन भुगतान (रेज़रपे - Razorpay)' : 'Online Payment (Razorpay)'}</span>
-                        <span className="text-[8px] px-1 bg-cyan-500/20 text-cyan-300 font-extrabold uppercase rounded border border-cyan-500/30">
+                        <span className="text-[8px] px-1 bg-emerald-100 text-emerald-800 font-extrabold uppercase rounded border border-emerald-300">
                           ⚡ Fast & Safe
                         </span>
                       </p>
-                      <p className="text-[10px] text-slate-400 font-medium truncate">
+                      <p className="text-[10px] text-slate-500 font-medium truncate">
                         {language === 'hi' ? 'UPI (PhonePe, GPay, Paytm), डेबिट/क्रेडिट कार्ड, नेटबैंकिंग' : 'UPI (PhonePe, GPay), Cards, Netbanking & Wallets'}
                       </p>
                     </div>
                     <div className={`ml-auto w-4 h-4 rounded-full border flex items-center justify-center ${
-                      paymentMethod === 'razorpay' ? 'border-cyan-400' : 'border-white/30'
+                      paymentMethod === 'razorpay' ? 'border-emerald-600' : 'border-slate-300'
                     }`}>
-                      {paymentMethod === 'razorpay' && <div className="w-2.5 h-2.5 bg-cyan-400 rounded-full" />}
+                      {paymentMethod === 'razorpay' && <div className="w-2.5 h-2.5 bg-emerald-600 rounded-full" />}
                     </div>
                   </label>
                 )}
@@ -2082,8 +2239,8 @@ export default function CartCheckout({ onViewChange }) {
                   <label 
                     className={`flex items-center gap-3 p-3.5 border rounded-xl cursor-pointer transition-all duration-200 ${
                       paymentMethod === 'cashfree' 
-                        ? 'border-emerald-400/50 bg-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.15)]' 
-                        : 'border-white/10 hover:bg-white/5'
+                        ? 'border-emerald-500 bg-emerald-50 shadow-xs' 
+                        : 'border-slate-200 hover:bg-slate-50'
                     }`}
                   >
                     <input 
@@ -2093,31 +2250,31 @@ export default function CartCheckout({ onViewChange }) {
                       onChange={() => setPaymentMethod('cashfree')}
                       className="hidden"
                     />
-                    <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
                       <CreditCard className="h-4 w-4" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <p className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                         <span>{language === 'hi' ? 'ऑनलाइन भुगतान (कैशफ्री गेटवे)' : 'Online Payment (Cashfree)'}</span>
                       </p>
-                      <p className="text-[10px] text-slate-400 font-medium truncate">
+                      <p className="text-[10px] text-slate-500 font-medium truncate">
                         {language === 'hi' ? 'UPI, रुपे, कार्ड एवं नेटबैंकिंग द्वारा सुरक्षित भुगतान।' : 'UPI, RuPay, All Cards & Netbanking'}
                       </p>
                     </div>
                     <div className={`ml-auto w-4 h-4 rounded-full border flex items-center justify-center ${
-                      paymentMethod === 'cashfree' ? 'border-emerald-400' : 'border-white/30'
+                      paymentMethod === 'cashfree' ? 'border-emerald-600' : 'border-slate-300'
                     }`}>
-                      {paymentMethod === 'cashfree' && <div className="w-2.5 h-2.5 bg-emerald-400 rounded-full" />}
+                      {paymentMethod === 'cashfree' && <div className="w-2.5 h-2.5 bg-emerald-600 rounded-full" />}
                     </div>
                   </label>
                 )}
               </div>
 
               {/* MANDATORY COMPLIANCES: Return, Refund & Cancellation Policy Banner */}
-              <div className="pt-3 border-t border-white/10 space-y-3">
-                <div className="bg-white/5 p-3.5 rounded-xl border border-white/10 text-[11px] leading-relaxed text-slate-300 space-y-2">
-                  <p className="font-extrabold text-[10px] uppercase text-cyan-400 tracking-wider flex items-center gap-1">
-                    <ShieldCheck className="h-4 w-4 shrink-0 text-cyan-400" />
+              <div className="pt-3 border-t border-slate-200 space-y-3">
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-[11px] leading-relaxed text-slate-700 space-y-2">
+                  <p className="font-extrabold text-[10px] uppercase text-emerald-800 tracking-wider flex items-center gap-1">
+                    <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-700" />
                     <span>{language === 'hi' ? 'वापसी एवं रिफंड नीति' : 'Refund & Returns Policy Accordance'}</span>
                   </p>
                   <p>
@@ -2130,8 +2287,8 @@ export default function CartCheckout({ onViewChange }) {
 
               {/* Checkout Error Banner */}
               {checkoutError && (
-                <div className="p-3.5 bg-red-500/15 border border-red-500/30 rounded-xl text-red-200 text-xs font-semibold leading-relaxed flex items-start gap-2.5 shadow-md">
-                  <AlertCircle className="h-4.5 w-4.5 text-red-400 shrink-0 mt-0.5" />
+                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-semibold leading-relaxed flex items-start gap-2.5 shadow-xs">
+                  <AlertCircle className="h-4.5 w-4.5 text-rose-600 shrink-0 mt-0.5" />
                   <span>{checkoutError}</span>
                 </div>
               )}
@@ -2140,10 +2297,10 @@ export default function CartCheckout({ onViewChange }) {
               <button 
                 onClick={handlePlaceOrder}
                 disabled={isPlacing}
-                className={`w-full font-black rounded-xl py-4 text-sm uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                className={`w-full font-extrabold rounded-xl py-4 text-sm uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                   !isLoggedIn
-                    ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-pink-500/20 hover:brightness-110'
-                    : 'bg-gradient-to-r from-cyan-400 to-cyan-500 text-slate-950 shadow-cyan-400/20 hover:brightness-110 active:scale-98'
+                    ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-98'
                 }`}
                 id="place-order-nav-btn"
               >
@@ -2162,18 +2319,18 @@ export default function CartCheckout({ onViewChange }) {
                 <ArrowRight className="h-4 w-4 stroke-[3]" />
               </button>
 
-              <p className="text-[10px] text-center text-slate-400 leading-relaxed px-2">
+              <p className="text-[10px] text-center text-slate-500 leading-relaxed px-2 font-medium">
                 {t('termsAgree')}
               </p>
             </div>
 
 
             {/* Secure Badging elements */}
-            <div className="bg-pink-500/10 p-4 rounded-xl flex items-center gap-3 border border-pink-500/20 text-pink-300">
-              <ShieldCheck className="h-6 w-6 text-pink-400 shrink-0 animate-pulse" />
+            <div className="bg-emerald-50 p-4 rounded-xl flex items-center gap-3 border border-emerald-200 text-emerald-900">
+              <ShieldCheck className="h-6 w-6 text-emerald-600 shrink-0" />
               <div>
-                <p className="font-bold text-xs text-white">{t('secureCheckoutTitle')}</p>
-                <p className="text-[10px] text-slate-300 opacity-85 leading-tight">{t('secureCheckoutDesc')}</p>
+                <p className="font-extrabold text-xs text-slate-900">{t('secureCheckoutTitle')}</p>
+                <p className="text-[10px] text-slate-600 leading-tight font-medium">{t('secureCheckoutDesc')}</p>
               </div>
             </div>
 

@@ -40,7 +40,9 @@ import {
   Menu,
   MapPin,
   Database,
-  CreditCard
+  CreditCard,
+  Bike,
+  Crown
 } from 'lucide-react';
 
 // Modular child subtab managers
@@ -58,6 +60,8 @@ import PaymentReports from './PaymentReports';
 import LocationGroupsManager from './LocationGroupsManager';
 import MargIntegration from './MargIntegration';
 import PaymentSettings from './PaymentSettings';
+import DeliveryDashboard from './DeliveryDashboard';
+import MembershipManager from './MembershipManager';
 import NotificationCenter from '../../components/NotificationCenter';
 
 export default function AdminDashboard({ onViewChange }) {
@@ -130,6 +134,42 @@ export default function AdminDashboard({ onViewChange }) {
   // 2. Multilevel menu tracker
   const [openMenuId, setOpenMenuId] = useState(null);
   const [isAdminMenuOpen, setIsAdminMenuOpen] = useState(false);
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const profileDropdownRef = React.useRef(null);
+  const [isBackupDownloading, setIsBackupDownloading] = useState(false);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target)) {
+        setIsProfileDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleQuickDbBackup = async () => {
+    setIsBackupDownloading(true);
+    try {
+      const res = await fetch('/api/database/backup');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(data, null, 2))}`;
+      const downloadAnchor = document.createElement('a');
+      const filename = `swastik_db_backup_${new Date().toISOString().split('T')[0]}.json`;
+      downloadAnchor.setAttribute("href", jsonString);
+      downloadAnchor.setAttribute("download", filename);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      alert('✅ Database Backup Downloaded Successfully!');
+    } catch (e) {
+      console.error("Backup error:", e);
+      alert(`❌ Database Backup Failed: ${e.message}`);
+    } finally {
+      setIsBackupDownloading(false);
+    }
+  };
 
   const toggleAdminTheme = () => {
     const nextVal = !isAdminDark;
@@ -145,15 +185,25 @@ export default function AdminDashboard({ onViewChange }) {
   const [editingStaffId, setEditingStaffId] = useState(null);
   const [newStaffStatus, setNewStaffStatus] = useState('enabled');
 
-  // Synchronize and clamp active tab when staff logging logs in or shifts roles
+  // Keep loggedInStaff synced with global staff directory updates (or auto-logout if suspended)
   useEffect(() => {
     if (loggedInStaff) {
-      const perms = loggedInStaff.permissions || [];
-      if (perms.length > 0 && !perms.includes(activeTab)) {
-        setActiveTab(perms[0]); // Defend routing leaks
+      const current = staff.find(s => s.id === loggedInStaff.id || s.mobile === loggedInStaff.mobile);
+      if (current) {
+        if (current.status === 'disabled') {
+          alert('Your staff workspace account has been suspended by Administrator.');
+          handleLogout();
+        } else if (
+          JSON.stringify(current.permissions) !== JSON.stringify(loggedInStaff.permissions) ||
+          current.name !== loggedInStaff.name ||
+          current.password !== loggedInStaff.password
+        ) {
+          setLoggedInStaff(current);
+          localStorage.setItem('swastik_logged_in_staff', JSON.stringify(current));
+        }
       }
     }
-  }, [loggedInStaff]);
+  }, [staff]);
 
   // Login Submission
   const handleLoginSubmit = (e) => {
@@ -171,7 +221,12 @@ export default function AdminDashboard({ onViewChange }) {
       }
       setLoggedInStaff(matched);
       localStorage.setItem('swastik_logged_in_staff', JSON.stringify(matched));
-      setUserRole(matched.permissions.includes('staff') ? 'admin' : 'manager');
+      const perms = matched.permissions || [];
+      const isSuper = matched.id === 1 || matched.mobile === '9999999999' || perms.includes('staff');
+      const isDeliveryOnly = perms.length === 1 && perms[0] === 'delivery';
+      const roleToSet = isDeliveryOnly ? 'delivery' : (isSuper ? 'admin' : 'manager');
+      setUserRole(roleToSet);
+      localStorage.setItem('swastik_user_role', roleToSet);
     } else {
       setLoginError('Invalid credentials. Access Denied.');
     }
@@ -472,8 +527,33 @@ export default function AdminDashboard({ onViewChange }) {
     );
   }
 
-  // Get active staff layout parameters
-  const authorizedTabs = loggedInStaff.permissions || [];
+  // Determine if active user has Super Admin clearance (Root Admin)
+  const isRootAdmin = Boolean(
+    !loggedInStaff ||
+    loggedInStaff.id === 1 ||
+    loggedInStaff.mobile === '9999999999' ||
+    loggedInStaff.role === 'admin' ||
+    (loggedInStaff.permissions && loggedInStaff.permissions.includes('staff'))
+  );
+
+  const allAdminTabs = ["dashboard", "products", "categories", "orders", "offers", "membership", "customers", "partners", "reviews", "pages", "staff", "delivery", "payment-reports", "sliders", "locations", "marg-billing", "payment-settings"];
+
+  const authorizedTabs = userRole === 'delivery'
+    ? ['delivery', 'payment-reports']
+    : (isRootAdmin
+        ? allAdminTabs
+        : (loggedInStaff?.permissions && loggedInStaff.permissions.length > 0
+            ? loggedInStaff.permissions
+            : allAdminTabs));
+
+  // Automatically clamp activeTab if current tab is unauthorized for logged in staff member
+  useEffect(() => {
+    if (loggedInStaff && !isRootAdmin) {
+      if (authorizedTabs.length > 0 && !authorizedTabs.includes(activeTab)) {
+        setActiveTab(authorizedTabs[0]);
+      }
+    }
+  }, [loggedInStaff, isRootAdmin, authorizedTabs, activeTab]);
 
   return (
     <div className={`min-h-screen font-sans selection:bg-cyan-500 selection:text-slate-900 pb-20 transition-colors duration-200 ${isAdminDark ? 'bg-slate-950 text-white admin-theme-dark' : 'bg-slate-50 text-slate-900 admin-theme-light'}`}>
@@ -484,25 +564,27 @@ export default function AdminDashboard({ onViewChange }) {
           background-color: #f8fafc !important;
           color: #0d1527 !important;
         }
-        .admin-theme-light .bg-slate-900 {
-          background-color: #ffffff !important;
-        }
-        .admin-theme-light .bg-slate-950 {
-          background-color: #f1f5f9 !important;
-        }
+        .admin-theme-light .bg-slate-900,
+        .admin-theme-light .bg-slate-950,
         .admin-theme-light .bg-slate-900\\/50,
-        .admin-theme-light .bg-slate-900\\/55,
         .admin-theme-light .bg-slate-900\\/60,
+        .admin-theme-light .bg-slate-900\\/80,
+        .admin-theme-light .bg-slate-900\\/90,
         .admin-theme-light .bg-slate-950\\/20,
+        .admin-theme-light .bg-slate-950\\/40,
         .admin-theme-light .bg-slate-950\\/60,
-        .admin-theme-light .bg-slate-950\\/80 {
-          background-color: #f1f5f9 !important;
+        .admin-theme-light .bg-slate-950\\/80,
+        .admin-theme-light .bg-slate-950\\/90 {
+          background-color: #ffffff !important;
+          color: #0f172a !important;
+          border-color: #cbd5e1 !important;
         }
-        .admin-theme-light .border-white\\/10,
         .admin-theme-light .border-white\\/5,
+        .admin-theme-light .border-white\\/8,
+        .admin-theme-light .border-white\\/10,
         .admin-theme-light .border-white\\/12,
         .admin-theme-light .border-white\\/20 {
-          border-color: #dee2e6 !important;
+          border-color: #e2e8f0 !important;
         }
         .admin-theme-light .text-white,
         .admin-theme-light .text-slate-100,
@@ -524,15 +606,15 @@ export default function AdminDashboard({ onViewChange }) {
         .admin-theme-light .text-white\\/50 {
           color: #334155 !important; /* Slate 700 */
         }
-        .admin-theme-light .text-slate-555,
         .admin-theme-light .text-slate-500,
         .admin-theme-light .text-white\\/40,
         .admin-theme-light .text-white\\/30 {
           color: #64748b !important; /* Slate 500 */
         }
-        .admin-theme-light .bg-white\\/5 {
-          background-color: #ffffff !important;
-          border-color: #dee2e6 !important;
+        .admin-theme-light .bg-white\\/5,
+        .admin-theme-light .bg-white\\/10 {
+          background-color: #f1f5f9 !important;
+          border-color: #e2e8f0 !important;
         }
         .admin-theme-light input,
         .admin-theme-light select,
@@ -551,23 +633,58 @@ export default function AdminDashboard({ onViewChange }) {
         .admin-theme-light tr:hover {
           background-color: #f1f5f9 !important;
         }
+        .admin-theme-light .text-cyan-100,
+        .admin-theme-light .text-cyan-200,
         .admin-theme-light .text-cyan-300,
         .admin-theme-light .text-cyan-400 {
           color: #0284c7 !important;
         }
-        .admin-theme-light .text-amber-400 {
-          color: #b45309 !important;
+        .admin-theme-light .bg-cyan-500\\/5,
+        .admin-theme-light .bg-cyan-500\\/10,
+        .admin-theme-light .bg-cyan-500\\/20 {
+          background-color: #e0f2fe !important;
+          color: #0369a1 !important;
+          border-color: #bae6fd !important;
         }
-        .admin-theme-light .text-emerald-450,
+        .admin-theme-light .text-emerald-300,
         .admin-theme-light .text-emerald-400 {
           color: #047857 !important;
         }
-        .admin-theme-light .bg-cyan-500\\/10 {
-          background-color: #e0f2fe !important;
-          color: #0369a1 !important;
+        .admin-theme-light .bg-emerald-500\\/10,
+        .admin-theme-light .bg-emerald-500\\/20 {
+          background-color: #ecfdf5 !important;
+          color: #047857 !important;
+          border-color: #a7f3d0 !important;
         }
-        .admin-theme-light .bg-slate-950\\/60 {
-          background-color: #f1f5f9 !important;
+        .admin-theme-light .text-amber-300,
+        .admin-theme-light .text-amber-400 {
+          color: #b45309 !important;
+        }
+        .admin-theme-light .bg-amber-500\\/10,
+        .admin-theme-light .bg-amber-500\\/20 {
+          background-color: #fffbeb !important;
+          color: #b45309 !important;
+          border-color: #fde68a !important;
+        }
+        .admin-theme-light .text-pink-300,
+        .admin-theme-light .text-pink-400 {
+          color: #be185d !important;
+        }
+        .admin-theme-light .bg-pink-500\\/10,
+        .admin-theme-light .bg-pink-500\\/20 {
+          background-color: #fdf2f8 !important;
+          color: #be185d !important;
+          border-color: #fbcfe8 !important;
+        }
+        .admin-theme-light .text-indigo-300,
+        .admin-theme-light .text-indigo-400 {
+          color: #4338ca !important;
+        }
+        .admin-theme-light .bg-indigo-500\\/10,
+        .admin-theme-light .bg-indigo-500\\/20 {
+          background-color: #eef2ff !important;
+          color: #4338ca !important;
+          border-color: #c7d2fe !important;
         }
       `}</style>
       
@@ -584,7 +701,7 @@ export default function AdminDashboard({ onViewChange }) {
               </span>
               <div className="text-left font-bold uppercase tracking-wider">
                 <span className={`block font-black leading-none ${isAdminDark ? 'text-white' : 'text-slate-900'}`}>Swastik Operations Node</span>
-                <span className="text-[8px] text-slate-400 font-mono font-black">Authorized Section 34A • Noida Sec-15</span>
+                <span className="text-[8px] text-slate-400 font-mono font-black uppercase">Swastik Operations & Fulfillment HQ</span>
               </div>
             </div>
 
@@ -612,7 +729,7 @@ export default function AdminDashboard({ onViewChange }) {
               />
             )}
 
-            {/* Group 1: Overview Tab */}
+            {/* 1. Dashboard */}
             {authorizedTabs.includes('dashboard') && (
               <button
                 type="button"
@@ -621,74 +738,109 @@ export default function AdminDashboard({ onViewChange }) {
                   setOpenMenuId(null);
                   setIsAdminMenuOpen(false);
                 }}
-                className={`w-full lg:w-auto px-3 py-2 rounded-xl text-[10px] uppercase font-bold tracking-wider transition-all border flex items-center justify-between lg:justify-start gap-1.5 cursor-pointer ${
+                className={`w-full lg:w-auto px-3 py-2 rounded-xl text-[11px] font-bold transition-all border flex items-center justify-between lg:justify-start gap-1.5 cursor-pointer ${
                   activeTab === 'dashboard'
-                    ? 'bg-cyan-500/15 text-cyan-500 border-cyan-400/35 shadow-inner font-extrabold'
-                    : 'border-transparent hover:bg-slate-500/10 text-slate-400'
+                    ? (isAdminDark ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40 shadow-inner font-black' : 'bg-emerald-100 text-emerald-900 border-emerald-300 font-black')
+                    : (isAdminDark ? 'border-transparent text-slate-300 hover:text-white hover:bg-slate-800/60' : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100')
                 }`}
               >
-                <span className="flex items-center gap-1.5"><Activity className="h-4 w-4" /> {isHindi ? "डैशबोर्ड (Dashboard)" : "Dashboard / डैशबोर्ड"}</span>
+                <span className="flex items-center gap-1.5"><Activity className="h-4 w-4" /> {isHindi ? "डैशबोर्ड" : "Dashboard"}</span>
               </button>
             )}
 
-            {/* Group 2: Storefront Catalog */}
+            {/* 2. Customer Orders */}
+            {authorizedTabs.includes('orders') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('orders');
+                  setOpenMenuId(null);
+                  setIsAdminMenuOpen(false);
+                }}
+                className={`w-full lg:w-auto px-3 py-2 rounded-xl text-[11px] font-bold transition-all border flex items-center justify-between lg:justify-start gap-1.5 cursor-pointer ${
+                  activeTab === 'orders'
+                    ? (isAdminDark ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40 shadow-inner font-black' : 'bg-emerald-100 text-emerald-900 border-emerald-300 font-black')
+                    : (isAdminDark ? 'border-transparent text-slate-300 hover:text-white hover:bg-slate-800/60' : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100')
+                }`}
+              >
+                <span className="flex items-center gap-1.5"><Clock className="h-4 w-4" /> {isHindi ? "ऑर्डर सूची" : "Orders"}</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono font-extrabold ${isAdminDark ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-100 text-emerald-800'}`}>{orders.length}</span>
+              </button>
+            )}
+
+            {/* 3. Catalog & Products */}
             {['products', 'categories', 'sliders', 'offers'].some(t => authorizedTabs.includes(t)) && (
               <div className="relative w-full lg:w-auto z-40">
                 <button
                   type="button"
                   onClick={() => setOpenMenuId(openMenuId === 'catalog' ? null : 'catalog')}
-                  className={`w-full lg:w-auto px-3 py-2 rounded-xl text-[10px] uppercase font-bold tracking-wider transition-all border flex items-center justify-between lg:justify-start gap-1.5 cursor-pointer ${
+                  className={`w-full lg:w-auto px-3 py-2 rounded-xl text-[11px] font-bold transition-all border flex items-center justify-between lg:justify-start gap-1.5 cursor-pointer ${
                     ['products', 'categories', 'sliders', 'offers'].includes(activeTab)
-                      ? 'bg-cyan-500/15 text-cyan-500 border-cyan-400/35 shadow-inner font-extrabold'
-                      : 'border-transparent hover:bg-slate-500/10 text-slate-400'
+                      ? (isAdminDark ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40 shadow-inner font-black' : 'bg-emerald-100 text-emerald-900 border-emerald-300 font-black')
+                      : (isAdminDark ? 'border-transparent text-slate-300 hover:text-white hover:bg-slate-800/60' : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100')
                   }`}
                 >
-                  <span className="flex items-center gap-1.5"><Package className="h-4 w-4" /> {isHindi ? "कैटलॉग और दुकान" : "Catalog / कैटलॉग"}</span>
+                  <span className="flex items-center gap-1.5"><Package className="h-4 w-4" /> {isHindi ? "कैटलॉग सामान" : "Catalog & Store"}</span>
                   <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${openMenuId === 'catalog' ? 'rotate-180' : ''}`} />
                 </button>
                 {(openMenuId === 'catalog' || isAdminMenuOpen) && (
-                  <div className={`lg:absolute lg:left-0 lg:mt-2 lg:w-64 rounded-xl p-1.5 shadow-2xl z-50 space-y-1 text-xs border ${
+                  <div className={`lg:absolute lg:left-0 lg:mt-2 lg:w-60 rounded-xl p-1.5 shadow-xl z-50 space-y-1 text-xs border ${
                     isAdminMenuOpen ? 'w-full bg-slate-900/40 border-white/5 pl-4 mt-1' : (isAdminDark ? 'bg-slate-900 border-white/10' : 'bg-white border-slate-200')
                   }`}>
                     {authorizedTabs.includes('products') && (
                       <button
                         type="button"
                         onClick={() => { setActiveTab('products'); setOpenMenuId(null); setIsAdminMenuOpen(false); }}
-                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${activeTab === 'products' ? 'bg-cyan-500/20 text-cyan-500 font-extrabold' : 'hover:bg-slate-500/5 text-slate-400'}`}
+                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${
+                          activeTab === 'products'
+                            ? (isAdminDark ? 'bg-emerald-500/20 text-emerald-300 font-black' : 'bg-emerald-100 text-emerald-900 font-black')
+                            : (isAdminDark ? 'text-slate-300 hover:bg-slate-800/60 hover:text-white' : 'text-slate-700 hover:bg-slate-100')
+                        }`}
                       >
-                        <span className="flex items-center gap-2"><Package className="h-3.5 w-3.5 text-cyan-400" /> {isHindi ? "सामान और स्टॉक (Products)" : "Products & Stock / सामान"}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-950 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>{products.length}</span>
+                        <span className="flex items-center gap-2"><Package className="h-3.5 w-3.5 text-emerald-500" /> {isHindi ? "प्रोडक्ट्स (Products)" : "Products"}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>{products.length}</span>
                       </button>
                     )}
                     {authorizedTabs.includes('categories') && (
                       <button
                         type="button"
                         onClick={() => { setActiveTab('categories'); setOpenMenuId(null); setIsAdminMenuOpen(false); }}
-                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${activeTab === 'categories' ? 'bg-cyan-500/20 text-cyan-500 font-extrabold' : 'hover:bg-slate-500/5 text-slate-400'}`}
+                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${
+                          activeTab === 'categories'
+                            ? (isAdminDark ? 'bg-emerald-500/20 text-emerald-300 font-black' : 'bg-emerald-100 text-emerald-900 font-black')
+                            : (isAdminDark ? 'text-slate-300 hover:bg-slate-800/60 hover:text-white' : 'text-slate-700 hover:bg-slate-100')
+                        }`}
                       >
-                        <span className="flex items-center gap-2"><FolderOpen className="h-3.5 w-3.5 text-cyan-400" /> {isHindi ? "कैटेगरी (Categories)" : "Categories / कैटेगरी"}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-950 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>{categories.length}</span>
+                        <span className="flex items-center gap-2"><FolderOpen className="h-3.5 w-3.5 text-emerald-500" /> {isHindi ? "कैटेगरी (Categories)" : "Categories"}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>{categories.length}</span>
                       </button>
                     )}
-                    {(authorizedTabs.includes('pages') || authorizedTabs.includes('sliders')) && (
+                    {authorizedTabs.includes('sliders') && (
                       <button
                         type="button"
                         onClick={() => { setActiveTab('sliders'); setOpenMenuId(null); setIsAdminMenuOpen(false); }}
-                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${activeTab === 'sliders' ? 'bg-cyan-500/20 text-cyan-500 font-extrabold' : 'hover:bg-slate-500/5 text-slate-400'}`}
-                        id="nav-sliders-tab"
+                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${
+                          activeTab === 'sliders'
+                            ? (isAdminDark ? 'bg-emerald-500/20 text-emerald-300 font-black' : 'bg-emerald-100 text-emerald-900 font-black')
+                            : (isAdminDark ? 'text-slate-300 hover:bg-slate-800/60 hover:text-white' : 'text-slate-700 hover:bg-slate-100')
+                        }`}
                       >
-                        <span className="flex items-center gap-2"><Image className="h-3.5 w-3.5 text-cyan-400" /> {isHindi ? "होम बैनर फोटो (Banners)" : "Home Banners / होम बैनर"}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-950 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>{slides ? slides.length : 0}</span>
+                        <span className="flex items-center gap-2"><Image className="h-3.5 w-3.5 text-emerald-500" /> {isHindi ? "होम बैनर (Banners)" : "Banners"}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>{slides ? slides.length : 0}</span>
                       </button>
                     )}
                     {authorizedTabs.includes('offers') && (
                       <button
                         type="button"
                         onClick={() => { setActiveTab('offers'); setOpenMenuId(null); setIsAdminMenuOpen(false); }}
-                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${activeTab === 'offers' ? 'bg-cyan-500/20 text-cyan-500 font-extrabold' : 'hover:bg-slate-500/5 text-slate-400'}`}
+                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${
+                          activeTab === 'offers'
+                            ? (isAdminDark ? 'bg-emerald-500/20 text-emerald-300 font-black' : 'bg-emerald-100 text-emerald-900 font-black')
+                            : (isAdminDark ? 'text-slate-300 hover:bg-slate-800/60 hover:text-white' : 'text-slate-700 hover:bg-slate-100')
+                        }`}
                       >
-                        <span className="flex items-center gap-2"><Tag className="h-3.5 w-3.5 text-cyan-400" /> {isHindi ? "ऑफर और कूपन (Offers)" : "Offers & Coupons / कूपन"}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-950 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>{offers.length}</span>
+                        <span className="flex items-center gap-2"><Tag className="h-3.5 w-3.5 text-emerald-500" /> {isHindi ? "ऑफ़र व कूपन (Offers)" : "Offers & Coupons"}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>{offers.length}</span>
                       </button>
                     )}
                   </div>
@@ -696,63 +848,65 @@ export default function AdminDashboard({ onViewChange }) {
               </div>
             )}
 
-            {/* Group 3: Operations & Logistics */}
-            {['orders', 'payment-reports', 'locations', 'partners'].some(t => authorizedTabs.includes(t) || (t === 'payment-reports' && authorizedTabs.includes('orders')) || (t === 'locations' && authorizedTabs.includes('offers'))) && (
+            {/* 4. Delivery & Logistics */}
+            {['delivery', 'locations', 'partners'].some(t => authorizedTabs.includes(t)) && (
               <div className="relative w-full lg:w-auto z-40">
                 <button
                   type="button"
                   onClick={() => setOpenMenuId(openMenuId === 'logistics' ? null : 'logistics')}
-                  className={`w-full lg:w-auto px-3 py-2 rounded-xl text-[10px] uppercase font-bold tracking-wider transition-all border flex items-center justify-between lg:justify-start gap-1.5 cursor-pointer ${
-                    ['orders', 'payment-reports', 'locations', 'partners'].includes(activeTab)
-                      ? 'bg-cyan-500/15 text-cyan-500 border-cyan-400/35 shadow-inner font-extrabold'
-                      : 'border-transparent hover:bg-slate-500/10 text-slate-300 hover:text-white'
+                  className={`w-full lg:w-auto px-3 py-2 rounded-xl text-[11px] font-bold transition-all border flex items-center justify-between lg:justify-start gap-1.5 cursor-pointer ${
+                    ['delivery', 'locations', 'partners'].includes(activeTab)
+                      ? (isAdminDark ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40 shadow-inner font-black' : 'bg-emerald-100 text-emerald-900 border-emerald-300 font-black')
+                      : (isAdminDark ? 'border-transparent text-slate-300 hover:text-white hover:bg-slate-800/60' : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100')
                   }`}
                 >
-                  <span className="flex items-center gap-1.5"><Clock className="h-4 w-4" /> {isHindi ? "ऑर्डर और डिलीवरी" : "Orders & Delivery / ऑर्डर"}</span>
+                  <span className="flex items-center gap-1.5"><Bike className="h-4 w-4 text-emerald-500" /> {isHindi ? "डिलीवरी प्रबंधन" : "Delivery"}</span>
                   <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${openMenuId === 'logistics' ? 'rotate-180' : ''}`} />
                 </button>
                 {(openMenuId === 'logistics' || isAdminMenuOpen) && (
-                  <div className={`lg:absolute lg:left-0 lg:mt-2 lg:w-64 rounded-xl p-1.5 shadow-2xl z-50 space-y-1 text-xs border ${
+                  <div className={`lg:absolute lg:left-0 lg:mt-2 lg:w-60 rounded-xl p-1.5 shadow-xl z-50 space-y-1 text-xs border ${
                     isAdminMenuOpen ? 'w-full bg-slate-900/40 border-white/5 pl-4 mt-1' : (isAdminDark ? 'bg-slate-900 border-white/10' : 'bg-white border-slate-200')
                   }`}>
-                    {authorizedTabs.includes('orders') && (
+                    {authorizedTabs.includes('delivery') && (
                       <button
                         type="button"
-                        onClick={() => { setActiveTab('orders'); setOpenMenuId(null); setIsAdminMenuOpen(false); }}
-                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${activeTab === 'orders' ? 'bg-cyan-500/20 text-cyan-500 font-extrabold' : 'hover:bg-slate-500/5 text-slate-400'}`}
+                        onClick={() => { setActiveTab('delivery'); setOpenMenuId(null); setIsAdminMenuOpen(false); }}
+                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${
+                          activeTab === 'delivery'
+                            ? (isAdminDark ? 'bg-emerald-500/20 text-emerald-300 font-black' : 'bg-emerald-100 text-emerald-900 font-black')
+                            : (isAdminDark ? 'text-slate-300 hover:bg-slate-800/60 hover:text-white' : 'text-slate-700 hover:bg-slate-100')
+                        }`}
                       >
-                        <span className="flex items-center gap-2"><Clock className="h-3.5 w-3.5 text-cyan-400" /> {isHindi ? "ऑर्डर लिस्ट (Orders)" : "Customer Orders / ऑर्डर"}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-950 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>{orders.length}</span>
+                        <span className="flex items-center gap-2"><Bike className="h-3.5 w-3.5 text-emerald-500" /> {isHindi ? "डिलीवरी डैशबोर्ड" : "Delivery Dashboard"}</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase bg-emerald-100 text-emerald-800">Live</span>
                       </button>
                     )}
-                    {authorizedTabs.includes('orders') && (
-                      <button
-                        type="button"
-                        onClick={() => { setActiveTab('payment-reports'); setOpenMenuId(null); setIsAdminMenuOpen(false); }}
-                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${activeTab === 'payment-reports' ? 'bg-cyan-500/20 text-cyan-500 font-extrabold' : 'hover:bg-slate-500/5 text-slate-400'}`}
-                      >
-                        <span className="flex items-center gap-2"><FileText className="h-3.5 w-3.5 text-cyan-400" /> {isHindi ? "पेमेंट रिपोर्ट (Payments)" : "Payment Reports / पेमेंट रिपोर्ट"}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-950 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>Ledger</span>
-                      </button>
-                    )}
-                    {authorizedTabs.includes('offers') && (
+                    {authorizedTabs.includes('locations') && (
                       <button
                         type="button"
                         onClick={() => { setActiveTab('locations'); setOpenMenuId(null); setIsAdminMenuOpen(false); }}
-                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${activeTab === 'locations' ? 'bg-cyan-500/20 text-cyan-500 font-extrabold' : 'hover:bg-slate-500/5 text-slate-400'}`}
+                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${
+                          activeTab === 'locations'
+                            ? (isAdminDark ? 'bg-emerald-500/20 text-emerald-300 font-black' : 'bg-emerald-100 text-emerald-900 font-black')
+                            : (isAdminDark ? 'text-slate-300 hover:bg-slate-800/60 hover:text-white' : 'text-slate-700 hover:bg-slate-100')
+                        }`}
                       >
-                        <span className="flex items-center gap-2"><MapPin className="h-3.5 w-3.5 text-cyan-400" /> {isHindi ? "डिलीवरी एरिया (Delivery Areas)" : "Delivery Areas / डिलीवरी एरिया"}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-950 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>{locationGroups ? locationGroups.length : 0}</span>
+                        <span className="flex items-center gap-2"><MapPin className="h-3.5 w-3.5 text-emerald-500" /> {isHindi ? "डिलीवरी एरिया" : "Delivery Areas"}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>{locationGroups ? locationGroups.length : 0}</span>
                       </button>
                     )}
                     {authorizedTabs.includes('partners') && (
                       <button
                         type="button"
                         onClick={() => { setActiveTab('partners'); setOpenMenuId(null); setIsAdminMenuOpen(false); }}
-                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${activeTab === 'partners' ? 'bg-cyan-500/20 text-cyan-500 font-extrabold' : 'hover:bg-slate-500/5 text-slate-400'}`}
+                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${
+                          activeTab === 'partners'
+                            ? (isAdminDark ? 'bg-emerald-500/20 text-emerald-300 font-black' : 'bg-emerald-100 text-emerald-900 font-black')
+                            : (isAdminDark ? 'text-slate-300 hover:bg-slate-800/60 hover:text-white' : 'text-slate-700 hover:bg-slate-100')
+                        }`}
                       >
-                        <span className="flex items-center gap-2"><Share2 className="h-3.5 w-3.5 text-cyan-400" /> {isHindi ? "डिलीवरी पार्टनर्स (Drivers)" : "Delivery Partners / पार्टनर्स"}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-950 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>{partners.length}</span>
+                        <span className="flex items-center gap-2"><Share2 className="h-3.5 w-3.5 text-emerald-500" /> {isHindi ? "स्टोर पार्टनर्स" : "Store Partners"}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>{partners.length}</span>
                       </button>
                     )}
                   </div>
@@ -760,43 +914,71 @@ export default function AdminDashboard({ onViewChange }) {
               </div>
             )}
 
-            {/* Group 4: Customers & Marketing */}
+            {/* 5. Direct VIP Membership Button */}
+            {authorizedTabs.includes('membership') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('membership');
+                  setOpenMenuId(null);
+                  setIsAdminMenuOpen(false);
+                }}
+                className={`w-full lg:w-auto px-3.5 py-2 rounded-xl text-[11px] font-black tracking-wider transition-all border flex items-center justify-between lg:justify-start gap-1.5 cursor-pointer ${
+                  activeTab === 'membership'
+                    ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-md font-black'
+                    : (isAdminDark ? 'border-amber-400/40 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25' : 'border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900')
+                }`}
+              >
+                <span className="flex items-center gap-1.5"><Crown className="h-4 w-4 text-amber-500 animate-pulse" /> {isHindi ? "वीआईपी मेम्बरशिप" : "VIP Membership"}</span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded font-black uppercase bg-amber-500 text-slate-950">VIP</span>
+              </button>
+            )}
+
+            {/* 6. Customers & Reviews */}
             {['customers', 'reviews'].some(t => authorizedTabs.includes(t)) && (
               <div className="relative w-full lg:w-auto z-40">
                 <button
                   type="button"
-                  onClick={() => setOpenMenuId(openMenuId === 'customers-marketing' ? null : 'customers-marketing')}
-                  className={`w-full lg:w-auto px-3 py-2 rounded-xl text-[10px] uppercase font-bold tracking-wider transition-all border flex items-center justify-between lg:justify-start gap-1.5 cursor-pointer ${
+                  onClick={() => setOpenMenuId(openMenuId === 'customers' ? null : 'customers')}
+                  className={`w-full lg:w-auto px-3 py-2 rounded-xl text-[11px] font-bold transition-all border flex items-center justify-between lg:justify-start gap-1.5 cursor-pointer ${
                     ['customers', 'reviews'].includes(activeTab)
-                      ? 'bg-cyan-500/15 text-cyan-500 border-cyan-400/35 shadow-inner font-extrabold'
-                      : 'border-transparent hover:bg-slate-500/10 text-slate-400'
+                      ? (isAdminDark ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40 shadow-inner font-black' : 'bg-emerald-100 text-emerald-900 border-emerald-300 font-black')
+                      : (isAdminDark ? 'border-transparent text-slate-300 hover:text-white hover:bg-slate-800/60' : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100')
                   }`}
                 >
-                  <span className="flex items-center gap-1.5"><Users className="h-4 w-4" /> {isHindi ? "ग्राहक और फीडबैक" : "Customers & CRM / ग्राहक"}</span>
-                  <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${openMenuId === 'customers-marketing' ? 'rotate-180' : ''}`} />
+                  <span className="flex items-center gap-1.5"><Users className="h-4 w-4" /> {isHindi ? "ग्राहक व समीक्षा" : "Customers"}</span>
+                  <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${openMenuId === 'customers' ? 'rotate-180' : ''}`} />
                 </button>
-                {(openMenuId === 'customers-marketing' || isAdminMenuOpen) && (
-                  <div className={`lg:absolute lg:left-0 lg:mt-2 lg:w-64 rounded-xl p-1.5 shadow-2xl z-50 space-y-1 text-xs border ${
+                {(openMenuId === 'customers' || isAdminMenuOpen) && (
+                  <div className={`lg:absolute lg:left-0 lg:mt-2 lg:w-60 rounded-xl p-1.5 shadow-xl z-50 space-y-1 text-xs border ${
                     isAdminMenuOpen ? 'w-full bg-slate-900/40 border-white/5 pl-4 mt-1' : (isAdminDark ? 'bg-slate-900 border-white/10' : 'bg-white border-slate-200')
                   }`}>
                     {authorizedTabs.includes('customers') && (
                       <button
                         type="button"
                         onClick={() => { setActiveTab('customers'); setOpenMenuId(null); setIsAdminMenuOpen(false); }}
-                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${activeTab === 'customers' ? 'bg-cyan-500/20 text-cyan-500 font-extrabold' : 'hover:bg-slate-500/5'}`}
+                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${
+                          activeTab === 'customers'
+                            ? (isAdminDark ? 'bg-emerald-500/20 text-emerald-300 font-black' : 'bg-emerald-100 text-emerald-900 font-black')
+                            : (isAdminDark ? 'text-slate-300 hover:bg-slate-800/60 hover:text-white' : 'text-slate-700 hover:bg-slate-100')
+                        }`}
                       >
-                        <span className="flex items-center gap-2"><Users className="h-3.5 w-3.5 text-cyan-400" /> {isHindi ? "व्हाट्सएप ब्रॉडकास्ट (WhatsApp)" : "WhatsApp Broadcast / व्हाट्सएप"}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-950 text-slate-350' : 'bg-slate-100 text-slate-500'}`}>CRM</span>
+                        <span className="flex items-center gap-2"><Users className="h-3.5 w-3.5 text-emerald-500" /> {isHindi ? "ग्राहक सूची (WhatsApp CRM)" : "Customers & WhatsApp"}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>CRM</span>
                       </button>
                     )}
                     {authorizedTabs.includes('reviews') && (
                       <button
                         type="button"
                         onClick={() => { setActiveTab('reviews'); setOpenMenuId(null); setIsAdminMenuOpen(false); }}
-                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${activeTab === 'reviews' ? 'bg-cyan-500/20 text-cyan-500 font-extrabold' : 'hover:bg-slate-500/5 text-slate-400'}`}
+                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${
+                          activeTab === 'reviews'
+                            ? (isAdminDark ? 'bg-emerald-500/20 text-emerald-300 font-black' : 'bg-emerald-100 text-emerald-900 font-black')
+                            : (isAdminDark ? 'text-slate-300 hover:bg-slate-800/60 hover:text-white' : 'text-slate-700 hover:bg-slate-100')
+                        }`}
                       >
-                        <span className="flex items-center gap-2"><MessageSquare className="h-3.5 w-3.5 text-cyan-400" /> {isHindi ? "कस्टमर रिव्यू (Reviews)" : "Customer Reviews / कस्टमर रिव्यू"}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-950 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>{reviews.length}</span>
+                        <span className="flex items-center gap-2"><MessageSquare className="h-3.5 w-3.5 text-emerald-500" /> {isHindi ? "कस्टमर समीक्षा (Reviews)" : "Customer Reviews"}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>{reviews.length}</span>
                       </button>
                     )}
                   </div>
@@ -804,63 +986,93 @@ export default function AdminDashboard({ onViewChange }) {
               </div>
             )}
 
-            {/* Group 5: Administration & Integrations */}
-            {['staff', 'marg-billing', 'pages'].some(t => authorizedTabs.includes(t) || (t === 'marg-billing' && authorizedTabs.includes('offers'))) && (
+            {/* 7. Settings & Integrations */}
+            {['staff', 'payment-settings', 'payment-reports', 'marg-billing', 'pages'].some(t => authorizedTabs.includes(t)) && (
               <div className="relative w-full lg:w-auto z-40">
                 <button
                   type="button"
                   onClick={() => setOpenMenuId(openMenuId === 'system-settings' ? null : 'system-settings')}
-                  className={`w-full lg:w-auto px-3 py-2 rounded-xl text-[10px] uppercase font-bold tracking-wider transition-all border flex items-center justify-between lg:justify-start gap-1.5 cursor-pointer ${
-                    ['staff', 'marg-billing', 'pages'].includes(activeTab)
-                      ? 'bg-cyan-500/15 text-cyan-500 border-cyan-400/35 shadow-inner'
-                      : 'border-transparent hover:bg-slate-500/10 text-slate-300 hover:text-white'
+                  className={`w-full lg:w-auto px-3 py-2 rounded-xl text-[11px] font-bold transition-all border flex items-center justify-between lg:justify-start gap-1.5 cursor-pointer ${
+                    ['staff', 'payment-settings', 'payment-reports', 'marg-billing', 'pages'].includes(activeTab)
+                      ? (isAdminDark ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40 shadow-inner font-black' : 'bg-emerald-100 text-emerald-900 border-emerald-300 font-black')
+                      : (isAdminDark ? 'border-transparent text-slate-300 hover:text-white hover:bg-slate-800/60' : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100')
                   }`}
                 >
-                  <span className="flex items-center gap-1.5"><Shield className="h-4 w-4" /> {isHindi ? "सेटिंग्स और स्टाफ" : "Settings & Staff / सेटिंग्स"}</span>
+                  <span className="flex items-center gap-1.5"><Shield className="h-4 w-4" /> {isHindi ? "सेटिंग्स" : "Settings"}</span>
                   <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${openMenuId === 'system-settings' ? 'rotate-180' : ''}`} />
                 </button>
                 {(openMenuId === 'system-settings' || isAdminMenuOpen) && (
-                  <div className={`lg:absolute lg:left-0 lg:mt-2 lg:w-64 rounded-xl p-1.5 shadow-2xl z-50 space-y-1 text-xs border ${
+                  <div className={`lg:absolute lg:left-0 lg:mt-2 lg:w-60 rounded-xl p-1.5 shadow-xl z-50 space-y-1 text-xs border ${
                     isAdminMenuOpen ? 'w-full bg-slate-900/40 border-white/5 pl-4 mt-1' : (isAdminDark ? 'bg-slate-900 border-white/10' : 'bg-white border-slate-200')
                   }`}>
                     {authorizedTabs.includes('staff') && (
                       <button
                         type="button"
                         onClick={() => { setActiveTab('staff'); setOpenMenuId(null); setIsAdminMenuOpen(false); }}
-                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${activeTab === 'staff' ? 'bg-cyan-500/20 text-cyan-500 font-extrabold' : 'hover:bg-slate-500/5 text-slate-400'}`}
+                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${
+                          activeTab === 'staff'
+                            ? (isAdminDark ? 'bg-emerald-500/20 text-emerald-300 font-black' : 'bg-emerald-100 text-emerald-900 font-black')
+                            : (isAdminDark ? 'text-slate-300 hover:bg-slate-800/60 hover:text-white' : 'text-slate-700 hover:bg-slate-100')
+                        }`}
                       >
-                        <span className="flex items-center gap-2"><UserCheck className="h-3.5 w-3.5 text-cyan-400" /> {isHindi ? "स्टाफ मेंबर्स (Manage Staff)" : "Manage Staff / स्टाफ मेंबर्स"}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-950 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>{staff.length}</span>
+                        <span className="flex items-center gap-2"><UserCheck className="h-3.5 w-3.5 text-emerald-500" /> {isHindi ? "स्टाफ मैनेजमेंट" : "Manage Staff"}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>{staff.length}</span>
                       </button>
                     )}
-                    {authorizedTabs.includes('staff') && (
+                    {authorizedTabs.includes('payment-settings') && (
                       <button
                         type="button"
                         onClick={() => { setActiveTab('payment-settings'); setOpenMenuId(null); setIsAdminMenuOpen(false); }}
-                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${activeTab === 'payment-settings' ? 'bg-cyan-500/20 text-cyan-500 font-extrabold' : 'hover:bg-slate-500/5 text-slate-400'}`}
+                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${
+                          activeTab === 'payment-settings'
+                            ? (isAdminDark ? 'bg-emerald-500/20 text-emerald-300 font-black' : 'bg-emerald-100 text-emerald-900 font-black')
+                            : (isAdminDark ? 'text-slate-300 hover:bg-slate-800/60 hover:text-white' : 'text-slate-700 hover:bg-slate-100')
+                        }`}
                       >
-                        <span className="flex items-center gap-2"><CreditCard className="h-3.5 w-3.5 text-cyan-400" /> {isHindi ? "भुगतान सेटिंग्स (Payment Settings)" : "Payment Gateway Settings / भुगतान सेटिंग्स"}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-950 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>CF PG</span>
+                        <span className="flex items-center gap-2"><CreditCard className="h-3.5 w-3.5 text-emerald-500" /> {isHindi ? "पेमेंट गेटवे सेटिंग्स" : "Payment Gateway"}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>Cashfree</span>
                       </button>
                     )}
-                    {authorizedTabs.includes('offers') && (
+                    {authorizedTabs.includes('payment-reports') && (
+                      <button
+                        type="button"
+                        onClick={() => { setActiveTab('payment-reports'); setOpenMenuId(null); setIsAdminMenuOpen(false); }}
+                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${
+                          activeTab === 'payment-reports'
+                            ? (isAdminDark ? 'bg-emerald-500/20 text-emerald-300 font-black' : 'bg-emerald-100 text-emerald-900 font-black')
+                            : (isAdminDark ? 'text-slate-300 hover:bg-slate-800/60 hover:text-white' : 'text-slate-700 hover:bg-slate-100')
+                        }`}
+                      >
+                        <span className="flex items-center gap-2"><FileText className="h-3.5 w-3.5 text-emerald-500" /> {isHindi ? "पेमेंट लेजर व रिपोर्ट" : "Payment Reports"}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>Ledger</span>
+                      </button>
+                    )}
+                    {authorizedTabs.includes('marg-billing') && (
                       <button
                         type="button"
                         onClick={() => { setActiveTab('marg-billing'); setOpenMenuId(null); setIsAdminMenuOpen(false); }}
-                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${activeTab === 'marg-billing' ? 'bg-cyan-500/20 text-cyan-500 font-extrabold' : 'hover:bg-slate-500/5 text-slate-400'}`}
+                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${
+                          activeTab === 'marg-billing'
+                            ? (isAdminDark ? 'bg-emerald-500/20 text-emerald-300 font-black' : 'bg-emerald-100 text-emerald-900 font-black')
+                            : (isAdminDark ? 'text-slate-300 hover:bg-slate-800/60 hover:text-white' : 'text-slate-700 hover:bg-slate-100')
+                        }`}
                       >
-                        <span className="flex items-center gap-2"><Database className="h-3.5 w-3.5 text-cyan-400" /> {isHindi ? "मार्ग बिलिंग (MARG ERP)" : "MARG ERP Billing / मार्ग बिलिंग"}</span>
-                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold uppercase font-sans">Active</span>
+                        <span className="flex items-center gap-2"><Database className="h-3.5 w-3.5 text-emerald-500" /> {isHindi ? "मार्ग बिलिंग" : "MARG ERP Billing"}</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold uppercase">Active</span>
                       </button>
                     )}
                     {authorizedTabs.includes('pages') && (
                       <button
                         type="button"
                         onClick={() => { setActiveTab('pages'); setOpenMenuId(null); setIsAdminMenuOpen(false); }}
-                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${activeTab === 'pages' ? 'bg-cyan-500/20 text-cyan-500 font-extrabold' : 'hover:bg-slate-500/5 text-slate-400'}`}
+                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${
+                          activeTab === 'pages'
+                            ? (isAdminDark ? 'bg-emerald-500/20 text-emerald-300 font-black' : 'bg-emerald-100 text-emerald-900 font-black')
+                            : (isAdminDark ? 'text-slate-300 hover:bg-slate-800/60 hover:text-white' : 'text-slate-700 hover:bg-slate-100')
+                        }`}
                       >
-                        <span className="flex items-center gap-2"><FileText className="h-3.5 w-3.5 text-cyan-400" /> {isHindi ? "कस्टम पेज (Custom Pages)" : "Custom Pages / कस्टम पेज"}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-950 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>Edit</span>
+                        <span className="flex items-center gap-2"><FileText className="h-3.5 w-3.5 text-emerald-500" /> {isHindi ? "स्टोर जानकारी व पेज" : "Store Pages & Info"}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>Info</span>
                       </button>
                     )}
                   </div>
@@ -870,73 +1082,214 @@ export default function AdminDashboard({ onViewChange }) {
 
           </div>
 
-          {/* C. Right Actions controllers & User profile */}
-          <div className="flex flex-wrap items-center gap-2 text-[10px]">
+          {/* C. Right Actions controllers & Encapsulated Profile Dropdown */}
+          <div className="flex items-center gap-2.5 text-[10px]">
             
             {/* Real-time Admin Notification Bell */}
-            <NotificationCenter role="admin" />
+            <NotificationCenter 
+              role={userRole === 'delivery' ? 'delivery' : (isRootAdmin ? 'admin' : (userRole || 'admin'))} 
+              phone={loggedInStaff?.mobile || ''} 
+            />
 
             {/* Go to Client Storefront */}
             {onViewChange && (
               <button 
                 type="button"
                 onClick={() => onViewChange('home')}
-                className="px-2.5 py-1.5 border border-emerald-500/10 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-[9px] uppercase font-black font-sans"
+                className={`px-3 py-1.5 border rounded-xl transition-all cursor-pointer flex items-center gap-1.5 text-[10px] font-bold ${
+                  isAdminDark 
+                    ? 'border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400' 
+                    : 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
+                }`}
                 title="Return to Retail Customer Store App"
               >
-                <Globe className="h-3 w-3" />
-                <span>Store</span>
+                <Globe className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline font-sans">{isHindi ? "ग्राहक स्टोर" : "Store Front"}</span>
               </button>
             )}
 
-            {/* Theme Toggle Switch */}
-            <button 
-              type="button"
-              onClick={toggleAdminTheme}
-              className={`p-1.5 rounded-xl border transition-all flex items-center gap-1 focus:outline-none ${isAdminDark ? 'bg-white/5 border-white/10 hover:bg-white/10 text-white' : 'bg-slate-100 border-slate-300 hover:bg-slate-200 text-slate-700'}`}
-              title="Toggle Light or Dark Mode Layout"
-            >
-              {isAdminDark ? (
-                <>
-                  <Sun className="h-3 w-3 text-amber-400" />
-                  <span className="hidden sm:inline">Light</span>
-                </>
-              ) : (
-                <>
-                  <Moon className="h-3 w-3 text-cyan-600" />
-                  <span className="hidden sm:inline">Dark</span>
-                </>
+            {/* Profile Avatar Capsule & Dropdown */}
+            <div className="relative" ref={profileDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
+                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-2xl border transition-all cursor-pointer active:scale-95 shadow-sm ${
+                  isAdminDark 
+                    ? 'bg-slate-900/90 border-slate-700/80 hover:bg-slate-800 text-white' 
+                    : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-800'
+                }`}
+              >
+                {/* User Avatar Circle */}
+                <div className={`h-6 w-6 rounded-full flex items-center justify-center font-black text-[11px] shrink-0 text-white shadow-sm ${
+                  isRootAdmin
+                    ? 'bg-gradient-to-tr from-cyan-600 to-emerald-500'
+                    : 'bg-gradient-to-tr from-indigo-600 to-purple-500'
+                }`}>
+                  {loggedInStaff?.name ? loggedInStaff.name.charAt(0).toUpperCase() : 'A'}
+                </div>
+
+                <div className="text-left hidden sm:block leading-tight">
+                  <div className={`font-black text-[11px] truncate max-w-[120px] ${isAdminDark ? 'text-slate-100' : 'text-slate-900'}`}>
+                    {loggedInStaff?.name || 'Administrator'}
+                  </div>
+                  <div className={`text-[8.5px] font-bold uppercase tracking-wider ${isRootAdmin ? 'text-cyan-500' : 'text-slate-400'}`}>
+                    {isRootAdmin ? 'Super Admin' : 'Staff'}
+                  </div>
+                </div>
+
+                <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform duration-200 ${isProfileDropdownOpen ? 'rotate-180 text-cyan-500' : ''}`} />
+              </button>
+
+              {/* Profile Dropdown Floating Menu */}
+              {isProfileDropdownOpen && (
+                <div className={`absolute right-0 mt-2 w-64 rounded-2xl border shadow-2xl z-50 p-2 space-y-1 animate-in fade-in zoom-in-95 duration-150 ${
+                  isAdminDark 
+                    ? 'bg-slate-900 border-slate-700/90 text-slate-200' 
+                    : 'bg-white border-slate-200 text-slate-800'
+                }`}>
+                  {/* User Details Header */}
+                  <div className={`p-3 rounded-xl ${isAdminDark ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-50 border-slate-200'} border space-y-2`}>
+                    <div className="flex items-center gap-2.5">
+                      <div className={`h-8 w-8 rounded-full flex items-center justify-center font-black text-xs text-white shrink-0 ${
+                        isRootAdmin ? 'bg-gradient-to-tr from-cyan-600 to-emerald-500' : 'bg-gradient-to-tr from-indigo-600 to-purple-500'
+                      }`}>
+                        {loggedInStaff?.name ? loggedInStaff.name.charAt(0).toUpperCase() : 'A'}
+                      </div>
+                      <div className="overflow-hidden">
+                        <div className={`font-black text-xs truncate ${isAdminDark ? 'text-white' : 'text-slate-900'}`}>
+                          {loggedInStaff?.name || 'Administrator'}
+                        </div>
+                        <div className="text-[10px] font-mono text-slate-400 truncate">
+                          {loggedInStaff?.mobile ? `+91 ${loggedInStaff.mobile}` : 'Master Node'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-1 border-t border-slate-500/10 flex items-center justify-between">
+                      <span className={`text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                        isRootAdmin 
+                          ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' 
+                          : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      }`}>
+                        {isRootAdmin ? 'SUPER ADMIN' : `OPERATOR (${authorizedTabs.length} MODULES)`}
+                      </span>
+                      <span className="text-[9px] font-mono text-emerald-400 font-bold flex items-center gap-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        ONLINE
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="py-1 space-y-0.5 text-[11px] font-semibold">
+                    {/* Theme Toggle Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        toggleAdminTheme();
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-xl transition-all flex items-center justify-between cursor-pointer ${
+                        isAdminDark ? 'hover:bg-slate-800 text-slate-200' : 'hover:bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        {isAdminDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-cyan-600" />}
+                        <span>{isAdminDark ? 'Switch to Light Theme' : 'Switch to Dark Theme'}</span>
+                      </span>
+                      <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded uppercase ${
+                        isAdminDark ? 'bg-slate-800 text-amber-300' : 'bg-slate-100 text-cyan-700'
+                      }`}>
+                        {isAdminDark ? 'DARK' : 'LIGHT'}
+                      </span>
+                    </button>
+
+                    {/* Change Security PIN / Passcode */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowChangePasswordModal(true);
+                        setIsProfileDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-xl transition-all flex items-center justify-between cursor-pointer ${
+                        isAdminDark ? 'hover:bg-slate-800 text-slate-200' : 'hover:bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Key className="h-4 w-4 text-cyan-500" />
+                        <span>Change Security PIN</span>
+                      </span>
+                      <span className="text-[9px] font-mono font-bold text-cyan-500 bg-cyan-500/10 px-1.5 py-0.5 rounded">
+                        PIN
+                      </span>
+                    </button>
+
+                    {/* Download DB Backup (Root Admin Only) */}
+                    {isRootAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleQuickDbBackup();
+                          setIsProfileDropdownOpen(false);
+                        }}
+                        disabled={isBackupDownloading}
+                        className={`w-full text-left px-3 py-2 rounded-xl transition-all flex items-center justify-between cursor-pointer ${
+                          isAdminDark ? 'hover:bg-slate-800 text-emerald-300' : 'hover:bg-slate-100 text-emerald-700'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <Database className="h-4 w-4 text-emerald-500" />
+                          <span>{isBackupDownloading ? 'Exporting Backup...' : 'Download DB Backup'}</span>
+                        </span>
+                        <span className="text-[9px] font-mono font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                          JSON
+                        </span>
+                      </button>
+                    )}
+
+                    {/* Visit Client Storefront */}
+                    {onViewChange && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onViewChange('home');
+                          setIsProfileDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 rounded-xl transition-all flex items-center justify-between cursor-pointer ${
+                          isAdminDark ? 'hover:bg-slate-800 text-slate-200' : 'hover:bg-slate-100 text-slate-700'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <Globe className="h-4 w-4 text-cyan-400" />
+                          <span>Customer Store Front</span>
+                        </span>
+                        <span className="text-[9px] font-mono font-bold text-slate-400">
+                          LIVE
+                        </span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="pt-1 border-t border-slate-500/10">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProfileDropdownOpen(false);
+                        handleLogout();
+                      }}
+                      className="w-full text-left px-3 py-2.5 rounded-xl transition-all flex items-center justify-between cursor-pointer bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold"
+                    >
+                      <span className="flex items-center gap-2">
+                        <LogOut className="h-4 w-4" />
+                        <span>Sign Out / Disconnect</span>
+                      </span>
+                      <span className="text-[9px] font-mono font-extrabold uppercase px-1.5 py-0.5 rounded bg-red-500/20 text-red-400">
+                        QUIT
+                      </span>
+                    </button>
+                  </div>
+                </div>
               )}
-            </button>
-
-            <span className="h-4 w-px bg-slate-500/20" />
-
-            {/* Profile detail */}
-            <div className="text-right hidden sm:block">
-              <span className={`font-black font-sans block ${isAdminDark ? 'text-cyan-300' : 'text-cyan-705'}`}>{loggedInStaff.name}</span>
             </div>
 
-            <button 
-              onClick={() => setShowChangePasswordModal(true)}
-              title="Change Passcode / PIN"
-              className={`p-1.5 border rounded-xl transition-all active:scale-95 cursor-pointer flex items-center gap-1 uppercase font-black ${
-                isAdminDark 
-                  ? 'bg-cyan-500/10 hover:bg-cyan-500/20 border-cyan-500/30 text-cyan-300' 
-                  : 'bg-cyan-50 hover:bg-cyan-100 border-cyan-200 text-cyan-700 font-sans'
-              }`}
-            >
-              <Key className="h-3 w-3" />
-              <span>PIN</span>
-            </button>
-
-            <button 
-              onClick={handleLogout}
-              title="Disconnect Administrative Gate"
-              className="p-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-500 rounded-xl transition-all active:scale-95 cursor-pointer flex items-center gap-1 uppercase font-black"
-            >
-              <LogOut className="h-3 w-3" />
-              <span>Quit</span>
-            </button>
           </div>
 
         </div>
@@ -964,7 +1317,7 @@ export default function AdminDashboard({ onViewChange }) {
             <Activity className="h-5 w-5 text-cyan-550 animate-pulse text-cyan-400" />
             <div className="text-[10px] font-bold uppercase text-slate-400 leading-tight">
               <span>ACTIVE ROLE:</span>
-              <span className={`block text-xs font-black ${isAdminDark ? 'text-emerald-400' : 'text-emerald-600'}`}>{loggedInStaff.permissions.includes('staff') ? 'SUPER ADMIN' : 'WORKSPACE OPERATOR'}</span>
+              <span className={`block text-xs font-black ${isAdminDark ? 'text-emerald-400' : 'text-emerald-600'}`}>{isRootAdmin ? 'SUPER ADMIN' : `WORKSPACE OPERATOR (${authorizedTabs.length} MODULES)`}</span>
             </div>
           </div>
         </div>
@@ -1206,12 +1559,19 @@ export default function AdminDashboard({ onViewChange }) {
             )}
 
             {activeTab === 'payment-reports' && (
-              <PaymentReports />
+              <PaymentReports userRole={userRole} loggedInStaff={loggedInStaff} />
             )}
 
             {activeTab === 'offers' && (
               <OffersManager
                 userRole={userRole}
+              />
+            )}
+
+            {activeTab === 'membership' && (
+              <MembershipManager
+                userRole={userRole}
+                isAdminDark={isAdminDark}
               />
             )}
 
@@ -1257,6 +1617,13 @@ export default function AdminDashboard({ onViewChange }) {
 
             {activeTab === 'payment-settings' && (
               <PaymentSettings isAdminDark={isAdminDark} />
+            )}
+
+            {activeTab === 'delivery' && (
+              <DeliveryDashboard 
+                userRole={userRole} 
+                onNavigateToReports={() => setActiveTab('payment-reports')}
+              />
             )}
 
             {/* Render Super-Admin specific Staff security gate tools (Requirement 8) */}
@@ -1347,20 +1714,27 @@ export default function AdminDashboard({ onViewChange }) {
 
                     {/* Checkbox Checklist of permissions (Requirement 8) */}
                     <div className="space-y-1.5 bg-slate-950 border border-white/10 p-4 rounded-2xl">
-                      <span className="text-[9px] font-black uppercase text-slate-400 block border-b border-white/5 pb-1">Define Clearances Checklist:</span>
+                      <span className="text-[9px] font-black uppercase text-slate-400 block border-b border-white/5 pb-1">Define Clearances Checklist (Covering All 17 Modules):</span>
                       
-                      <div className="grid grid-cols-2 gap-2 pt-2 text-[10px]">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 text-[10px]">
                         {[
-                          { key: 'dashboard', label: '📊 Dashboard Charts' },
+                          { key: 'dashboard', label: '📊 Dashboard Overview' },
+                          { key: 'orders', label: '🚚 Orders & Bills' },
                           { key: 'products', label: '📦 Products Catalog' },
-                          { key: 'categories', label: '🥦 Categories Manager' },
-                          { key: 'orders', label: '🚚 Orders & Receipt Bills' },
+                          { key: 'categories', label: '🥦 Categories' },
+                          { key: 'sliders', label: '🖼️ Banners & Sliders' },
                           { key: 'offers', label: '🏷️ Deals & Coupons' },
-                          { key: 'customers', label: '👥 Manage Customer' },
-                          { key: 'partners', label: '🧑‍🌾 Team & partners' },
+                          { key: 'delivery', label: '🛵 Delivery Dashboard' },
+                          { key: 'locations', label: '📍 Delivery Areas' },
+                          { key: 'partners', label: '🧑‍🌾 Store Partners' },
+                          { key: 'membership', label: '👑 VIP Membership' },
+                          { key: 'customers', label: '👥 Customer CRM' },
                           { key: 'reviews', label: '💬 Reviews Moderator' },
-                          { key: 'pages', label: '📄 Page Layouts Manager' },
-                          { key: 'staff', label: '⚠️ Staff Roles Editor' }
+                          { key: 'staff', label: '🛡️ Staff Roles Editor' },
+                          { key: 'payment-settings', label: '💳 Payment Gateway' },
+                          { key: 'payment-reports', label: '📄 Payment Ledger' },
+                          { key: 'marg-billing', label: '🗄️ MARG ERP Billing' },
+                          { key: 'pages', label: '📜 Store Pages & Info' }
                         ].map((pOpt) => {
                           const hasPerm = newStaffPerms.includes(pOpt.key);
                           return (

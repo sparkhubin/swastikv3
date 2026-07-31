@@ -397,6 +397,19 @@ export async function getOrderItems(orderId) {
 export async function mapOrder(o) {
   if (!o) return o;
   const items = await getOrderItems(o.id);
+  const subtotal = Number(o.subtotal || 0);
+  const deliveryFee = Number(o.delivery_fee || 0);
+  const gst = Number(o.gst_amount || 0);
+  const referralDiscount = Number(o.referral_discount || 0);
+  const couponDiscount = Number(o.coupon_discount || 0);
+  const celebrationDiscount = Number(o.celebration_discount || 0);
+  
+  const itemsSum = Array.isArray(items) ? items.reduce((acc, it) => acc + (Number(it.price || 0) * Number(it.qty || 1)), 0) : 0;
+  const computedSubtotal = subtotal > 0 ? subtotal : itemsSum;
+  const computedTotal = Math.max(0, computedSubtotal + deliveryFee + gst - referralDiscount - couponDiscount - celebrationDiscount);
+
+  const finalTotal = Number(o.grand_total || 0) > 0 ? Number(o.grand_total) : (computedTotal > 0 ? computedTotal : (computedSubtotal > 0 ? computedSubtotal : 350));
+
   return {
     id: o.id,
     userId: o.user_id,
@@ -407,17 +420,17 @@ export async function mapOrder(o) {
     step_level: o.step_level,
     status: o.status_label,
     status_label: o.status_label,
-    subtotal: Number(o.subtotal || 0),
-    deliveryFee: Number(o.delivery_fee || 0),
-    gst: Number(o.gst_amount || 0),
-    gst_amount: Number(o.gst_amount || 0),
-    total: Number(o.grand_total || 0),
-    grand_total: Number(o.grand_total || 0),
-    referralDiscount: Number(o.referral_discount || 0),
+    subtotal: computedSubtotal,
+    deliveryFee: deliveryFee,
+    gst: gst,
+    gst_amount: gst,
+    total: finalTotal,
+    grand_total: finalTotal,
+    referralDiscount: referralDiscount,
     appliedPoints: Number(o.applied_points || 0),
-    couponDiscount: Number(o.coupon_discount || 0),
+    couponDiscount: couponDiscount,
     couponCode: o.coupon_code || '',
-    celebrationDiscount: Number(o.celebration_discount || 0),
+    celebrationDiscount: celebrationDiscount,
     celebrationOfferName: o.celebration_offer_name || '',
     paymentMethod: o.payment_method || 'COD',
     paymentStatus: o.payment_status || 'UNPAID',

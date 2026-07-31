@@ -55,6 +55,7 @@ export default function OffersManager({ userRole }) {
   const [celebrationFeedback, setCelebrationFeedback] = useState('');
 
   // Prime VIP Membership Administration states
+  const [isMembershipEnabled, setIsMembershipEnabled] = useState(() => primeSettings?.isMembershipEnabled ?? true);
   const [primePlanFee, setPrimePlanFee] = useState(() => primeSettings?.primePlanFee ?? 299);
   const [pBen1En, setPBen1En] = useState(() => primeSettings?.primeBenefit1En ?? 'Free / Reduced Delivery');
   const [pBenDesc1En, setPBenDesc1En] = useState(() => primeSettings?.primeBenefitDesc1En ?? 'Maximum relief on all location groups');
@@ -76,6 +77,7 @@ export default function OffersManager({ userRole }) {
   const handleSavePrimeRules = (e) => {
     e.preventDefault();
     setPrimeSettings({
+      isMembershipEnabled,
       primePlanFee: Number(primePlanFee),
       primeBenefit1En: pBen1En,
       primeBenefitDesc1En: pBenDesc1En,
@@ -129,6 +131,9 @@ export default function OffersManager({ userRole }) {
     discountType: 'percentage',
     value: 10,
     minOrder: 199,
+    startDate: '',
+    endDate: '',
+    maxUsesPerCustomer: 1,
     banner: '',
     description: '',
     image: ''
@@ -141,6 +146,9 @@ export default function OffersManager({ userRole }) {
       discountType: 'percentage',
       value: 10,
       minOrder: 199,
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: '',
+      maxUsesPerCustomer: 1,
       banner: '',
       description: '',
       image: ''
@@ -155,6 +163,9 @@ export default function OffersManager({ userRole }) {
       discountType: item.discountType,
       value: item.value,
       minOrder: item.minOrder,
+      startDate: item.startDate || '',
+      endDate: item.endDate || '',
+      maxUsesPerCustomer: item.maxUsesPerCustomer ?? (item.maxUsesPerCustomer === 0 ? 0 : 1),
       banner: item.bannerEn || item.bannerHi || '',
       description: item.descriptionEn || item.descriptionHi || '',
       image: item.image || ''
@@ -177,6 +188,9 @@ export default function OffersManager({ userRole }) {
       discountType: formData.discountType,
       value: Number(formData.value),
       minOrder: Number(formData.minOrder),
+      startDate: formData.startDate || '',
+      endDate: formData.endDate || '',
+      maxUsesPerCustomer: formData.maxUsesPerCustomer !== '' ? Number(formData.maxUsesPerCustomer) : 0,
       bannerEn: formData.banner,
       bannerHi: formData.banner,
       descriptionEn: formData.description,
@@ -280,6 +294,16 @@ export default function OffersManager({ userRole }) {
                   <span>{off.bannerEn}</span>
                 </p>
                 <div className="text-[10px] text-slate-400 font-semibold">{off.descriptionEn}</div>
+                
+                {/* Validity Period & Usage Limit Badges */}
+                <div className="pt-2 flex flex-wrap gap-2 text-[10px]">
+                  <span className="px-2 py-0.5 bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 rounded-md font-mono flex items-center gap-1">
+                    📅 {off.startDate || off.endDate ? `${off.startDate || 'Anytime'} → ${off.endDate || 'No Expiry'}` : 'Always Active'}
+                  </span>
+                  <span className="px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 text-amber-300 rounded-md font-mono flex items-center gap-1">
+                    👤 {off.maxUsesPerCustomer && off.maxUsesPerCustomer > 0 ? `Limit: ${off.maxUsesPerCustomer} use(s) / customer` : 'Unlimited uses / customer'}
+                  </span>
+                </div>
               </div>
 
               {userRole !== 'customer' && (
@@ -533,127 +557,12 @@ export default function OffersManager({ userRole }) {
         </form>
       </div>
 
-      {/* Swastik Prime VIP Membership Settings Form (100% Dynamic configuration) */}
-      <div className="bg-slate-900/60 backdrop-blur-md border border-white/10 rounded-3xl p-6 space-y-5 text-white shadow-xl">
-        <div className="border-b border-white/5 pb-3">
-          <h3 className="text-sm font-black uppercase tracking-wider text-pink-400 flex items-center gap-2">
-            <Crown className="h-5 w-5 text-pink-400 animate-pulse" />
-            <span>{isHindi ? "स्वास्तिक प्राइम वीआईपी सदस्यता सेटिंग्स" : "Swastik Prime VIP Settings"}</span>
-          </h3>
-          <p className="text-[10px] text-zinc-400 font-semibold mt-1">
-            {isHindi 
-              ? "वार्षिक योजना शुल्क, विशिष्ट सुविधाओं और तीनों प्रमुख लाभ विवरणों को बदलें जो ग्राहकों के लिए डिजिटल मेंबरशिप पास और भुगतान पेज पर प्रदर्शित होंगे।" 
-              : "Dynamically customize the Prime Plan fee, benefits highlights, descriptions, and translations rendered on customer's Digital Gold passes and payment pages."}
-          </p>
-        </div>
 
-        {primeFeedback && (
-          <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 animate-pulse">
-            <span>✅</span>
-            <span>{primeFeedback}</span>
-          </div>
-        )}
-
-        <form onSubmit={handleSavePrimeRules} className="space-y-6">
-          <div className="bg-slate-950/30 p-4 rounded-2xl border border-white/5 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">{isHindi ? "प्राइम सदस्यता वार्षिक शुल्क (₹)" : "PRIME PLAN ANNUAL FEE (₹)"}</label>
-                <input 
-                  type="number"
-                  min="0"
-                  required
-                  value={primePlanFee}
-                  onChange={(e) => setPrimePlanFee(e.target.value)}
-                  className="px-3 py-2 bg-slate-950 border border-white/12 rounded-xl text-xs text-white outline-none focus:border-cyan-400 font-mono font-bold"
-                />
-              </div>
-              <div className="text-[10px] text-slate-400 flex items-center font-semibold italic">
-                {isHindi ? "💡 इसे अपडेट करने से तुरंत ग्राहक पेमेंट पेज और होमपेज कार्ड्स पर मूल्य बदल जाएगा।" : "💡 Updating this price automatically alters the billing amount on customer accounts dynamic fields."}
-              </div>
-            </div>
-
-            <div className="border-t border-white/5 pt-3 grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Benefit 1 */}
-              <div className="space-y-3 bg-slate-950/40 p-3 rounded-xl border border-white/5">
-                <span className="text-[10px] font-black text-cyan-300 uppercase block">Benefit #1 (Delivery Policy)</span>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[8px] font-bold text-slate-500 uppercase">Title (EN)</label>
-                  <input type="text" value={pBen1En} onChange={e => setPBen1En(e.target.value)} className="px-2.5 py-1.5 bg-slate-900 border border-white/10 rounded-lg text-[10px] text-white" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[8px] font-bold text-slate-500 uppercase">Description (EN)</label>
-                  <input type="text" value={pBenDesc1En} onChange={e => setPBenDesc1En(e.target.value)} className="px-2.5 py-1.5 bg-slate-900 border border-white/10 rounded-lg text-[10px] text-white" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[8px] font-bold text-slate-500 uppercase">शीर्षक (HI)</label>
-                  <input type="text" value={pBen1Hi} onChange={e => setPBen1Hi(e.target.value)} className="px-2.5 py-1.5 bg-slate-900 border border-white/10 rounded-lg text-[10px] text-white" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[8px] font-bold text-slate-500 uppercase">विवरण (HI)</label>
-                  <input type="text" value={pBenDesc1Hi} onChange={e => setPBenDesc1Hi(e.target.value)} className="px-2.5 py-1.5 bg-slate-900 border border-white/10 rounded-lg text-[10px] text-white" />
-                </div>
-              </div>
-
-              {/* Benefit 2 */}
-              <div className="space-y-3 bg-slate-950/40 p-3 rounded-xl border border-white/5">
-                <span className="text-[10px] font-black text-purple-400 uppercase block">Benefit #2 (Priority Dispatch)</span>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[8px] font-bold text-slate-500 uppercase">Title (EN)</label>
-                  <input type="text" value={pBen2En} onChange={e => setPBen2En(e.target.value)} className="px-2.5 py-1.5 bg-slate-900 border border-white/10 rounded-lg text-[10px] text-white" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[8px] font-bold text-slate-500 uppercase">Description (EN)</label>
-                  <input type="text" value={pBenDesc2En} onChange={e => setPBenDesc2En(e.target.value)} className="px-2.5 py-1.5 bg-slate-900 border border-white/10 rounded-lg text-[10px] text-white" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[8px] font-bold text-slate-500 uppercase">शीर्षक (HI)</label>
-                  <input type="text" value={pBen2Hi} onChange={e => setPBen2Hi(e.target.value)} className="px-2.5 py-1.5 bg-slate-900 border border-white/10 rounded-lg text-[10px] text-white" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[8px] font-bold text-slate-500 uppercase">विवरण (HI)</label>
-                  <input type="text" value={pBenDesc2Hi} onChange={e => setPBenDesc2Hi(e.target.value)} className="px-2.5 py-1.5 bg-slate-900 border border-white/10 rounded-lg text-[10px] text-white" />
-                </div>
-              </div>
-
-              {/* Benefit 3 */}
-              <div className="space-y-3 bg-slate-950/40 p-3 rounded-xl border border-white/5">
-                <span className="text-[10px] font-black text-amber-400 uppercase block">Benefit #3 (Bonus Multipliers)</span>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[8px] font-bold text-slate-500 uppercase">Title (EN)</label>
-                  <input type="text" value={pBen3En} onChange={e => setPBen3En(e.target.value)} className="px-2.5 py-1.5 bg-slate-900 border border-white/10 rounded-lg text-[10px] text-white" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[8px] font-bold text-slate-500 uppercase">Description (EN)</label>
-                  <input type="text" value={pBenDesc3En} onChange={e => setPBenDesc3En(e.target.value)} className="px-2.5 py-1.5 bg-slate-900 border border-white/10 rounded-lg text-[10px] text-white" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[8px] font-bold text-slate-500 uppercase">शीर्षक (HI)</label>
-                  <input type="text" value={pBen3Hi} onChange={e => setPBen3Hi(e.target.value)} className="px-2.5 py-1.5 bg-slate-900 border border-white/10 rounded-lg text-[10px] text-white" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[8px] font-bold text-slate-500 uppercase">विवरण (HI)</label>
-                  <input type="text" value={pBenDesc3Hi} onChange={e => setPBenDesc3Hi(e.target.value)} className="px-2.5 py-1.5 bg-slate-900 border border-white/10 rounded-lg text-[10px] text-white" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-end pt-1">
-            <button
-              type="submit"
-              className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 border border-indigo-500 text-white font-semibold text-xs uppercase tracking-wider rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
-            >
-              {isHindi ? "प्राइम सदस्यता विवरण अपडेट करें" : "Update Swastik Prime Configuration"}
-            </button>
-          </div>
-        </form>
-      </div>
 
       {/* Editor Modal overlay Box */}
       {editorModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
-          <div className="relative w-full max-w-md bg-slate-950 border border-white/12 rounded-3xl p-6 shadow-2xl space-y-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-fade-in overflow-y-auto">
+          <div className="relative w-full max-w-lg bg-slate-950 border border-white/12 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 my-auto max-h-[90vh] overflow-y-auto custom-scrollbar">
             
             <button
               onClick={handleCloseModal}
@@ -717,6 +626,51 @@ export default function OffersManager({ userRole }) {
                   onChange={(e) => setFormData({ ...formData, minOrder: e.target.value })}
                   className="w-full bg-slate-900 border border-white/10 rounded-xl px-3.5 py-1.5 text-xs text-white"
                 />
+              </div>
+
+              {/* Date Validity & Per Customer Limits */}
+              <div className="p-3 bg-slate-900/60 border border-white/10 rounded-2xl space-y-3">
+                <span className="text-[9px] font-black text-cyan-400 uppercase tracking-widest block flex items-center gap-1">
+                  <span>📅</span> Date Validity & Usage Limits
+                </span>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-slate-300 uppercase tracking-wider block">Valid From Date</label>
+                    <input 
+                      type="date"
+                      value={formData.startDate}
+                      onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white color-scheme-dark"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-slate-300 uppercase tracking-wider block">Valid Until Date (Expiry)</label>
+                    <input 
+                      type="date"
+                      value={formData.endDate}
+                      onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white color-scheme-dark"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-300 uppercase tracking-wider block">
+                    Max Uses Per Customer (0 = Unlimited)
+                  </label>
+                  <input 
+                    type="number"
+                    min="0"
+                    placeholder="e.g. 1 for single customer use"
+                    value={formData.maxUsesPerCustomer}
+                    onChange={(e) => setFormData({ ...formData, maxUsesPerCustomer: e.target.value })}
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white font-mono"
+                  />
+                  <span className="text-[9px] text-slate-400 italic block">
+                    Defines how many times a single customer can apply this coupon in separate orders.
+                  </span>
+                </div>
               </div>
 
               <div className="space-y-1">

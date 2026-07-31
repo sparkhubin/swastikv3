@@ -18,9 +18,12 @@ import {
   Edit2,
   Gavel,
   ShieldCheck,
-  Truck
+  RotateCcw,
+  Truck,
+  Users
 } from 'lucide-react';
 import R2ImageUploader from './R2ImageUploader';
+import PartnersManager from './PartnersManager';
 
 export default function PagesManager({ userRole }) {
   const { isHindi } = useLanguage();
@@ -38,7 +41,11 @@ export default function PagesManager({ userRole }) {
     termsSections,
     addTermsSection,
     updateTermsSection,
-    deleteTermsSection
+    deleteTermsSection,
+    refundSections,
+    addRefundSection,
+    updateRefundSection,
+    deleteRefundSection
   } = useData();
 
   // Internal active section: inbox | about | contact_coord
@@ -125,6 +132,11 @@ export default function PagesManager({ userRole }) {
   const [termsForm, setTermsForm] = useState({ titleEn: '', titleHi: '', descEn: '', descHi: '' });
   const [isAddingTerms, setIsAddingTerms] = useState(false);
 
+  // For Refund Policy Manager CRUD
+  const [editingRefundId, setEditingRefundId] = useState(null);
+  const [refundForm, setRefundForm] = useState({ titleEn: '', titleHi: '', descEn: '', descHi: '' });
+  const [isAddingRefund, setIsAddingRefund] = useState(false);
+
   const handlePrivacySubmit = (e) => {
     e.preventDefault();
     if (editingPrivacyId !== null) {
@@ -163,6 +175,26 @@ export default function PagesManager({ userRole }) {
     setEditingTermsId(sect.id);
     setTermsForm({ titleEn: sect.titleEn, titleHi: sect.titleHi, descEn: sect.descEn, descHi: sect.descHi });
     setIsAddingTerms(true);
+  };
+
+  const handleRefundSubmit = (e) => {
+    e.preventDefault();
+    if (editingRefundId !== null) {
+      updateRefundSection(editingRefundId, refundForm);
+      setEditingRefundId(null);
+      alert(isHindi ? "रिफ़ंड नीति नियम संशोधित हुआ!" : "Refund Policy clause updated successfully!");
+    } else {
+      addRefundSection(refundForm);
+      setIsAddingRefund(false);
+      alert(isHindi ? "नया रिफ़ंड नियम जोड़ा गया!" : "New Refund Policy section added successfully!");
+    }
+    setRefundForm({ titleEn: '', titleHi: '', descEn: '', descHi: '' });
+  };
+
+  const startEditRefund = (sect) => {
+    setEditingRefundId(sect.id);
+    setRefundForm({ titleEn: sect.titleEn, titleHi: sect.titleHi, descEn: sect.descEn, descHi: sect.descHi });
+    setIsAddingRefund(true);
   };
 
   // About update submit handler
@@ -213,7 +245,9 @@ export default function PagesManager({ userRole }) {
             { id: 'about', label: isHindi ? 'हमारे बारे में' : 'About Biographies', icon: Languages },
             { id: 'contact_coord', label: isHindi ? 'स्टोर व हेल्पलाइन' : 'Store & Helpline', icon: Settings },
             { id: 'privacy_manager', label: isHindi ? 'गोपनीयता' : 'Privacy policy', icon: ShieldCheck },
-            { id: 'terms_manager', label: isHindi ? 'नियम व शर्तें' : 'Terms of service', icon: Gavel }
+            { id: 'terms_manager', label: isHindi ? 'नियम व शर्तें' : 'Terms of service', icon: Gavel },
+            { id: 'refund_manager', label: isHindi ? 'रिफ़ंड नीति' : 'Refund policy', icon: RotateCcw },
+            { id: 'partners', label: isHindi ? 'निदेशक व निवेशक' : 'Investors & Directors', icon: Users }
           ].map((sec) => {
             const Icon = sec.icon;
             return (
@@ -685,75 +719,7 @@ export default function PagesManager({ userRole }) {
               />
             </div>
 
-            {/* Delivery Cost Tiers Configurator */}
-            <div className="bg-slate-900/60 p-4 rounded-xl border border-white/5 space-y-4 col-span-1 sm:col-span-2">
-              <div className="flex items-center gap-2 border-b border-white/10 pb-2">
-                <Truck className="h-4 w-4 text-cyan-400 animate-pulse" />
-                <h4 className="text-xs font-black text-white uppercase tracking-wider">
-                  {isHindi ? "वितरण शुल्क दर विन्यास" : "Delivery Charges Rate & Tier Configurator"}
-                </h4>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
-                {/* Under 2KM */}
-                <div>
-                  <label className="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1 font-semibold">
-                    {isHindi ? "2KM से कम का शुल्क (₹) *" : "Fee Under 2.0 KM (₹) *"}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    value={coordsForm.deliveryChargeNear}
-                    onChange={(e) => setCoordsForm({ ...coordsForm, deliveryChargeNear: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-400 font-mono"
-                  />
-                </div>
-
-                {/* 2KM to 5KM */}
-                <div>
-                  <label className="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1 font-semibold">
-                    {isHindi ? "2KM से 5KM तक (₹) *" : "Fee 2.0 to 5.0 KM (₹) *"}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    value={coordsForm.deliveryChargeMedium}
-                    onChange={(e) => setCoordsForm({ ...coordsForm, deliveryChargeMedium: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-400 font-mono"
-                  />
-                </div>
-
-                {/* 5KM to 10KM */}
-                <div>
-                  <label className="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1 font-semibold">
-                    {isHindi ? "5KM से 10KM तक (₹) *" : "Fee 5.0 to 10.0 KM (₹) *"}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    value={coordsForm.deliveryChargeFar}
-                    onChange={(e) => setCoordsForm({ ...coordsForm, deliveryChargeFar: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-400 font-mono"
-                  />
-                </div>
-
-                {/* Above 10KM */}
-                <div>
-                  <label className="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1 font-semibold">
-                    {isHindi ? "10KM से अधिक शुल्क (₹) *" : "Fee Above 10.0 KM (₹) *"}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    value={coordsForm.deliveryChargeOutlier}
-                    onChange={(e) => setCoordsForm({ ...coordsForm, deliveryChargeOutlier: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-400 font-mono"
-                  />
-                </div>
 
                 {/* Min Order for Free Delivery */}
                 <div className="sm:col-span-2">
@@ -774,8 +740,6 @@ export default function PagesManager({ userRole }) {
                   </span>
                 </div>
               </div>
-            </div>
-          </div>
 
           <div className="flex items-center justify-between pt-2">
             {userRole !== 'customer' ? (
@@ -1078,6 +1042,155 @@ export default function PagesManager({ userRole }) {
             ))}
           </div>
         </div>
+      )}
+
+      {/* RENDER TAB SECTION F: REFUND POLICY MANAGER */}
+      {panelSection === 'refund_manager' && (
+        <div className="space-y-6 animate-fade-in">
+          <div className="bg-slate-900/60 p-5 rounded-2xl border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                <RotateCcw className="h-4 w-4 text-emerald-400" />
+                <span>Dynamic Refund & Cancellation Policy Manager</span>
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Manage order cancellation rules, doorstep returns, and refund processing timelines. Changes automatically sync to the backend database.
+              </p>
+            </div>
+            {!isAddingRefund && editingRefundId === null && userRole !== 'customer' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingRefundId(null);
+                  setRefundForm({ titleEn: '', titleHi: '', descEn: '', descHi: '' });
+                  setIsAddingRefund(true);
+                }}
+                className="px-3 py-1.5 bg-emerald-500 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1 hover:bg-emerald-400 cursor-pointer transition-all animate-fade-in"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Add Refund Rule</span>
+              </button>
+            )}
+          </div>
+
+          {(isAddingRefund || editingRefundId !== null) && (
+            <form onSubmit={handleRefundSubmit} className="space-y-4 bg-slate-900/60 p-5 rounded-2xl border border-white/10 max-w-2xl animate-scale-in">
+              <h4 className="text-xs font-bold text-emerald-300 uppercase tracking-widest">
+                {editingRefundId !== null ? "Edit Refund Policy Clause" : "Create New Refund Policy Clause"}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Heading (English)</label>
+                  <input
+                    type="text"
+                    required
+                    value={refundForm.titleEn}
+                    onChange={(e) => setRefundForm({ ...refundForm, titleEn: e.target.value })}
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl p-2.5 text-xs text-white outline-none focus:border-emerald-400 font-sans"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Heading (Hindi)</label>
+                  <input
+                    type="text"
+                    required
+                    value={refundForm.titleHi}
+                    onChange={(e) => setRefundForm({ ...refundForm, titleHi: e.target.value })}
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl p-2.5 text-xs text-white outline-none focus:border-emerald-400 font-sans"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Content description (English)</label>
+                  <textarea
+                    rows="3"
+                    required
+                    value={refundForm.descEn}
+                    onChange={(e) => setRefundForm({ ...refundForm, descEn: e.target.value })}
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl p-2.5 text-xs text-white outline-none focus:border-emerald-400 font-sans resize-none"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Content description (Hindi)</label>
+                  <textarea
+                    rows="3"
+                    required
+                    value={refundForm.descHi}
+                    onChange={(e) => setRefundForm({ ...refundForm, descHi: e.target.value })}
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl p-2.5 text-xs text-white outline-none focus:border-emerald-400 font-sans resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingRefund(false);
+                    setEditingRefundId(null);
+                    setRefundForm({ titleEn: '', titleHi: '', descEn: '', descHi: '' });
+                  }}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold leading-none cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-lg text-xs font-bold leading-none cursor-pointer"
+                >
+                  Save Refund Clause
+                </button>
+              </div>
+            </form>
+          )}
+
+          <div className="space-y-3">
+            {(refundSections || []).map((sect) => (
+              <div key={sect.id} className="bg-white/5 border border-white/5 p-4 rounded-xl flex items-start justify-between gap-4 hover:bg-white/10 transition-all font-sans">
+                <div className="space-y-2">
+                  <div>
+                    <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded text-emerald-300 font-bold mr-2">EN</span>
+                    <span className="font-bold text-xs text-slate-200">{sect.titleEn}</span>
+                    <p className="text-xs text-slate-400 mt-1 pl-4 border-l border-white/10">{sect.descEn}</p>
+                  </div>
+                  <div className="pt-2 border-t border-white/5">
+                    <span className="text-[9px] bg-pink-500/10 border border-pink-500/20 px-2 py-0.5 rounded text-pink-300 font-bold mr-2">HI</span>
+                    <span className="font-bold text-xs text-slate-200">{sect.titleHi}</span>
+                    <p className="text-xs text-slate-400 mt-1 pl-4 border-l border-white/10">{sect.descHi}</p>
+                  </div>
+                </div>
+                {userRole !== 'customer' && (
+                  <div className="flex gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => startEditRefund(sect)}
+                      className="p-1.5 hover:bg-emerald-500/10 rounded-lg text-emerald-300 hover:text-emerald-200 transition-all cursor-pointer"
+                      title="Edit"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm("Are you sure you want to delete this refund rule?")) {
+                          deleteRefundSection(sect.id);
+                          alert("Deleted!");
+                        }
+                      }}
+                      className="p-1.5 hover:bg-red-500/10 rounded-lg text-red-400 hover:text-red-350 transition-all cursor-pointer"
+                      title="Delete"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {panelSection === 'partners' && (
+        <PartnersManager userRole={userRole} />
       )}
 
     </div>
