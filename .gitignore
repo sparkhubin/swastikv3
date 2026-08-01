@@ -20,5 +20,16 @@ swastik_local.db
 .vscode/
 .idea/
 
+# Capacitor
+android/
+ios/
+capacitor.config.ts
+capacitor.config.json
+
+# Android Studio
+.gradle/
+.idea/
+local.properties
+
+# Build outputs
 android/app/build/
-android/.gradle/
