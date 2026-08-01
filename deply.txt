@@ -1,0 +1,14 @@
+Local
+git add .
+git commit -m "New feature"
+git push origin master
+VPS
+cd /var/www/swastik
+
+git fetch origin
+git reset --hard origin/master
+
+npm install      # only if package.json changes
+npm run build
+
+pm2 restart swastik
