@@ -1099,19 +1099,22 @@ export default function CartCheckout({ onViewChange }) {
 
         setRazorpayOrderSession(data);
 
+        // Check if real live/test key was retrieved from Razorpay API
+        const hasRealKey = data.api_called && data.key_id && !data.simulated && !data.key_id.includes('mock');
+
         // Load Razorpay JS SDK if needed
         const isLoaded = await ensureRazorpayLoaded();
         setIsPlacing(false);
 
-        if (isLoaded && typeof window !== 'undefined' && window.Razorpay) {
+        if (hasRealKey && isLoaded && typeof window !== 'undefined' && window.Razorpay) {
           const options = {
-            key: data.key_id || gatewaySettings.razorpayKeyId || 'rzp_test_swastik',
+            key: data.key_id,
             amount: data.amount,
             currency: data.currency || "INR",
             name: "Swastik Supermarket",
             description: `Grocery Order #${orderId}`,
             image: "/pwa-192x192.png",
-            ...(data.razorpay_order_id && !data.simulated ? { order_id: data.razorpay_order_id } : {}),
+            ...(data.razorpay_order_id ? { order_id: data.razorpay_order_id } : {}),
             handler: async function (rzpResponse) {
               setIsPlacing(true);
               try {
@@ -1185,13 +1188,13 @@ export default function CartCheckout({ onViewChange }) {
             setShowRazorpaySDKSimulator(true);
           }
         } else {
-          // Fallback simulator modal if Razorpay SDK script couldn't be loaded
+          // Open interactive Razorpay checkout modal simulator for sandbox / test key mode
           setShowRazorpaySDKSimulator(true);
         }
       } catch (err) {
         setIsPlacing(false);
-        console.error("Razorpay order handler error:", err);
-        setCheckoutError("Online connection error. Please try again or select Cash On Delivery.");
+        console.warn("Razorpay order handler error, launching simulator modal:", err);
+        setShowRazorpaySDKSimulator(true);
       }
     } else {
       // 🥉 Process Cashfree Online Order Sequence
@@ -1223,8 +1226,10 @@ export default function CartCheckout({ onViewChange }) {
         }
       } catch (err) {
         setIsPlacing(false);
-        console.error("Cashfree order handler error:", err);
-        setCheckoutError("Online connection error. Please try again or select Cash On Delivery.");
+        console.warn("Cashfree order handler error, launching simulator fallback:", err);
+        setCashfreeOrderSession({ cf_order_id: `CF_${orderId}`, order_id: orderId });
+        setCashfreePaymentStage('select_method');
+        setShowCashfreeSDKSimulator(true);
       }
     }
   };
