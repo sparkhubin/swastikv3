@@ -166,6 +166,33 @@ export default function CartCheckout({ onViewChange }) {
   const [showRazorpaySDKSimulator, setShowRazorpaySDKSimulator] = useState(false);
   const [razorpayOrderSession, setRazorpayOrderSession] = useState(null);
   const [rzpSimulating, setRzpSimulating] = useState(false);
+  const [pendingOrderData, setPendingOrderData] = useState(null);
+
+  const ensureRazorpayLoaded = () => {
+    return new Promise((resolve) => {
+      if (typeof window !== 'undefined' && window.Razorpay) {
+        resolve(true);
+        return;
+      }
+      if (typeof window !== 'undefined') {
+        const existingScript = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+        if (existingScript) {
+          existingScript.addEventListener('load', () => resolve(true));
+          existingScript.addEventListener('error', () => resolve(false));
+          setTimeout(() => resolve(Boolean(window.Razorpay)), 1500);
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.async = true;
+        script.onload = () => resolve(true);
+        script.onerror = () => resolve(false);
+        document.body.appendChild(script);
+      } else {
+        resolve(false);
+      }
+    });
+  };
 
   // Fetch backend gateway configurations dynamically & inject Razorpay JS SDK
   useEffect(() => {
@@ -1048,13 +1075,7 @@ export default function CartCheckout({ onViewChange }) {
     } else if (isOnlineRzp) {
       // 🥈 Process Razorpay Online Order Sequence
       try {
-        const dbRes = await addOrder(newOrder);
-        if (dbRes && dbRes.success === false) {
-          setIsPlacing(false);
-          const errText = language === 'hi' ? (dbRes.errorHi || dbRes.error) : dbRes.error;
-          setCheckoutError(errText);
-          return;
-        }
+        setPendingOrderData(newOrder);
 
         const response = await fetch('/api/razorpay/create-order', {
           method: 'POST',
@@ -1069,70 +1090,103 @@ export default function CartCheckout({ onViewChange }) {
         });
 
         const data = await response.json();
+
+        if (!response.ok || data.status !== 'success') {
+          setIsPlacing(false);
+          setCheckoutError(data.error || (language === 'hi' ? "रेज़रपे गेटवे प्रारंभ करने में विफलता।" : "Failed to initialize Razorpay Session."));
+          return;
+        }
+
+        setRazorpayOrderSession(data);
+
+        // Load Razorpay JS SDK if needed
+        const isLoaded = await ensureRazorpayLoaded();
         setIsPlacing(false);
 
-        if (response.ok && data.status === 'success') {
-          // If Razorpay SDK is loaded and we have real credentials
-          if (typeof window !== 'undefined' && window.Razorpay && data.api_called && !data.simulated) {
-            const options = {
-              key: data.key_id,
-              amount: data.amount,
-              currency: data.currency || "INR",
-              name: "Swastik Supermarket",
-              description: `Grocery Order #${orderId}`,
-              image: "/pwa-192x192.png",
-              order_id: data.razorpay_order_id,
-              handler: async function (rzpResponse) {
-                try {
-                  await fetch('/api/razorpay/verify', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      orderId: orderId,
-                      razorpay_order_id: rzpResponse.razorpay_order_id,
-                      razorpay_payment_id: rzpResponse.razorpay_payment_id,
-                      razorpay_signature: rzpResponse.razorpay_signature
-                    })
-                  });
+        if (isLoaded && typeof window !== 'undefined' && window.Razorpay) {
+          const options = {
+            key: data.key_id || gatewaySettings.razorpayKeyId || 'rzp_test_swastik',
+            amount: data.amount,
+            currency: data.currency || "INR",
+            name: "Swastik Supermarket",
+            description: `Grocery Order #${orderId}`,
+            image: "/pwa-192x192.png",
+            ...(data.razorpay_order_id && !data.simulated ? { order_id: data.razorpay_order_id } : {}),
+            handler: async function (rzpResponse) {
+              setIsPlacing(true);
+              try {
+                await fetch('/api/razorpay/verify', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    orderId: orderId,
+                    razorpay_order_id: rzpResponse.razorpay_order_id || data.razorpay_order_id,
+                    razorpay_payment_id: rzpResponse.razorpay_payment_id || `pay_${Date.now()}`,
+                    razorpay_signature: rzpResponse.razorpay_signature || ''
+                  })
+                });
 
-                  handleSuccessfulCheckout();
-                  setShowOrderSuccess(true);
-                  setSuccessInfo(
-                    language === 'hi' 
-                      ? `शानदार! आपका रेज़रपे द्वारा ऑनलाइन भुगतान सफल रहा (Payment ID: ${rzpResponse.razorpay_payment_id})। स्वास्तिक डिलीवरी टीम शीघ्र ही पहुंचेगी!`
-                      : `Success! Online payment of ₹${finalGrandTotal} verified via Razorpay! Payment ID: ${rzpResponse.razorpay_payment_id}`
-                  );
-                } catch (err) {
-                  console.error("Razorpay verification error:", err);
-                  setCheckoutError("Payment verification error. Please contact store support.");
-                }
-              },
-              prefill: {
-                name: shippingInfo.fullName || "Swastik Customer",
-                contact: (shippingInfo.phoneNumber || "").replace(/\D/g, "").slice(-10) || "9999988888",
-                email: customerEmail || "customer@swastik.com"
-              },
-              theme: {
-                color: "#06b6d4"
+                // Save confirmed & paid order to DB (which sends WhatsApp and in-app notifications)
+                const paidOrder = {
+                  ...newOrder,
+                  status: "Confirmed",
+                  paymentStatus: "PAID",
+                  razorpayPaymentId: rzpResponse.razorpay_payment_id || `pay_${Date.now()}`
+                };
+
+                await addOrder(paidOrder);
+                handleSuccessfulCheckout();
+                setIsPlacing(false);
+                setShowOrderSuccess(true);
+                setSuccessInfo(
+                  language === 'hi' 
+                    ? `शानदार! आपका रेज़रपे द्वारा ऑनलाइन भुगतान सफल रहा (Payment ID: ${rzpResponse.razorpay_payment_id || 'SUCCESS'})। स्वास्तिक डिलीवरी टीम शीघ्र ही पहुंचेगी!`
+                    : `Success! Online payment of ₹${finalGrandTotal} verified via Razorpay! Payment ID: ${rzpResponse.razorpay_payment_id || 'SUCCESS'}`
+                );
+              } catch (err) {
+                setIsPlacing(false);
+                console.error("Razorpay verification error:", err);
+                setCheckoutError("Payment verification error. Please contact store support.");
               }
-            };
+            },
+            prefill: {
+              name: shippingInfo.fullName || "Swastik Customer",
+              contact: (shippingInfo.phoneNumber || "").replace(/\D/g, "").slice(-10) || "9999988888",
+              email: customerEmail || "customer@swastik.com"
+            },
+            theme: {
+              color: "#06b6d4"
+            },
+            modal: {
+              ondismiss: function () {
+                setIsPlacing(false);
+                setCheckoutError(
+                  language === 'hi'
+                    ? "भुगतान प्रक्रिया रद्द कर दी गई। आपका ऑर्डर सबमिट नहीं हुआ है।"
+                    : "Payment cancelled. Your order was not submitted."
+                );
+              }
+            }
+          };
 
+          try {
             const rzpObj = new window.Razorpay(options);
             rzpObj.on('payment.failed', function (resp) {
+              setIsPlacing(false);
               setCheckoutError(
                 language === 'hi'
-                  ? `भुगतान विफल: ${resp.error.description || 'लेनदेन रद्द कर दिया गया।'}`
-                  : `Payment Failed: ${resp.error.description || 'Transaction cancelled.'}`
+                  ? `भुगतान विफल: ${resp.error?.description || 'लेनदेन रद्द कर दिया गया।'}`
+                  : `Payment Failed: ${resp.error?.description || 'Transaction cancelled.'}`
               );
             });
             rzpObj.open();
-          } else {
-            // Fallback simulator for sandbox / test environment
-            setRazorpayOrderSession(data);
+          } catch (err) {
+            console.warn("Error opening Razorpay checkout window, opening simulator fallback:", err);
             setShowRazorpaySDKSimulator(true);
           }
         } else {
-          setCheckoutError(data.error || (language === 'hi' ? "रेज़रपे गेटवे प्रारंभ करने में विफलता।" : "Failed to initialize Razorpay Session."));
+          // Fallback simulator modal if Razorpay SDK script couldn't be loaded
+          setShowRazorpaySDKSimulator(true);
         }
       } catch (err) {
         setIsPlacing(false);
@@ -1142,14 +1196,7 @@ export default function CartCheckout({ onViewChange }) {
     } else {
       // 🥉 Process Cashfree Online Order Sequence
       try {
-        // Add pending order to global context state / DB first
-        const dbRes = await addOrder(newOrder);
-        if (dbRes && dbRes.success === false) {
-          setIsPlacing(false);
-          const errText = language === 'hi' ? (dbRes.errorHi || dbRes.error) : dbRes.error;
-          setCheckoutError(errText);
-          return;
-        }
+        setPendingOrderData(newOrder);
 
         // Call Express payment initialization endpoints
         const response = await fetch('/api/cashfree/create-order', {
@@ -1246,7 +1293,42 @@ export default function CartCheckout({ onViewChange }) {
     setCashfreePaymentStage('failed');
   };
 
-  const handleCloseCashfreeSuccess = () => {
+  const handleCloseCashfreeSuccess = async () => {
+    try {
+      const targetOrder = pendingOrderData || {
+        id: cashfreeOrderSession?.order_id || ("SW-" + Math.floor(1000 + Math.random() * 9000)),
+        orderDate: new Date().toISOString(),
+        date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+        subtotal: Number(subtotal),
+        deliveryFee: Number(deliveryFee),
+        gst: Number(gst),
+        total: Number(finalGrandTotal),
+        customerName: shippingInfo.fullName || "Swastik Shopper",
+        customerPhone: shippingInfo.phoneNumber || "+91 98765 12345",
+        customerEmail: customerEmail,
+        items: cartItems.map(item => ({
+          productId: Number(item.product.id),
+          nameEn: item.product.nameEn,
+          nameHi: item.product.nameHi,
+          price: Number(getUnitPrice(item.product, item.selectedUnit)),
+          qty: Number(item.quantity),
+          weight: item.selectedUnit || (language === 'hi' ? (item.product.packHi || "100gm") : (item.product.packEn || "100gm"))
+        }))
+      };
+      
+      const paidOrder = {
+        ...targetOrder,
+        status: "Confirmed",
+        paymentStatus: "PAID",
+        paymentMethod: "CASHFREE_ONLINE",
+        cashfreePaymentId: cashfreeOrderSession?.order_id || `CF_${Date.now()}`
+      };
+
+      await addOrder(paidOrder);
+    } catch (err) {
+      console.error("Error saving Cashfree paid order:", err);
+    }
+
     // Deduct used loyalty points & add automatic referral bonus instantly
     handleSuccessfulCheckout();
 
@@ -2726,6 +2808,37 @@ export default function CartCheckout({ onViewChange }) {
                             razorpay_signature: mockSignature
                           })
                         });
+
+                        const targetOrder = pendingOrderData || {
+                          id: orderRec,
+                          orderDate: new Date().toISOString(),
+                          date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+                          subtotal: Number(subtotal),
+                          deliveryFee: Number(deliveryFee),
+                          gst: Number(gst),
+                          total: Number(finalGrandTotal),
+                          customerName: shippingInfo.fullName || "Swastik Customer",
+                          customerPhone: shippingInfo.phoneNumber || "+91 98765 12345",
+                          customerEmail: customerEmail,
+                          items: cartItems.map(item => ({
+                            productId: Number(item.product.id),
+                            nameEn: item.product.nameEn,
+                            nameHi: item.product.nameHi,
+                            price: Number(getUnitPrice(item.product, item.selectedUnit)),
+                            qty: Number(item.quantity),
+                            weight: item.selectedUnit || (language === 'hi' ? (item.product.packHi || "100gm") : (item.product.packEn || "100gm"))
+                          }))
+                        };
+
+                        const paidOrder = {
+                          ...targetOrder,
+                          status: "Confirmed",
+                          paymentStatus: "PAID",
+                          paymentMethod: "RAZORPAY_ONLINE",
+                          razorpayPaymentId: mockPaymentId
+                        };
+
+                        await addOrder(paidOrder);
 
                         handleSuccessfulCheckout();
                         setShowRazorpaySDKSimulator(false);
