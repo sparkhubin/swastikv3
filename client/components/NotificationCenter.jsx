@@ -98,22 +98,22 @@ export default function NotificationCenter({ role = 'customer', phone = '', clas
 
       {/* Notifications Dropdown Panel */}
       {isOpen && (
-        <div className="fixed sm:absolute right-2 sm:right-0 top-16 sm:top-auto mt-2 w-[calc(100vw-1rem)] max-w-sm sm:w-96 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 text-slate-900 overflow-hidden animate-fade-in">
+        <div className="fixed sm:absolute right-2 sm:right-0 top-16 sm:top-auto mt-2 w-[calc(100vw-1rem)] max-w-sm sm:w-96 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl z-50 text-slate-100 overflow-hidden animate-fade-in">
           
           {/* Panel Header */}
-          <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+          <div className="p-3.5 bg-slate-800/90 border-b border-slate-700 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700">
+              <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                 <Bell className="h-4 w-4" />
               </div>
               <div>
-                <h4 className="text-xs font-black uppercase text-slate-900 flex items-center gap-1.5">
+                <h4 className="text-xs font-black uppercase text-slate-100 flex items-center gap-1.5">
                   <span>{isHindi ? "लाइव सूचनाएं" : "Live Notifications"}</span>
-                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                     {role.toUpperCase()}
                   </span>
                 </h4>
-                <p className="text-[9px] text-slate-500 font-semibold">
+                <p className="text-[10px] text-slate-400 font-semibold">
                   {unreadCount > 0 
                     ? (isHindi ? `${unreadCount} अनपढ़ी सूचनाएं` : `${unreadCount} Unread Notifications`)
                     : (isHindi ? "सभी सूचनाएं पढ़ी जा चुकी हैं" : "All caught up!")}
@@ -125,7 +125,7 @@ export default function NotificationCenter({ role = 'customer', phone = '', clas
               {unreadCount > 0 && (
                 <button
                   onClick={handleMarkAllRead}
-                  className="p-1.5 rounded-lg text-slate-600 hover:text-emerald-700 hover:bg-slate-200 transition-all text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                  className="p-1.5 rounded-lg text-slate-300 hover:text-emerald-400 hover:bg-slate-700 transition-all text-[10px] font-bold flex items-center gap-1 cursor-pointer"
                   title={isHindi ? "सभी को पढ़ा हुआ चिन्हित करें" : "Mark all as read"}
                 >
                   <CheckCheck className="h-3.5 w-3.5" />
@@ -134,7 +134,7 @@ export default function NotificationCenter({ role = 'customer', phone = '', clas
               )}
               <button
                 onClick={() => setIsOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-200 transition-all cursor-pointer"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-700 transition-all cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -142,10 +142,10 @@ export default function NotificationCenter({ role = 'customer', phone = '', clas
           </div>
 
           {/* Notifications List Body */}
-          <div className="max-h-80 overflow-y-auto divide-y divide-white/5 p-2 space-y-1">
+          <div className="max-h-80 overflow-y-auto divide-y divide-slate-800/80 p-2 space-y-1.5">
             {notifications.length === 0 ? (
               <div className="py-8 text-center space-y-2">
-                <Info className="h-8 w-8 text-slate-600 mx-auto" />
+                <Info className="h-8 w-8 text-slate-500 mx-auto" />
                 <p className="text-xs text-slate-400 font-semibold">
                   {isHindi ? "कोई नई सूचना उपलब्ध नहीं है।" : "No notifications yet."}
                 </p>
@@ -157,10 +157,10 @@ export default function NotificationCenter({ role = 'customer', phone = '', clas
                   <div
                     key={notif.id}
                     onClick={() => handleMarkSingleRead(notif.id)}
-                    className={`p-3 rounded-2xl transition-all cursor-pointer space-y-1 ${
+                    className={`p-3 rounded-xl transition-all cursor-pointer space-y-1.5 ${
                       isNew 
-                        ? 'bg-cyan-500/10 border border-cyan-500/20 text-white' 
-                        : 'bg-slate-950/40 text-slate-300 hover:bg-slate-950/80 border border-transparent'
+                        ? 'bg-cyan-950/50 border border-cyan-500/40 text-slate-100 hover:bg-cyan-900/40 shadow-sm' 
+                        : 'bg-slate-800/40 text-slate-300 hover:bg-slate-800/80 border border-slate-800'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -172,26 +172,26 @@ export default function NotificationCenter({ role = 'customer', phone = '', clas
                         ) : (
                           <Zap className="h-4 w-4 text-amber-400 shrink-0" />
                         )}
-                        <span className="text-xs font-black leading-snug">
+                        <span className="text-xs font-bold leading-snug text-slate-100">
                           {isHindi ? notif.titleHi : notif.titleEn}
                         </span>
                       </div>
-                      <span className="text-[8.5px] font-mono text-slate-400 shrink-0">
+                      <span className="text-[9px] font-mono text-slate-400 shrink-0">
                         {notif.createdAt ? new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Now'}
                       </span>
                     </div>
 
-                    <p className="text-[10.5px] text-slate-300 leading-relaxed font-medium pl-6">
+                    <p className="text-[11px] text-slate-200 leading-relaxed font-medium pl-6">
                       {isHindi ? notif.messageHi : notif.messageEn}
                     </p>
 
                     {notif.orderId && (
                       <div className="pl-6 pt-1 flex items-center justify-between">
-                        <span className="text-[9px] font-mono text-cyan-300 font-bold bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
+                        <span className="text-[9.5px] font-mono text-cyan-300 font-bold bg-slate-950 px-2 py-0.5 rounded border border-cyan-500/40">
                           Order #{notif.orderId}
                         </span>
                         {isNew && (
-                          <span className="text-[8px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1">
+                          <span className="text-[8.5px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
                             NEW
                           </span>
@@ -205,9 +205,12 @@ export default function NotificationCenter({ role = 'customer', phone = '', clas
           </div>
 
           {/* Footer Bar */}
-          <div className="p-2.5 bg-slate-950 border-t border-white/10 text-center text-[9px] font-mono text-slate-400 flex justify-between items-center px-4">
+          <div className="p-2.5 bg-slate-950 border-t border-slate-800 text-center text-[9px] font-mono text-slate-400 flex justify-between items-center px-4">
             <span>Swastik Real-Time Push Gateway</span>
-            <span className="text-emerald-400 font-bold">● Active 5s Auto Sync</span>
+            <span className="text-emerald-400 font-bold flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Active 5s Auto Sync
+            </span>
           </div>
 
         </div>
