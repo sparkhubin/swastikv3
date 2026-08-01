@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { useLanguage } from '../../context/LanguageContext';
 import { useData } from '../../context/DataContext';
