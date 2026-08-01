@@ -746,30 +746,6 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
               </div>
             </div>
 
-            {/* Dangerous Operations Box */}
-            <div className="bg-red-500/10 border border-red-500/20 p-5 rounded-3xl space-y-3 shadow-xl">
-              <h3 className="text-xs font-black uppercase text-red-400 tracking-wider flex items-center gap-1.5 border-b border-red-500/10 pb-2">
-                <Trash2 className="h-4 w-4" />
-                <span>Dangerous Admin Operations</span>
-              </h3>
-              <p className="text-[10px] text-red-300 leading-normal">
-                Completely erase all existing products inside the database. This action is permanent and is usually done before starting fresh category-wise bulk uploads.
-              </p>
-              <button
-                type="button"
-                onClick={async () => {
-                  if (window.confirm("⚠️ DANGER: Are you absolutely sure you want to PERMANENTLY DELETE ALL PRODUCTS from the database? This cannot be undone!")) {
-                    if (window.confirm("FINAL CONFIRMATION: Tap OK to clear all catalog products.")) {
-                      await clearAllProducts();
-                      alert("✓ Database catalog fully cleared! You can now proceed with fresh JSON uploads.");
-                    }
-                  }
-                }}
-                className="w-full bg-red-600 hover:bg-red-700 hover:border-red-500 text-white font-black uppercase text-[10px] tracking-wider py-2.5 rounded-xl border border-red-600 transition-all active:scale-95 cursor-pointer"
-              >
-                Clear All Catalog Products
-              </button>
-            </div>
 
           </div>
 

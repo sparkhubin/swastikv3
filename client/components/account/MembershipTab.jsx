@@ -6,8 +6,12 @@ export default function MembershipTab({
   setProfile,
   setShowPrimePayment,
   onOfflinePurchase,
+  primeSettings,
   isHindi
 }) {
+  const isMembershipEnabled = primeSettings?.isMembershipEnabled ?? true;
+  const planFee = primeSettings?.primePlanFee ?? 299;
+
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm text-slate-900">
       <div className="border-b border-slate-200 pb-4 mb-6">
@@ -44,15 +48,15 @@ export default function MembershipTab({
               <ul className="space-y-2.5 text-xs text-slate-800 font-medium">
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>{isHindi ? "हर ऑर्डर पर 100% मुफ्त एक्सप्रेस होम डिलीवरी" : "100% Free Express Home Delivery on all grocery orders"}</span>
+                  <span>{isHindi ? (primeSettings?.primeBenefit1Hi || "हर ऑर्डर पर 100% मुफ्त एक्सप्रेस होम डिलीवरी") : (primeSettings?.primeBenefit1En || "100% Free Express Home Delivery on all grocery orders")}</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>{isHindi ? "प्राथमिकता वेयरहाउस पैकिंग और त्वरित प्रेषण" : "Priority Warehouse Express Packing & Immediate Dispatch"}</span>
+                  <span>{isHindi ? (primeSettings?.primeBenefit2Hi || "प्राथमिकता वेयरहाउस पैकिंग और त्वरित प्रेषण") : (primeSettings?.primeBenefit2En || "Priority Warehouse Express Packing & Immediate Dispatch")}</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>{isHindi ? "2X रिवॉर्ड पॉइंट्स हर ₹100 की खरीदारी पर" : "2X Double Reward Points on every ₹100 spent"}</span>
+                  <span>{isHindi ? (primeSettings?.primeBenefit3Hi || "2X रिवॉर्ड पॉइंट्स हर ₹100 की खरीदारी पर") : (primeSettings?.primeBenefit3En || "2X Double Reward Points on every ₹100 spent")}</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -65,42 +69,62 @@ export default function MembershipTab({
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">{isHindi ? "वार्षिक सदस्यता शुल्क" : "Annual Prime Fee"}</p>
-                  <p className="text-xl font-black text-amber-600 font-mono">₹299 <span className="text-xs text-slate-500 font-normal">/ {isHindi ? "वर्ष" : "year"}</span></p>
+                  <p className="text-xl font-black text-amber-600 font-mono">₹{planFee} <span className="text-xs text-slate-500 font-normal">/ {isHindi ? "वर्ष" : "year"}</span></p>
                 </div>
-                <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-lg">
-                  {isHindi ? "ऑनलाइन व ऑफलाइन उपलब्ध" : "Gateway & Cash Options Available"}
-                </span>
+                {isMembershipEnabled ? (
+                  <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-lg">
+                    {isHindi ? "ऑनलाइन व ऑफलाइन उपलब्ध" : "Gateway & Cash Options Available"}
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-extrabold text-amber-800 bg-amber-100 border border-amber-300 px-2.5 py-1 rounded-lg">
+                    {isHindi ? "खरीद विकल्प बंद है" : "Self-Buying Disabled"}
+                  </span>
+                )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setShowPrimePayment(true)}
-                  className="w-full py-2.5 px-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-xs active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <span>💳</span>
-                  <span>{isHindi ? "पेमेंट गेटवे द्वारा खरीदें" : "Buy via Payment Gateway"}</span>
-                </button>
+              {!isMembershipEnabled ? (
+                <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5">
+                  <p className="text-xs font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>🔒</span>
+                    <span>{isHindi ? "सदस्यता स्व-खरीद बंद है" : "Self-Buying Option Disabled by Admin"}</span>
+                  </p>
+                  <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                    {isHindi 
+                      ? "ऑनलाइन या ऑफलाइन मेंबरशिप स्व-खरीद एडमिन द्वारा बंद की गई है। जब स्टोर एडमिन आपके लिए मैन्युअल रूप से कार्ड जारी करेगा, तभी आपके पास वीआईपी प्राइम कार्ड एक्टिव होगा।" 
+                      : "Self-buying membership is currently disabled by store management. VIP Membership Pass will only appear here when manually created or issued by store admin."}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setShowPrimePayment(true)}
+                    className="w-full py-2.5 px-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-xs active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <span>💳</span>
+                    <span>{isHindi ? "पेमेंट गेटवे द्वारा खरीदें" : "Buy via Payment Gateway"}</span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm(isHindi 
-                      ? "क्या आप स्टोर काउंटर / कैश ऑन डिलीवरी द्वारा ऑफलाइन भुगतान चुनकर स्वास्तिक प्राइम सक्रिय करना चाहते हैं?" 
-                      : "Activate Swastik Prime with Offline / Cash at Store or COD payment option?")) {
-                      if (onOfflinePurchase) {
-                        onOfflinePurchase();
-                      } else {
-                        setProfile(prev => ({ ...prev, isPrimeActive: true }));
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm(isHindi 
+                        ? "क्या आप स्टोर काउंटर / कैश ऑन डिलीवरी द्वारा ऑफलाइन भुगतान चुनकर स्वास्तिक प्राइम सक्रिय करना चाहते हैं?" 
+                        : "Activate Swastik Prime with Offline / Cash at Store or COD payment option?")) {
+                        if (onOfflinePurchase) {
+                          onOfflinePurchase();
+                        } else {
+                          setProfile(prev => ({ ...prev, isPrimeActive: true }));
+                        }
                       }
-                    }
-                  }}
-                  className="w-full py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-900 border border-slate-300 font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-xs active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <span>💵</span>
-                  <span>{isHindi ? "ऑफलाइन / नकद से खरीदें" : "Buy via Offline / Cash"}</span>
-                </button>
-              </div>
+                    }}
+                    className="w-full py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-900 border border-slate-300 font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-xs active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <span>💵</span>
+                    <span>{isHindi ? "ऑफलाइन / नकद से खरीदें" : "Buy via Offline / Cash"}</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 

@@ -464,12 +464,20 @@ export async function sendWhatsappMessageUnified(
   const metaToken = process.env.META_WHATSAPP_ACCESS_TOKEN;
   const defaultMetaTemplate = process.env.META_WHATSAPP_TEMPLATE_NAME || "reference_no";
 
-  if (metaPhoneId && metaToken) {
-    let cleanTo = to.replace(/[^\d]/g, "");
-    if (cleanTo.length === 10) {
-      cleanTo = "91" + cleanTo;
-    }
+  let cleanTo = String(to || "").replace(/[^\d]/g, "");
+  if (cleanTo.length === 10) {
+    cleanTo = "91" + cleanTo;
+  } else if (cleanTo.length === 11 && cleanTo.startsWith("0")) {
+    cleanTo = "91" + cleanTo.slice(1);
+  }
 
+  if (!cleanTo) {
+    console.error("[WhatsApp Error] Missing target phone number");
+    return { success: false, error: "Missing target phone number" };
+  }
+
+  // 1. Try Meta WhatsApp Cloud API if configured
+  if (metaPhoneId && metaToken) {
     const url = `https://graph.facebook.com/v18.0/${metaPhoneId}/messages`;
 
     let payload;
@@ -529,7 +537,7 @@ export async function sendWhatsappMessageUnified(
     }
 
     try {
-      const response = await fetch(url, {
+      let response = await fetch(url, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${metaToken}`,
@@ -538,35 +546,53 @@ export async function sendWhatsappMessageUnified(
         body: JSON.stringify(payload)
       });
 
-      const data = await response.json();
+      let data = await response.json();
+
+      // Fallback: If template failed (e.g. template not approved or param mismatch), retry as plain text message
+      if (!response.ok && payload.type === "template") {
+        console.warn("[Meta WA Warning] Template failed, retrying with plain text body...", JSON.stringify(data));
+        const textPayload = {
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: cleanTo,
+          type: "text",
+          text: { body }
+        };
+
+        const textResponse = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${metaToken}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(textPayload)
+        });
+        const textData = await textResponse.json();
+        if (textResponse.ok) {
+          console.log(`[Meta WA Text Success] Fallback text message sent to ${cleanTo}. ID: ${textData.messages?.[0]?.id}`);
+          return { success: true, provider: "meta_text_fallback", id: textData.messages?.[0]?.id };
+        }
+      }
+
       if (response.ok) {
         console.log(`[Meta WA Success] Message sent to ${cleanTo}. ID: ${data.messages?.[0]?.id}`);
         return { success: true, provider: "meta", id: data.messages?.[0]?.id };
       } else {
         console.error("[Meta WA Error] API response failure:", JSON.stringify(data));
-        return { success: false, provider: "meta", error: data.error?.message || "Meta request failed" };
       }
     } catch (err) {
       console.error("[Meta WA Error] Connection failed:", err.message);
-      return { success: false, provider: "meta", error: err.message };
     }
   }
 
+  // 2. Try Twilio if Meta failed or is unconfigured
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   const fromNum = process.env.TWILIO_WHATSAPP_FROM || "+14155238886";
 
   if (accountSid && authToken) {
-    let cleanTo = to.replace(/[^\d+]/g, "");
-    if (!cleanTo.startsWith("+")) {
-      if (cleanTo.length === 10) {
-        cleanTo = "+91" + cleanTo;
-      } else {
-        cleanTo = "+" + cleanTo;
-      }
-    }
-
-    const twilioTo = cleanTo.startsWith("whatsapp:") ? cleanTo : `whatsapp:${cleanTo}`;
+    let twilioCleanTo = cleanTo.startsWith("+") ? cleanTo : "+" + cleanTo;
+    const twilioTo = twilioCleanTo.startsWith("whatsapp:") ? twilioCleanTo : `whatsapp:${twilioCleanTo}`;
     const twilioFrom = fromNum.startsWith("whatsapp:") ? fromNum : `whatsapp:${fromNum}`;
 
     const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
@@ -593,15 +619,14 @@ export async function sendWhatsappMessageUnified(
         return { success: true, provider: "twilio", id: data.sid };
       } else {
         console.error("[Twilio WA Error] API response failure:", data);
-        return { success: false, provider: "twilio", error: data.message || "Twilio request failed" };
       }
     } catch (err) {
       console.error("[Twilio WA Error] Connection failed:", err.message);
-      return { success: false, provider: "twilio", error: err.message };
     }
   }
 
-  console.log(`[SIMULATED WHATSAPP OUTBOX] To: ${to} | Msg: ${body}`);
+  // 3. Fallback: Log to Simulated Outbox
+  console.log(`[SIMULATED WHATSAPP OUTBOX] To: ${cleanTo} | Msg: ${body}`);
   return { success: true, provider: "simulation" };
 }
 

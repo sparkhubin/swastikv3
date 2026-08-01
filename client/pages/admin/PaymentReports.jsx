@@ -73,6 +73,7 @@ export default function PaymentReports({ userRole, loggedInStaff }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [payMethod, setPayMethod] = useState('All'); // All, COD, CASHFREE_ONLINE, UPI, CARD, NETBANKING
   const [payStatus, setPayStatus] = useState('All'); // All, PAID, PENDING, FAILED
+  const [gatewayRider, setGatewayRider] = useState('All');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [amountMin, setAmountMin] = useState('');
@@ -92,6 +93,7 @@ export default function PaymentReports({ userRole, loggedInStaff }) {
     setSearchTerm('');
     setPayMethod('All');
     setPayStatus('All');
+    setGatewayRider('All');
     setDateFrom('');
     setDateTo('');
     setAmountMin('');
@@ -168,6 +170,12 @@ export default function PaymentReports({ userRole, loggedInStaff }) {
       const status = (o.paymentStatus || 'PENDING').toUpperCase();
       const matchesStatus = payStatus === 'All' || status === payStatus;
 
+      let matchesRider = true;
+      if (gatewayRider !== 'All') {
+        const rName = (o.deliveryPartnerName || '').toLowerCase();
+        matchesRider = rName.includes(gatewayRider.toLowerCase());
+      }
+
       const matchesDate = isWithinDateRange(o.orderDate || o.date || new Date().toISOString());
 
       const orderTotal = Number(o.total || o.subtotal || 0);
@@ -175,9 +183,9 @@ export default function PaymentReports({ userRole, loggedInStaff }) {
       if (amountMin && orderTotal < Number(amountMin)) matchesAmount = false;
       if (amountMax && orderTotal > Number(amountMax)) matchesAmount = false;
 
-      return matchesSearch && matchesMethod && matchesStatus && matchesDate && matchesAmount;
+      return matchesSearch && matchesMethod && matchesStatus && matchesRider && matchesDate && matchesAmount;
     });
-  }, [orders, searchTerm, payMethod, payStatus, dateFrom, dateTo, amountMin, amountMax]);
+  }, [orders, searchTerm, payMethod, payStatus, gatewayRider, dateFrom, dateTo, amountMin, amountMax]);
 
   // Apply filters for Delivery Staff tab
   const filteredDeliveryOrders = useMemo(() => {
@@ -944,7 +952,7 @@ export default function PaymentReports({ userRole, loggedInStaff }) {
         </div>
 
         {/* Filters Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs font-semibold">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs font-semibold">
           
           {/* Query string search */}
           <div className="space-y-1">
@@ -975,6 +983,21 @@ export default function PaymentReports({ userRole, loggedInStaff }) {
               <option value="UPI">✨ Unified Payments (UPI QR/ID)</option>
               <option value="CARD">💳 Visa / RuPay (Simulated Card)</option>
               <option value="NETBANKING">🏦 Popular Net banking portals</option>
+            </select>
+          </div>
+
+          {/* Delivery Staff */}
+          <div className="space-y-1">
+            <label className="text-[8.5px] font-black text-slate-400 uppercase tracking-widest block">Delivery Staff</label>
+            <select
+              value={gatewayRider}
+              onChange={(e) => { setGatewayRider(e.target.value); setCurrentPage(1); }}
+              className="w-full bg-slate-950 border border-white/10 px-3 py-2.5 rounded-xl text-xs text-white"
+            >
+              <option value="All">All Delivery Staff ({uniqueRiders.length})</option>
+              {uniqueRiders.map((r, i) => (
+                <option key={i} value={r}>{r}</option>
+              ))}
             </select>
           </div>
 

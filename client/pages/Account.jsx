@@ -229,110 +229,289 @@ export default function Account({ onViewChange }) {
   const [cashfreeOrderSession, setCashfreeOrderSession] = useState(null);
   const [cfSimulatingProgress, setCfSimulatingProgress] = useState('');
 
+  const ensureRazorpayLoaded = () => {
+    return new Promise((resolve) => {
+      if (typeof window !== 'undefined' && window.Razorpay) {
+        resolve(true);
+        return;
+      }
+      if (typeof window !== 'undefined') {
+        const existingScript = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+        if (existingScript) {
+          existingScript.addEventListener('load', () => resolve(true));
+          existingScript.addEventListener('error', () => resolve(false));
+          setTimeout(() => resolve(Boolean(window.Razorpay)), 1500);
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.async = true;
+        script.onload = () => resolve(true);
+        script.onerror = () => resolve(false);
+        document.body.appendChild(script);
+      } else {
+        resolve(false);
+      }
+    });
+  };
+
   const handleProcessPrimePayment = async () => {
     setPrimePaymentStep('processing');
     setPaymentErrorMessage('');
-    setCfSimulatingProgress(isHindi ? 'कैशफ्री गेटवे और 3डी सिक्योर प्रमाणीकरण शुरू हो रहा है...' : 'Initiating secure handshake with Cashfree Gateway API...');
 
-    try {
-      const primeFee = primeSettings?.primePlanFee ?? 299;
-      const orderId = `PRIME_${Date.now()}`;
+    const primeFee = primeSettings?.primePlanFee ?? 299;
 
-      // 1. Create order record first so webhook & verify can target it
-      const newPrimeOrder = {
-        id: orderId,
-        customerName: profile?.fullName || profile?.name || "Swastik VIP Member",
-        customerPhone: profile?.phone || "+91 95400 12099",
-        customerEmail: profile?.email || "vip@swastik.com",
-        shippingAddress: "Swastik Digital VIP Prime Pass Account",
-        subtotal: primeFee,
-        deliveryFee: 0,
-        gst: 0,
-        total: primeFee,
-        grand_total: primeFee,
-        paymentMethod: primePaymentMethod === 'offline' ? 'COD' : 'CASHFREE_ONLINE',
-        paymentStatus: 'PAID',
-        status: 'Paid',
-        status_label: 'Paid',
-        step: 1,
-        orderDate: new Date().toISOString(),
-        date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-        items: [
-          {
-            productId: 9999,
-            name: 'Swastik Prime Gold Membership (1 Year Pass)',
-            nameEn: 'Swastik Prime Gold Membership (1 Year Pass)',
-            nameHi: 'स्वास्तिक प्राइम गोल्ड मेंबरशिप (१ वर्ष पास)',
-            price: primeFee,
-            qty: 1,
-            quantity: 1,
-            weight: '1 Year Access'
-          }
-        ],
-        deliveryPartnerName: 'Swastik Prime System',
-        deliveryPartnerPhone: '+91 95400 12099',
-        hubName: 'VIP Membership Desk',
-        eta: 'Instant Activation'
-      };
+    if (selectedGateway === 'OFFLINE') {
+      await handleOfflinePrimePurchase();
+      setShowPrimePayment(false);
+      return;
+    }
 
-      await addOrder(newPrimeOrder);
-
-      // 2. Create Cashfree payment order session
-      const res = await fetch('/api/cashfree/create-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: orderId,
-          amount: primeFee,
-          customerName: profile?.fullName || profile?.name || "Swastik VIP Member",
-          customerPhone: profile?.phone || "+91 95400 12099",
-          customerEmail: profile?.email || "vip@swastik.com"
-        })
-      });
-
-      const data = await res.json();
-      setCashfreeOrderSession(data);
-
-      await new Promise(resolve => setTimeout(resolve, 800));
-      setCfSimulatingProgress(isHindi ? 'स्वास्तिक मर्चेंट वेबहुक अधिसूचना ट्रिगर हो रही है...' : 'Firing secure webhook transaction logs asynchronously...');
-
-      // 3. Dispatch secure payment webhook event
-      await fetch('/api/cashfree/webhook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: data?.order_id || orderId,
-          paymentStatus: 'SUCCESS',
-          transactionId: 'CF-PRIME-' + Math.floor(1000000 + Math.random() * 9000000)
-        })
-      });
-
-      await new Promise(resolve => setTimeout(resolve, 600));
-      setCfSimulatingProgress(isHindi ? 'भुगतान स्थिति की पुष्टि हो रही है...' : 'Verifying double-entry ledger state...');
-
-      // 4. Verify double-entry ledger state
-      await fetch('/api/cashfree/verify-payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: data?.order_id || orderId
-        })
-      });
-
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // 5. Update state & sync database customer record
-      setProfile(prev => ({ ...prev, isPrimeActive: true }));
-      const found = (customers || []).find(c => (c.phone && c.phone === profile?.phone) || (c.email && c.email === profile?.email));
-      if (found) {
-        updateCustomer(found.id, { ...found, isPrimeActive: true });
+    // --- RAZORPAY GATEWAY PROCESS ---
+    if (selectedGateway === 'RAZORPAY') {
+      if (!gatewaySettings.razorpayEnabled) {
+        setPrimePaymentStep('error');
+        setPaymentErrorMessage(isHindi ? "रेज़रपे पेमेंट गेटवे वर्तमान में अक्षम है।" : "Razorpay payment gateway is currently disabled.");
+        return;
       }
 
-      setPrimePaymentStep('success');
-    } catch (err) {
-      console.error("Cashfree Prime Payment Error:", err);
-      setPrimePaymentStep('error');
-      setPaymentErrorMessage(isHindi ? "कैशफ्री गेटवे पेमेंट सत्यापन में समस्या आई।" : "Failed to verify Cashfree payment gateway transaction.");
+      setCfSimulatingProgress(isHindi ? 'रेज़रपे मर्चेंट गेटवे कनेक्ट हो रहा है...' : 'Initiating Razorpay Session...');
+      try {
+        const orderId = `PRIME_RZP_${Date.now()}`;
+        const newPrimeOrder = {
+          id: orderId,
+          customerName: profile?.fullName || profile?.name || "Swastik VIP Member",
+          customerPhone: profile?.phone || "+91 95400 12099",
+          customerEmail: profile?.email || "vip@swastik.com",
+          shippingAddress: "Swastik Digital VIP Prime Pass Account",
+          subtotal: primeFee,
+          deliveryFee: 0,
+          gst: 0,
+          total: primeFee,
+          grand_total: primeFee,
+          paymentMethod: 'RAZORPAY_ONLINE',
+          paymentStatus: 'PAID',
+          status: 'Paid',
+          status_label: 'Paid',
+          step: 1,
+          orderDate: new Date().toISOString(),
+          date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+          items: [
+            {
+              productId: 9999,
+              name: 'Swastik Prime Gold Membership (1 Year Pass)',
+              nameEn: 'Swastik Prime Gold Membership (1 Year Pass)',
+              nameHi: 'स्वास्तिक प्राइम गोल्ड मेंबरशिप (१ वर्ष पास)',
+              price: primeFee,
+              qty: 1,
+              quantity: 1,
+              weight: '1 Year Access'
+            }
+          ],
+          deliveryPartnerName: 'Swastik Prime System',
+          deliveryPartnerPhone: '+91 95400 12099',
+          hubName: 'VIP Membership Desk',
+          eta: 'Instant Activation'
+        };
+
+        const res = await fetch('/api/razorpay/create-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: orderId,
+            amount: primeFee,
+            customerName: profile?.fullName || profile?.name || "Swastik VIP Member",
+            customerPhone: profile?.phone || "+91 95400 12099",
+            customerEmail: profile?.email || "vip@swastik.com"
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok || data.status !== 'success') {
+          setPrimePaymentStep('error');
+          setPaymentErrorMessage(data.error || (isHindi ? "रेज़रपे ऑर्डर शुरू करने में विफलता।" : "Failed to initialize Razorpay order."));
+          return;
+        }
+
+        const hasRealKey = data.api_called && data.key_id && !data.simulated && !data.key_id.includes('mock');
+        const isLoaded = await ensureRazorpayLoaded();
+
+        if (hasRealKey && isLoaded && typeof window !== 'undefined' && window.Razorpay) {
+          const options = {
+            key: data.key_id,
+            amount: data.amount,
+            currency: data.currency || "INR",
+            name: "Swastik Supermarket",
+            description: "Swastik Prime VIP Gold Membership Pass",
+            image: "/pwa-192x192.png",
+            ...(data.razorpay_order_id ? { order_id: data.razorpay_order_id } : {}),
+            handler: async function (rzpResponse) {
+              setPrimePaymentStep('processing');
+              try {
+                await fetch('/api/razorpay/verify', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    orderId: orderId,
+                    razorpay_order_id: rzpResponse.razorpay_order_id || data.razorpay_order_id,
+                    razorpay_payment_id: rzpResponse.razorpay_payment_id || `pay_${Date.now()}`,
+                    razorpay_signature: rzpResponse.razorpay_signature || ''
+                  })
+                });
+
+                await addOrder(newPrimeOrder);
+
+                setProfile(prev => ({ ...prev, isPrimeActive: true }));
+                const found = (customers || []).find(c => (c.phone && c.phone === profile?.phone) || (c.email && c.email === profile?.email));
+                if (found) {
+                  updateCustomer(found.id, { ...found, isPrimeActive: true });
+                }
+                setPrimePaymentStep('success');
+              } catch (err) {
+                console.error("Razorpay verify error:", err);
+                setPrimePaymentStep('error');
+                setPaymentErrorMessage(isHindi ? "भुगतान सत्यापन में समस्या आई।" : "Razorpay payment verification failed.");
+              }
+            },
+            prefill: {
+              name: profile?.fullName || "Swastik Member",
+              contact: (profile?.phone || "").replace(/\D/g, "").slice(-10) || "9999988888",
+              email: profile?.email || "vip@swastik.com"
+            },
+            theme: { color: "#0284c7" },
+            modal: {
+              ondismiss: function () {
+                setPrimePaymentStep('select');
+              }
+            }
+          };
+
+          const rzpObj = new window.Razorpay(options);
+          rzpObj.open();
+        } else {
+          // Test Mode / Simulated flow
+          await addOrder(newPrimeOrder);
+          setCfSimulatingProgress(isHindi ? 'रेज़रपे डिजिटल वेरिफिकेशन पूर्ण हो रहा है...' : 'Processing Razorpay verification...');
+          await new Promise(r => setTimeout(r, 900));
+
+          setProfile(prev => ({ ...prev, isPrimeActive: true }));
+          const found = (customers || []).find(c => (c.phone && c.phone === profile?.phone) || (c.email && c.email === profile?.email));
+          if (found) {
+            updateCustomer(found.id, { ...found, isPrimeActive: true });
+          }
+          setPrimePaymentStep('success');
+        }
+      } catch (err) {
+        console.error("Razorpay Prime Error:", err);
+        setPrimePaymentStep('error');
+        setPaymentErrorMessage(isHindi ? "रेज़रपे गेटवे पेमेंट सत्यापन में समस्या आई।" : "Failed to verify Razorpay payment gateway transaction.");
+      }
+      return;
+    }
+
+    // --- CASHFREE GATEWAY PROCESS ---
+    if (selectedGateway === 'CASHFREE') {
+      if (!gatewaySettings.cashfreeEnabled) {
+        setPrimePaymentStep('error');
+        setPaymentErrorMessage(isHindi ? "कैशफ्री पेमेंट गेटवे वर्तमान में अक्षम है।" : "Cashfree payment gateway is currently disabled.");
+        return;
+      }
+
+      setCfSimulatingProgress(isHindi ? 'कैशफ्री गेटवे और 3डी सिक्योर प्रमाणीकरण शुरू हो रहा है...' : 'Initiating secure handshake with Cashfree Gateway API...');
+      try {
+        const orderId = `PRIME_CF_${Date.now()}`;
+
+        const newPrimeOrder = {
+          id: orderId,
+          customerName: profile?.fullName || profile?.name || "Swastik VIP Member",
+          customerPhone: profile?.phone || "+91 95400 12099",
+          customerEmail: profile?.email || "vip@swastik.com",
+          shippingAddress: "Swastik Digital VIP Prime Pass Account",
+          subtotal: primeFee,
+          deliveryFee: 0,
+          gst: 0,
+          total: primeFee,
+          grand_total: primeFee,
+          paymentMethod: 'CASHFREE_ONLINE',
+          paymentStatus: 'PAID',
+          status: 'Paid',
+          status_label: 'Paid',
+          step: 1,
+          orderDate: new Date().toISOString(),
+          date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+          items: [
+            {
+              productId: 9999,
+              name: 'Swastik Prime Gold Membership (1 Year Pass)',
+              nameEn: 'Swastik Prime Gold Membership (1 Year Pass)',
+              nameHi: 'स्वास्तिक प्राइम गोल्ड मेंबरशिप (१ वर्ष पास)',
+              price: primeFee,
+              qty: 1,
+              quantity: 1,
+              weight: '1 Year Access'
+            }
+          ],
+          deliveryPartnerName: 'Swastik Prime System',
+          deliveryPartnerPhone: '+91 95400 12099',
+          hubName: 'VIP Membership Desk',
+          eta: 'Instant Activation'
+        };
+
+        await addOrder(newPrimeOrder);
+
+        const res = await fetch('/api/cashfree/create-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: orderId,
+            amount: primeFee,
+            customerName: profile?.fullName || profile?.name || "Swastik VIP Member",
+            customerPhone: profile?.phone || "+91 95400 12099",
+            customerEmail: profile?.email || "vip@swastik.com"
+          })
+        });
+
+        const data = await res.json();
+        setCashfreeOrderSession(data);
+
+        await new Promise(resolve => setTimeout(resolve, 800));
+        setCfSimulatingProgress(isHindi ? 'स्वास्तिक मर्चेंट वेबहुक अधिसूचना ट्रिगर हो रही है...' : 'Firing secure webhook transaction logs asynchronously...');
+
+        await fetch('/api/cashfree/webhook', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: data?.order_id || orderId,
+            paymentStatus: 'SUCCESS',
+            transactionId: 'CF-PRIME-' + Math.floor(1000000 + Math.random() * 9000000)
+          })
+        });
+
+        await new Promise(resolve => setTimeout(resolve, 600));
+        setCfSimulatingProgress(isHindi ? 'भुगतान स्थिति की पुष्टि हो रही है...' : 'Verifying double-entry ledger state...');
+
+        await fetch('/api/cashfree/verify-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: data?.order_id || orderId
+          })
+        });
+
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        setProfile(prev => ({ ...prev, isPrimeActive: true }));
+        const found = (customers || []).find(c => (c.phone && c.phone === profile?.phone) || (c.email && c.email === profile?.email));
+        if (found) {
+          updateCustomer(found.id, { ...found, isPrimeActive: true });
+        }
+
+        setPrimePaymentStep('success');
+      } catch (err) {
+        console.error("Cashfree Prime Payment Error:", err);
+        setPrimePaymentStep('error');
+        setPaymentErrorMessage(isHindi ? "कैशफ्री गेटवे पेमेंट सत्यापन में समस्या आई।" : "Failed to verify Cashfree payment gateway transaction.");
+      }
     }
   };
 
@@ -415,6 +594,14 @@ export default function Account({ onViewChange }) {
   // --- PRIME MEMBERSHIP SECURE PAYMENT GATEWAY STATES ---
   const [showPrimePayment, setShowPrimePayment] = useState(false);
   const [primePaymentStep, setPrimePaymentStep] = useState('select'); // select | processing | success | error
+  const [selectedGateway, setSelectedGateway] = useState('RAZORPAY'); // RAZORPAY | CASHFREE | OFFLINE
+  const [gatewaySettings, setGatewaySettings] = useState({
+    activeGateway: 'RAZORPAY',
+    razorpayEnabled: true,
+    razorpayKeyId: '',
+    cashfreeEnabled: true,
+    environment: 'TEST'
+  });
   const [primePaymentMethod, setPrimePaymentMethod] = useState('upi'); // upi | card | netbanking
   const [primePaymentUpiApp, setPrimePaymentUpiApp] = useState('gpay'); // gpay | phonepe | paytm | upiid
   const [customUpiId, setCustomUpiId] = useState('');
@@ -424,6 +611,37 @@ export default function Account({ onViewChange }) {
   const [primeCardCvv, setPrimeCardCvv] = useState('');
   const [selectedBank, setSelectedBank] = useState('sbi'); // sbi | hdfc | icici | axis
   const [paymentErrorMessage, setPaymentErrorMessage] = useState('');
+
+  // Fetch Payment Gateway configurations dynamically when membership modal opens
+  useEffect(() => {
+    fetch('/api/payment/settings')
+      .then(res => res.json())
+      .then(data => {
+        const rzpEnabled = data.razorpayEnabled !== false;
+        const cfEnabled = data.enabled !== false;
+        setGatewaySettings({
+          activeGateway: data.activeGateway || 'RAZORPAY',
+          razorpayEnabled: rzpEnabled,
+          razorpayKeyId: data.razorpayKeyId || '',
+          cashfreeEnabled: cfEnabled,
+          environment: data.environment || 'TEST'
+        });
+
+        // Set default gateway preference based on active setting & availability
+        if (data.activeGateway === 'RAZORPAY' && rzpEnabled) {
+          setSelectedGateway('RAZORPAY');
+        } else if (data.activeGateway === 'CASHFREE' && cfEnabled) {
+          setSelectedGateway('CASHFREE');
+        } else if (rzpEnabled) {
+          setSelectedGateway('RAZORPAY');
+        } else if (cfEnabled) {
+          setSelectedGateway('CASHFREE');
+        } else {
+          setSelectedGateway('OFFLINE');
+        }
+      })
+      .catch(e => console.warn("Could not fetch payment settings for membership:", e));
+  }, [showPrimePayment]);
 
   // --- USER PROFILE STATES WITH LOCALSTORAGE SYNC ---
   const [profile, setProfile] = useState(() => {
@@ -1734,6 +1952,7 @@ export default function Account({ onViewChange }) {
                 setProfile={setProfile}
                 setShowPrimePayment={setShowPrimePayment}
                 onOfflinePurchase={handleOfflinePrimePurchase}
+                primeSettings={primeSettings}
                 isHindi={isHindi}
               />
             )}
@@ -2970,183 +3189,288 @@ export default function Account({ onViewChange }) {
                 <div className="space-y-4">
                   <p className="text-xs text-slate-600 leading-normal font-semibold">
                     {isHindi 
-                      ? "कृपया भुगतान पूरा करने के लिए नीचे दिए गए सुरक्षित डिजिटल चैनलों में से एक का चयन करें:" 
-                      : "Please select your preferred secure instant payment channel to complete activation:"}
+                      ? "कृपया स्वास्तिक प्राइम गोल्ड मेंबरशिप सक्रिय करने के लिए भुगतान गेटवे का चयन करें:" 
+                      : "Select your payment gateway to activate Swastik Prime Gold Membership:"}
                   </p>
 
-                  {/* Payment Tabs Selector */}
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {[
-                      { id: 'upi', label: 'UPI / QR', icon: '⚡' },
-                      { id: 'card', label: isHindi ? 'कार्ड' : 'Card', icon: '💳' },
-                      { id: 'netbanking', label: 'NetBank', icon: '🏛️' },
-                      { id: 'offline', label: isHindi ? 'ऑफलाइन' : 'Offline', icon: '💵' }
-                    ].map(tab => (
+                  {/* Payment Gateway Cards */}
+                  <div className="space-y-2">
+                    {/* Razorpay Option */}
+                    {gatewaySettings.razorpayEnabled && (
                       <button
-                        key={tab.id}
                         type="button"
                         onClick={() => {
-                          setPrimePaymentMethod(tab.id);
+                          setSelectedGateway('RAZORPAY');
                           setPaymentErrorMessage('');
                         }}
-                        className={`py-2 rounded-xl border text-[10px] font-black uppercase flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                          primePaymentMethod === tab.id
-                            ? 'bg-emerald-600 border-emerald-600 text-white shadow-xs'
-                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
+                        className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                          selectedGateway === 'RAZORPAY'
+                            ? 'bg-sky-50 border-sky-500 ring-2 ring-sky-500/20 text-slate-900 shadow-xs'
+                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
                         }`}
                       >
-                        <span className="text-sm">{tab.icon}</span>
-                        <span>{tab.label}</span>
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-sky-100 text-sky-800 font-bold text-xs">
+                            ⚡
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-xs text-slate-900">Razorpay Online</span>
+                              <span className="text-[9px] bg-sky-100 text-sky-800 font-mono px-1.5 py-0.2 rounded font-extrabold uppercase">Fast & Instant</span>
+                            </div>
+                            <p className="text-[10px] text-slate-500 font-medium">
+                              UPI (PhonePe, GPay, Paytm), Cards & Netbanking
+                            </p>
+                          </div>
+                        </div>
+                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedGateway === 'RAZORPAY' ? 'border-sky-600 bg-sky-600' : 'border-slate-300'}`}>
+                          {selectedGateway === 'RAZORPAY' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </div>
                       </button>
-                    ))}
+                    )}
+
+                    {/* Cashfree Option */}
+                    {gatewaySettings.cashfreeEnabled && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedGateway('CASHFREE');
+                          setPaymentErrorMessage('');
+                        }}
+                        className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                          selectedGateway === 'CASHFREE'
+                            ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/20 text-slate-900 shadow-xs'
+                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-emerald-100 text-emerald-800 font-bold text-xs">
+                            🛡️
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-xs text-slate-900">Cashfree Payments</span>
+                              <span className="text-[9px] bg-emerald-100 text-emerald-800 font-mono px-1.5 py-0.2 rounded font-extrabold uppercase">Secure PG</span>
+                            </div>
+                            <p className="text-[10px] text-slate-500 font-medium">
+                              UPI, RuPay Cards & All Netbanking
+                            </p>
+                          </div>
+                        </div>
+                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedGateway === 'CASHFREE' ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300'}`}>
+                          {selectedGateway === 'CASHFREE' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </div>
+                      </button>
+                    )}
+
+                    {/* Offline / Cash Option */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedGateway('OFFLINE');
+                        setPaymentErrorMessage('');
+                      }}
+                      className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                        selectedGateway === 'OFFLINE'
+                          ? 'bg-amber-50 border-amber-500 ring-2 ring-amber-500/20 text-slate-900 shadow-xs'
+                          : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-amber-100 text-amber-800 font-bold text-xs">
+                          💵
+                        </div>
+                        <div>
+                          <p className="font-extrabold text-xs text-slate-900">
+                            {isHindi ? "ऑफलाइन / स्टोर काउंटर कैश" : "Offline / Store Counter Cash"}
+                          </p>
+                          <p className="text-[10px] text-slate-500 font-medium">
+                            {isHindi ? "स्वास्तिक काउंटर पर या अगली डिलीवरी पर नकद भुगतान करें" : "Pay via cash at store counter or next COD order"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedGateway === 'OFFLINE' ? 'border-amber-600 bg-amber-600' : 'border-slate-300'}`}>
+                        {selectedGateway === 'OFFLINE' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                    </button>
+
+                    {!gatewaySettings.razorpayEnabled && !gatewaySettings.cashfreeEnabled && (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 font-medium flex items-center gap-2">
+                        <span>⚠️</span>
+                        <span>
+                          {isHindi 
+                            ? "ऑनलाइन भुगतान गेटवे वर्तमान में स्टोर प्रबंधन द्वारा अक्षम हैं। आप स्टोर नकद द्वारा मेंबरशिप एक्टिव कर सकते हैं।" 
+                            : "Online payment gateways are currently disabled in store settings. You can complete membership via store cash."}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Tab Bodies */}
-                  {primePaymentMethod === 'offline' && (
-                    <div className="space-y-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-                      <div className="flex items-center gap-2 text-amber-800 font-extrabold text-xs">
-                        <span className="text-sm">💵</span>
-                        <span>{isHindi ? "ऑफलाइन नकद भुगतान सुविधा" : "Offline Payment / Cash at Counter"}</span>
-                      </div>
-                      <p className="text-[11px] text-slate-600 leading-normal font-medium">
-                        {isHindi 
-                          ? "आप ₹299 की सदस्यता का भुगतान स्वास्तिक सुपरमार्केट काउंटर पर या अगले डिलीवरी ऑर्डर पर नकद में कर सकते हैं। मेंबरशिप तुरंत एक्टिव हो जाएगी!" 
-                          : "You can pay the ₹299 membership fee via cash at any store counter or during your next COD delivery. Your Prime VIP status will activate immediately!"}
-                      </p>
-                    </div>
-                  )}
-
-                  {primePaymentMethod === 'upi' && (
-                    <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  {/* Sub-method details for Online Gateways */}
+                  {selectedGateway !== 'OFFLINE' && (
+                    <div className="space-y-3 pt-2">
                       <div className="grid grid-cols-3 gap-1.5">
                         {[
-                          { id: 'gpay', name: 'Google Pay' },
-                          { id: 'phonepe', name: 'PhonePe' },
-                          { id: 'paytm', name: 'Paytm UPI' }
-                        ].map(app => (
+                          { id: 'upi', label: 'UPI / QR', icon: '⚡' },
+                          { id: 'card', label: isHindi ? 'कार्ड' : 'Card', icon: '💳' },
+                          { id: 'netbanking', label: 'NetBank', icon: '🏛️' }
+                        ].map(tab => (
                           <button
-                            key={app.id}
+                            key={tab.id}
                             type="button"
-                            onClick={() => setPrimePaymentUpiApp(app.id)}
-                            className={`py-1.5 rounded-lg border text-[9px] font-bold text-center transition-all cursor-pointer ${
-                              primePaymentUpiApp === app.id
-                                ? 'bg-emerald-100 border-emerald-400 text-emerald-800 font-extrabold'
-                                : 'bg-white border-slate-200 text-slate-600'
+                            onClick={() => {
+                              setPrimePaymentMethod(tab.id);
+                              setPaymentErrorMessage('');
+                            }}
+                            className={`py-2 rounded-xl border text-[10px] font-black uppercase flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                              primePaymentMethod === tab.id
+                                ? 'bg-slate-900 border-slate-900 text-white shadow-xs'
+                                : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
                             }`}
                           >
-                            {app.name}
+                            <span className="text-sm">{tab.icon}</span>
+                            <span>{tab.label}</span>
                           </button>
                         ))}
                       </div>
 
-                      <div className="space-y-1">
-                        <label className="text-[9px] text-slate-600 font-bold uppercase block">
-                          {isHindi ? "वैकल्पिक यूपीआई आईडी" : "Or Custom UPI ID"}
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="username@okhdfcbank"
-                          value={customUpiId}
-                          onChange={(e) => setCustomUpiId(e.target.value)}
-                          className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-emerald-500 font-mono"
-                        />
-                      </div>
-                    </div>
-                  )}
+                      {primePaymentMethod === 'upi' && (
+                        <div className="space-y-2.5 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {[
+                              { id: 'gpay', name: 'Google Pay' },
+                              { id: 'phonepe', name: 'PhonePe' },
+                              { id: 'paytm', name: 'Paytm UPI' }
+                            ].map(app => (
+                              <button
+                                key={app.id}
+                                type="button"
+                                onClick={() => setPrimePaymentUpiApp(app.id)}
+                                className={`py-1.5 rounded-lg border text-[9px] font-bold text-center transition-all cursor-pointer ${
+                                  primePaymentUpiApp === app.id
+                                    ? 'bg-sky-100 border-sky-400 text-sky-800 font-extrabold'
+                                    : 'bg-white border-slate-200 text-slate-600'
+                                }`}
+                              >
+                                {app.name}
+                              </button>
+                            ))}
+                          </div>
 
-                  {primePaymentMethod === 'card' && (
-                    <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200 font-mono">
-                      <div className="space-y-1">
-                        <label className="text-[8px] text-slate-600 font-bold uppercase block">{isHindi ? "कार्ड धारक का नाम" : "Cardholder Name"}</label>
-                        <input
-                          type="text"
-                          placeholder="Abhishek Sharma"
-                          value={primeCardName}
-                          onChange={(e) => setPrimeCardName(e.target.value)}
-                          className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-emerald-500 font-sans"
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[8px] text-slate-600 font-bold uppercase block">{isHindi ? "१६ अंकों का कार्ड नंबर" : "16 Digit Card Number"}</label>
-                        <input
-                          type="text"
-                          placeholder="4321 5678 9012 3456"
-                          value={primeCardNum}
-                          onChange={(e) => setPrimeCardNum(e.target.value.replace(/[^0-9]/g, ''))}
-                          maxLength={16}
-                          className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-emerald-500"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
-                          <label className="text-[8px] text-slate-600 font-bold uppercase block">{isHindi ? "समाप्ति तिथि" : "Expiry"}</label>
-                          <input
-                            type="text"
-                            placeholder="MM/YY"
-                            value={primeCardExpiry}
-                            onChange={(e) => setPrimeCardExpiry(e.target.value)}
-                            maxLength={5}
-                            className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-emerald-500 text-center"
-                          />
+                          <div className="space-y-1">
+                            <label className="text-[9px] text-slate-600 font-bold uppercase block">
+                              {isHindi ? "वैकल्पिक यूपीआई आईडी" : "Or Custom UPI ID"}
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="username@okhdfcbank"
+                              value={customUpiId}
+                              onChange={(e) => setCustomUpiId(e.target.value)}
+                              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-sky-500 font-mono"
+                            />
+                          </div>
                         </div>
-                        <div className="space-y-1">
-                          <label className="text-[8px] text-slate-600 font-bold uppercase block">CVV</label>
-                          <input
-                            type="password"
-                            placeholder="***"
-                            value={primeCardCvv}
-                            onChange={(e) => setPrimeCardCvv(e.target.value.replace(/[^0-9]/g, ''))}
-                            maxLength={3}
-                            className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-emerald-500 text-center"
-                          />
+                      )}
+
+                      {primePaymentMethod === 'card' && (
+                        <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200 font-mono">
+                          <div className="space-y-1">
+                            <label className="text-[8px] text-slate-600 font-bold uppercase block">{isHindi ? "कार्ड धारक का नाम" : "Cardholder Name"}</label>
+                            <input
+                              type="text"
+                              placeholder="Abhishek Sharma"
+                              value={primeCardName}
+                              onChange={(e) => setPrimeCardName(e.target.value)}
+                              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-sky-500 font-sans"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[8px] text-slate-600 font-bold uppercase block">{isHindi ? "१६ अंकों का कार्ड नंबर" : "16 Digit Card Number"}</label>
+                            <input
+                              type="text"
+                              placeholder="4321 5678 9012 3456"
+                              value={primeCardNum}
+                              onChange={(e) => setPrimeCardNum(e.target.value.replace(/[^0-9]/g, ''))}
+                              maxLength={16}
+                              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-sky-500"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <label className="text-[8px] text-slate-600 font-bold uppercase block">{isHindi ? "समाप्ति तिथि" : "Expiry"}</label>
+                              <input
+                                type="text"
+                                placeholder="MM/YY"
+                                value={primeCardExpiry}
+                                onChange={(e) => setPrimeCardExpiry(e.target.value)}
+                                maxLength={5}
+                                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-sky-500 text-center"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[8px] text-slate-600 font-bold uppercase block">CVV</label>
+                              <input
+                                type="password"
+                                placeholder="***"
+                                value={primeCardCvv}
+                                onChange={(e) => setPrimeCardCvv(e.target.value.replace(/[^0-9]/g, ''))}
+                                maxLength={3}
+                                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-sky-500 text-center"
+                              />
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                      )}
+
+                      {primePaymentMethod === 'netbanking' && (
+                        <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                          <label className="text-[9px] text-slate-600 font-bold uppercase tracking-wider block">
+                            {isHindi ? "अपना बैंक चुनें" : "Select Bank Account"}
+                          </label>
+                          <select
+                            value={selectedBank}
+                            onChange={(e) => setSelectedBank(e.target.value)}
+                            className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 outline-none focus:border-sky-500"
+                          >
+                            <option value="sbi">State Bank of India (SBI)</option>
+                            <option value="hdfc">HDFC Bank</option>
+                            <option value="icici">ICICI Bank</option>
+                            <option value="axis">Axis Bank Ltd</option>
+                          </select>
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {primePaymentMethod === 'netbanking' && (
-                    <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                      <label className="text-[9px] text-slate-600 font-bold uppercase tracking-wider block">
-                        {isHindi ? "अपना बैंक चुनें" : "Select Bank Account"}
-                      </label>
-                      <select
-                        value={selectedBank}
-                        onChange={(e) => setSelectedBank(e.target.value)}
-                        className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 outline-none focus:border-emerald-500"
-                      >
-                        <option value="sbi">State Bank of India (SBI)</option>
-                        <option value="hdfc">HDFC Bank</option>
-                        <option value="icici">ICICI Bank</option>
-                        <option value="axis">Axis Bank Ltd</option>
-                      </select>
+                  {paymentErrorMessage && (
+                    <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium">
+                      ⚠️ {paymentErrorMessage}
                     </div>
                   )}
 
-                  {/* Pay Securely & Rejections */}
+                  {/* Pay Securely Button */}
                   <div className="space-y-2 border-t border-slate-200 pt-4">
                     <button
                       type="button"
                       onClick={handleProcessPrimePayment}
-                      className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 font-extrabold text-xs uppercase tracking-widest rounded-xl text-white transition-all shadow-xs active:scale-98 cursor-pointer flex items-center justify-center gap-2"
+                      className={`w-full py-3.5 font-extrabold text-xs uppercase tracking-widest rounded-xl text-white transition-all shadow-md active:scale-98 cursor-pointer flex items-center justify-center gap-2 ${
+                        selectedGateway === 'RAZORPAY'
+                          ? 'bg-sky-600 hover:bg-sky-700 shadow-sky-600/20'
+                          : selectedGateway === 'CASHFREE'
+                          ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
+                          : 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/20'
+                      }`}
                     >
-                      <span>🔒</span>
-                      <span>{isHindi ? "कैशफ्री गेटवे से सुरक्षित भुगतान करें" : "Pay Securely via Cashfree Gateway"}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPrimePaymentStep('processing');
-                        setTimeout(() => {
-                          setPrimePaymentStep('error');
-                          setPaymentErrorMessage(isHindi ? "बैंक नेटवर्क टाइमआउट: उपयोगकर्ता द्वारा भुगतान अस्वीकृत किया गया।" : "Bank Network Timeout: Authorization declined by payer's bank node.");
-                        }, 1500);
-                      }}
-                      className="w-full py-1.5 bg-slate-100 hover:bg-rose-50 border border-slate-200 text-[9px] text-rose-700 font-bold uppercase tracking-widest rounded-lg transition-all cursor-pointer"
-                    >
-                      ⚠️ {isHindi ? "सिम्युलेट असफल ट्रांजैक्शन" : "Simulate Gateway Failure"}
+                      <span>{selectedGateway === 'OFFLINE' ? '💵' : '🔒'}</span>
+                      <span>
+                        {selectedGateway === 'RAZORPAY'
+                          ? (isHindi ? `रेज़रपे गेटवे से ₹${primeSettings?.primePlanFee ?? 299} भुगतान करें` : `Pay ₹${primeSettings?.primePlanFee ?? 299} via Razorpay Gateway`)
+                          : selectedGateway === 'CASHFREE'
+                          ? (isHindi ? `कैशफ्री गेटवे से ₹${primeSettings?.primePlanFee ?? 299} भुगतान करें` : `Pay ₹${primeSettings?.primePlanFee ?? 299} via Cashfree Gateway`)
+                          : (isHindi ? "ऑफलाइन नकद भुगतान द्वारा मेंबरशिप एक्टिव करें" : "Activate Membership via Offline Store Cash")}
+                      </span>
                     </button>
                   </div>
                 </div>

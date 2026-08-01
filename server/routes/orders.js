@@ -140,41 +140,65 @@ router.post("/orders", async (req, res) => {
     // Trigger WhatsApp notifications for Customer, Admin, and Delivery Staff
     try {
       const orderTotal = o.total || o.grand_total || 0;
-      const custName = o.customerName || "Valued Customer";
-      const custPhone = o.customerPhone;
+      let custName = o.customerName || o.customer_name;
+      const custPhone = o.customerPhone || o.customer_phone;
+
+      if ((!custName || custName === "Simulated Customer" || custName === "Valued Customer") && custPhone) {
+        try {
+          const custLookup = await db.query(
+            "SELECT customer_name FROM \"order\" WHERE customer_phone LIKE ? AND customer_name != '' AND customer_name != 'Simulated Customer' ORDER BY id DESC LIMIT 1",
+            [`%${String(custPhone).slice(-10)}%`]
+          );
+          if (custLookup.length > 0 && custLookup[0].customer_name) {
+            custName = custLookup[0].customer_name;
+          }
+        } catch (e) {}
+      }
+      if (!custName) custName = "Valued Customer";
+
       const deliveryPartnerPhone = o.deliveryPartnerPhone || "+91 95400 12099";
       const adminPhone = process.env.ADMIN_WHATSAPP_PHONE || "+91 98101 20299";
 
+      const waPromises = [];
+
       // 1. Customer WhatsApp Notification
       if (custPhone) {
-        // First try template if configured
-        sendWhatsappMessageUnified(
-          custPhone,
-          `🎉 *Order Placed Successfully!* (#${o.id})\n\nDear ${custName},\nThank you for shopping at Swastik Supermarket! Your order of *₹${orderTotal}* has been confirmed and is being packed.\n\n📍 *Address:* ${o.shippingAddress || 'N/A'}\n💳 *Payment:* ${o.paymentMethod || 'COD'}\n\nWe will update you as soon as your rider is dispatched! 🚚`,
-          false,
-          undefined,
-          "thank_you_template",
-          [custName, String(o.id), String(orderTotal)]
-        ).catch(err => console.error("[Auto WhatsApp Customer Error]:", err.message));
+        waPromises.push(
+          sendWhatsappMessageUnified(
+            custPhone,
+            `🎉 *Order Placed Successfully!* (#${o.id})\n\nDear ${custName},\nThank you for shopping at Swastik Supermarket! Your order of *₹${orderTotal}* has been confirmed and is being packed.\n\n📍 *Address:* ${o.shippingAddress || 'N/A'}\n💳 *Payment:* ${o.paymentMethod || 'COD'}\n\nWe will update you as soon as your rider is dispatched! 🚚`,
+            false,
+            undefined,
+            "thank_you_template",
+            [custName, String(o.id), String(orderTotal)]
+          )
+        );
       }
 
       // 2. Admin WhatsApp Notification
       if (adminPhone) {
-        sendWhatsappMessageUnified(
-          adminPhone,
-          `🚨 *NEW ORDER ALERT!* (#${o.id})\n\nCustomer: ${custName} (${custPhone || 'N/A'})\nTotal Bill: *₹${orderTotal}*\nPayment Method: ${o.paymentMethod || 'COD'}\nAddress: ${o.shippingAddress || 'Store Pickup'}\n\nPlease review and prepare items in Admin Dashboard.`,
-          false
-        ).catch(err => console.error("[Auto WhatsApp Admin Error]:", err.message));
+        waPromises.push(
+          sendWhatsappMessageUnified(
+            adminPhone,
+            `🚨 *NEW ORDER ALERT!* (#${o.id})\n\nCustomer: ${custName} (${custPhone || 'N/A'})\nTotal Bill: *₹${orderTotal}*\nPayment Method: ${o.paymentMethod || 'COD'}\nAddress: ${o.shippingAddress || 'Store Pickup'}\n\nPlease review and prepare items in Admin Dashboard.`,
+            false
+          )
+        );
       }
 
       // 3. Delivery Staff WhatsApp Notification
       if (deliveryPartnerPhone) {
-        sendWhatsappMessageUnified(
-          deliveryPartnerPhone,
-          `🛵 *NEW DELIVERY ASSIGNMENT* (#${o.id})\n\nCustomer: ${custName} (${custPhone || 'N/A'})\nDelivery Address: ${o.shippingAddress || 'Store Pickup'}\nAmount to Collect: *₹${orderTotal}* (${o.paymentMethod || 'COD'})\n\nPlease be ready for pickup from dispatch hub.`,
-          false
-        ).catch(err => console.error("[Auto WhatsApp Delivery Error]:", err.message));
+        waPromises.push(
+          sendWhatsappMessageUnified(
+            deliveryPartnerPhone,
+            `🛵 *NEW DELIVERY ASSIGNMENT* (#${o.id})\n\nCustomer: ${custName} (${custPhone || 'N/A'})\nDelivery Address: ${o.shippingAddress || 'Store Pickup'}\nAmount to Collect: *₹${orderTotal}* (${o.paymentMethod || 'COD'})\n\nPlease be ready for pickup from dispatch hub.`,
+            false
+          )
+        );
       }
+
+      const waResults = await Promise.allSettled(waPromises);
+      console.log("[Order WhatsApp Dispatch Complete]:", waResults.map(r => r.status === "fulfilled" ? r.value : r.reason));
     } catch (waErr) {
       console.error("[WhatsApp Dispatch Error]:", waErr.message);
     }
@@ -338,21 +362,35 @@ router.put("/orders/:id/transit", async (req, res) => {
       const deliveryPartnerPhone = updateData.deliveryPartnerPhone || orderRec.delivery_partner_phone || "+91 95400 12099";
       const adminPhone = process.env.ADMIN_WHATSAPP_PHONE || "+91 98101 20299";
 
+      let targetName = updateData.customerName || orderRec.customer_name;
+      if ((!targetName || targetName === "Simulated Customer" || targetName === "Valued Customer" || targetName === "Customer") && targetPhone) {
+        try {
+          const custLookup = await db.query(
+            "SELECT customer_name FROM \"order\" WHERE customer_phone LIKE ? AND customer_name != '' AND customer_name != 'Simulated Customer' ORDER BY id DESC LIMIT 1",
+            [`%${String(targetPhone).slice(-10)}%`]
+          );
+          if (custLookup.length > 0 && custLookup[0].customer_name) {
+            targetName = custLookup[0].customer_name;
+          }
+        } catch (e) {}
+      }
+      if (!targetName) targetName = "Valued Customer";
+
       if (targetPhone) {
         sendWhatsappMessageUnified(
           targetPhone,
-          `📦 *Order Update Notice!* (#${id})\n\nStatus: *${statusLabel}*\nAssigned Rider: ${partnerName}\n\nThank you for choosing Swastik Supermarket! 🛒`,
+          `📦 *Order Update Notice!* (#${id})\n\nDear ${targetName},\nYour order status has been updated to: *${statusLabel}*\nAssigned Rider: ${partnerName}\n\nThank you for choosing Swastik Supermarket! 🛒`,
           false,
           undefined,
           "order_dispatch_alert",
-          [orderRec.customer_name || "Customer", id, String(orderRec.grand_total || 0)]
+          [targetName, id, String(orderRec.grand_total || 0)]
         ).catch(err => console.error("[Auto WhatsApp Update Customer Error]:", err.message));
       }
 
       if (adminPhone) {
         sendWhatsappMessageUnified(
           adminPhone,
-          `✏️ *ORDER STATUS UPDATED* (#${id})\n\nNew Status: *${statusLabel}*\nRider: ${partnerName}\nCustomer: ${targetPhone}`,
+          `✏️ *ORDER STATUS UPDATED* (#${id})\n\nNew Status: *${statusLabel}*\nRider: ${partnerName}\nCustomer: ${targetName}${targetPhone ? ` (${targetPhone})` : ''}`,
           false
         ).catch(err => console.error("[Auto WhatsApp Update Admin Error]:", err.message));
       }
@@ -360,7 +398,7 @@ router.put("/orders/:id/transit", async (req, res) => {
       if (deliveryPartnerPhone) {
         sendWhatsappMessageUnified(
           deliveryPartnerPhone,
-          `🛵 *TASK STATUS UPDATED* (#${id})\n\nStatus: *${statusLabel}*\nCustomer Phone: ${targetPhone}\nDelivery Address: ${orderRec.shipping_address || 'Store Pickup'}`,
+          `🛵 *TASK STATUS UPDATED* (#${id})\n\nStatus: *${statusLabel}*\nCustomer: ${targetName}${targetPhone ? ` (${targetPhone})` : ''}\nDelivery Address: ${orderRec.shipping_address || 'Store Pickup'}`,
           false
         ).catch(err => console.error("[Auto WhatsApp Update Delivery Error]:", err.message));
       }

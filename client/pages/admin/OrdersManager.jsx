@@ -283,8 +283,25 @@ export default function OrdersManager({ userRole }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('All'); // All, Confirmed, In Transit, Delivered
   const [filterPaymentMode, setFilterPaymentMode] = useState('All'); // All, COD, CASHFREE_ONLINE
+  const [filterDeliveryPerson, setFilterDeliveryPerson] = useState('All');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+
+  // Extract unique delivery person options
+  const filterDeliveryStaffList = useMemo(() => {
+    const namesSet = new Set();
+    (staff || []).forEach(s => {
+      if (s.permissions?.includes('delivery') || s.name?.toLowerCase().includes('delivery') || s.name?.toLowerCase().includes('rider') || s.name?.toLowerCase().includes('pilot')) {
+        namesSet.add(s.name.trim());
+      }
+    });
+    (orders || []).forEach(o => {
+      if (o.deliveryPartnerName) {
+        namesSet.add(o.deliveryPartnerName.trim());
+      }
+    });
+    return Array.from(namesSet);
+  }, [staff, orders]);
 
   // Whatsapp Outbox Simulation Status state
   const [isSendingBill, setIsSendingBill] = useState(false);
@@ -306,7 +323,7 @@ export default function OrdersManager({ userRole }) {
 
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterStatus, filterPaymentMode, dateFrom, dateTo]);
+  }, [searchTerm, filterStatus, filterPaymentMode, filterDeliveryPerson, dateFrom, dateTo]);
 
   React.useEffect(() => {
     const cName = tpCustomerName || "Valued Customer";
@@ -321,6 +338,7 @@ export default function OrdersManager({ userRole }) {
     setSearchTerm('');
     setFilterStatus('All');
     setFilterPaymentMode('All');
+    setFilterDeliveryPerson('All');
     setDateFrom('');
     setDateTo('');
   };
@@ -429,7 +447,11 @@ export default function OrdersManager({ userRole }) {
       (filterPaymentMode === 'COD' && o.paymentMethod === 'COD') ||
       (filterPaymentMode === 'CASHFREE_ONLINE' && (o.paymentMethod === 'CASHFREE_ONLINE' || o.paymentMethod === 'ONLINE'));
 
-    return matchesSearch && matchesStatus && matchesDate && matchesPaymentMode;
+    // 5. Delivery Person Match
+    const matchesDeliveryPerson = filterDeliveryPerson === 'All' ||
+      (o.deliveryPartnerName && o.deliveryPartnerName.toLowerCase().includes(filterDeliveryPerson.toLowerCase()));
+
+    return matchesSearch && matchesStatus && matchesDate && matchesPaymentMode && matchesDeliveryPerson;
   });
 
   const totalPages = Math.ceil(filteredOrders.length / itemsPerPage) || 1;
@@ -1004,29 +1026,45 @@ export default function OrdersManager({ userRole }) {
 
         </div>
 
-        {/* Row 3: Payment Mode Filter and XLS Download Button */}
+        {/* Row 3: Payment Mode Filter, Delivery Person Filter, and XLS Download Button */}
         <div className="pt-3.5 border-t border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5">
-            <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest shrink-0">Payment Mode Filter:</span>
-            <div className="flex bg-slate-950 border border-white/10 p-0.5 rounded-lg">
-              {[
-                { key: 'All', label: 'All Modes' },
-                { key: 'COD', label: 'COD' },
-                { key: 'CASHFREE_ONLINE', label: 'Cashfree Sandbox PG' }
-              ].map((pm) => (
-                <button
-                  key={pm.key}
-                  type="button"
-                  onClick={() => setFilterPaymentMode(pm.key)}
-                  className={`px-3 py-1 rounded text-[9px] font-black uppercase transition-all whitespace-nowrap ${
-                    filterPaymentMode === pm.key 
-                      ? 'bg-amber-400 text-slate-950 font-black shadow-md shadow-amber-400/10' 
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {pm.label}
-                </button>
-              ))}
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2.5">
+              <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest shrink-0">Payment Mode:</span>
+              <div className="flex bg-slate-950 border border-white/10 p-0.5 rounded-lg">
+                {[
+                  { key: 'All', label: 'All Modes' },
+                  { key: 'COD', label: 'COD' },
+                  { key: 'CASHFREE_ONLINE', label: 'Cashfree Sandbox PG' }
+                ].map((pm) => (
+                  <button
+                    key={pm.key}
+                    type="button"
+                    onClick={() => setFilterPaymentMode(pm.key)}
+                    className={`px-3 py-1 rounded text-[9px] font-black uppercase transition-all whitespace-nowrap ${
+                      filterPaymentMode === pm.key 
+                        ? 'bg-amber-400 text-slate-950 font-black shadow-md shadow-amber-400/10' 
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {pm.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest shrink-0">🛵 Delivery Person:</span>
+              <select
+                value={filterDeliveryPerson}
+                onChange={(e) => setFilterDeliveryPerson(e.target.value)}
+                className="bg-slate-950 border border-white/10 px-3 py-1.5 rounded-xl text-xs text-cyan-300 font-bold outline-none focus:border-cyan-400/40 cursor-pointer"
+              >
+                <option value="All">All Delivery Staff ({filterDeliveryStaffList.length})</option>
+                {filterDeliveryStaffList.map((dpName, idx) => (
+                  <option key={idx} value={dpName}>{dpName}</option>
+                ))}
+              </select>
             </div>
           </div>
 
