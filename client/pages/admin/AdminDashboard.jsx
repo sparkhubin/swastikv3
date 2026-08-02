@@ -350,6 +350,34 @@ export default function AdminDashboard({ onViewChange }) {
     }
   };
 
+  // Determine if active user has Super Admin clearance (Root Admin)
+  const isRootAdmin = Boolean(
+    !loggedInStaff ||
+    loggedInStaff.id === 1 ||
+    loggedInStaff.mobile === '9999999999' ||
+    loggedInStaff.role === 'admin' ||
+    (loggedInStaff.permissions && loggedInStaff.permissions.includes('staff'))
+  );
+
+  const allAdminTabs = ["dashboard", "products", "categories", "orders", "offers", "membership", "customers", "partners", "reviews", "pages", "staff", "delivery", "payment-reports", "sliders", "locations", "marg-billing", "payment-settings"];
+
+  const authorizedTabs = userRole === 'delivery'
+    ? ['delivery', 'payment-reports']
+    : (isRootAdmin
+        ? allAdminTabs
+        : (loggedInStaff?.permissions && loggedInStaff.permissions.length > 0
+            ? loggedInStaff.permissions
+            : allAdminTabs));
+
+  // Automatically clamp activeTab if current tab is unauthorized for logged in staff member
+  useEffect(() => {
+    if (loggedInStaff && !isRootAdmin) {
+      if (authorizedTabs.length > 0 && !authorizedTabs.includes(activeTab)) {
+        setActiveTab(authorizedTabs[0]);
+      }
+    }
+  }, [loggedInStaff, isRootAdmin, authorizedTabs, activeTab]);
+
   // Render Login state gate
   if (!loggedInStaff) {
     return (
@@ -526,34 +554,6 @@ export default function AdminDashboard({ onViewChange }) {
       </div>
     );
   }
-
-  // Determine if active user has Super Admin clearance (Root Admin)
-  const isRootAdmin = Boolean(
-    !loggedInStaff ||
-    loggedInStaff.id === 1 ||
-    loggedInStaff.mobile === '9999999999' ||
-    loggedInStaff.role === 'admin' ||
-    (loggedInStaff.permissions && loggedInStaff.permissions.includes('staff'))
-  );
-
-  const allAdminTabs = ["dashboard", "products", "categories", "orders", "offers", "membership", "customers", "partners", "reviews", "pages", "staff", "delivery", "payment-reports", "sliders", "locations", "marg-billing", "payment-settings"];
-
-  const authorizedTabs = userRole === 'delivery'
-    ? ['delivery', 'payment-reports']
-    : (isRootAdmin
-        ? allAdminTabs
-        : (loggedInStaff?.permissions && loggedInStaff.permissions.length > 0
-            ? loggedInStaff.permissions
-            : allAdminTabs));
-
-  // Automatically clamp activeTab if current tab is unauthorized for logged in staff member
-  useEffect(() => {
-    if (loggedInStaff && !isRootAdmin) {
-      if (authorizedTabs.length > 0 && !authorizedTabs.includes(activeTab)) {
-        setActiveTab(authorizedTabs[0]);
-      }
-    }
-  }, [loggedInStaff, isRootAdmin, authorizedTabs, activeTab]);
 
   return (
     <div className={`min-h-screen font-sans selection:bg-cyan-500 selection:text-slate-900 pb-20 transition-colors duration-200 ${isAdminDark ? 'bg-slate-950 text-white admin-theme-dark' : 'bg-slate-50 text-slate-900 admin-theme-light'}`}>
