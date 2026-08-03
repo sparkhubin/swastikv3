@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { db } from "../database/db.js";
+import cors from "cors";
 import { 
   uploadsDir, 
   fallbackProducts, 
@@ -29,6 +30,19 @@ export async function createServer() {
   const app = express();
   const PORT = 3000;
 
+  app.use(cors({
+    origin: [
+      "https://localhost",
+      "capacitor://localhost",
+      "http://localhost",
+      "https://swastiksupermarket.com"
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  }));
+  
+  app.options("*", cors());
   // Serve uploaded assets statically
   app.use("/uploads", express.static(uploadsDir));
   app.use(express.json());
