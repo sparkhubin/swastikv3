@@ -4,6 +4,12 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useData } from '../../context/DataContext';
 import R2ImageUploader from './R2ImageUploader';
 import { 
+  resolveProductImage, 
+  markImageFailed, 
+  hasCustomProductImage, 
+  DEFAULT_PRODUCT_FALLBACK 
+} from '../../utils/imageHelper';
+import { 
   Package, 
   Search, 
   Plus, 
@@ -13,37 +19,48 @@ import {
   Image as ImageIcon,
   FileSpreadsheet,
   ChevronsUpDown,
-  Filter
+  Filter,
+  CheckCircle2,
+  AlertTriangle
 } from 'lucide-react';
 
 const ListProductImage = ({ p, r2PublicUrl }) => {
-  const extensions = ['.png', '.jpg', '.jpeg', '.webp'];
-  const [attemptIndex, setAttemptIndex] = useState(0);
+  const [imgSrc, setImgSrc] = useState(() => resolveProductImage(p, r2PublicUrl, 120));
 
-  const code = p?.code || p?.Code;
-  let imgSrc;
-  if (code && r2PublicUrl && attemptIndex < extensions.length) {
-    imgSrc = `${r2PublicUrl.replace(/\/$/, '')}/${code}${extensions[attemptIndex]}`;
-  } else if (attemptIndex === extensions.length) {
-    imgSrc = p?.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400';
-  } else {
-    imgSrc = 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400';
-  }
+  React.useEffect(() => {
+    setImgSrc(resolveProductImage(p, r2PublicUrl, 120));
+  }, [p, r2PublicUrl]);
 
   const handleImageError = () => {
-    if (attemptIndex <= extensions.length) {
-      setAttemptIndex(prev => prev + 1);
+    if (imgSrc && imgSrc !== DEFAULT_PRODUCT_FALLBACK) {
+      markImageFailed(imgSrc);
+      setImgSrc(DEFAULT_PRODUCT_FALLBACK);
     }
   };
 
+  const hasImage = hasCustomProductImage(p);
+
   return (
-    <img 
-      src={imgSrc} 
-      onError={handleImageError} 
-      className="w-12 h-12 rounded-lg object-cover border border-white/10 shadow bg-slate-950 shrink-0" 
-      alt="SKU"
-      referrerPolicy="no-referrer"
-    />
+    <div className="relative group shrink-0">
+      <img 
+        src={imgSrc} 
+        onError={handleImageError} 
+        loading="lazy"
+        decoding="async"
+        className="w-12 h-12 rounded-lg object-cover border border-white/10 shadow bg-slate-950 shrink-0" 
+        alt="SKU"
+        referrerPolicy="no-referrer"
+      />
+      {hasImage ? (
+        <span className="absolute -top-1 -right-1 bg-emerald-500 text-slate-950 p-0.5 rounded-full ring-2 ring-slate-900 shadow" title="Has custom image">
+          <CheckCircle2 className="w-2.5 h-2.5" />
+        </span>
+      ) : (
+        <span className="absolute -top-1 -right-1 bg-amber-500 text-slate-950 p-0.5 rounded-full ring-2 ring-slate-900 shadow" title="No custom image assigned">
+          <AlertTriangle className="w-2.5 h-2.5" />
+        </span>
+      )}
+    </div>
   );
 };
 
@@ -66,13 +83,26 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
     unitPrices: '',
     image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400',
     stockCount: '100',
-    code: ''
+    code: '',
+    gstPercent: '5'
   });
 
   // Filters state
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterPromoStatus, setFilterPromoStatus] = useState('all'); // all | promo | normal
   const [filterBrand, setFilterBrand] = useState('all');
+  const [filterImageStatus, setFilterImageStatus] = useState('all'); // all | with-image | no-image
+
+  // Image statistics
+  const { withImageCount, noImageCount } = React.useMemo(() => {
+    let withImg = 0;
+    let noImg = 0;
+    products.forEach(p => {
+      if (hasCustomProductImage(p)) withImg++;
+      else noImg++;
+    });
+    return { withImageCount: withImg, noImageCount: noImg };
+  }, [products]);
 
   const availableBrands = React.useMemo(() => {
     const brands = new Set();
@@ -85,13 +115,13 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
     return Array.from(brands).sort();
   }, [products]);
 
-  // Pagination states
+  // Pagination states (default 50 items per page)
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
+  const [itemsPerPage, setItemsPerPage] = useState(50);
 
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterCategory, filterPromoStatus, filterBrand]);
+  }, [searchQuery, filterCategory, filterPromoStatus, filterBrand, filterImageStatus, itemsPerPage]);
 
   const downloadSampleProductsExcel = () => {
     const sampleData = [
@@ -100,6 +130,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
         "Price": "120",
         "OriginalPrice": "150",
         "Discount": "20% OFF",
+        "GST (%)": "5",
         "Unit": "1kg, 2kg, 5kg",
         "UnitPrices": "120, 230, 550",
         "Brand": "India Gate",
@@ -110,10 +141,22 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
         "Price": "175",
         "OriginalPrice": "195",
         "Discount": "₹20 OFF",
+        "GST (%)": "5",
         "Unit": "1L, 2L, 5L",
         "UnitPrices": "175, 340, 820",
         "Brand": "Fortune",
         "Image": "https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&q=80&w=400"
+      },
+      {
+        "Name": "Dark Chocolate Slab",
+        "Price": "90",
+        "OriginalPrice": "100",
+        "Discount": "10% OFF",
+        "GST (%)": "18",
+        "Unit": "1 Unit",
+        "UnitPrices": "1 Unit:90",
+        "Brand": "Cadbury",
+        "Image": "https://images.unsplash.com/photo-1548907040-4d42b52125ca?auto=format&fit=crop&q=80&w=400"
       }
     ];
 
@@ -146,7 +189,8 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
       packHi: productForm.unit ? productForm.unit.split(',')[0].trim() : '1 Unit',
       image: productForm.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400',
       stockCount: productForm.stockCount !== '' ? Number(productForm.stockCount) : 100,
-      code: productForm.code || ''
+      code: productForm.code || '',
+      gstPercent: productForm.gstPercent !== '' ? Number(productForm.gstPercent) : 5
     };
 
     if (editingProdId) {
@@ -168,7 +212,8 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
       unitPrices: '',
       image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400',
       stockCount: '100',
-      code: ''
+      code: '',
+      gstPercent: '5'
     });
   };
 
@@ -185,7 +230,8 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
       unitPrices: prod.unitPrices || '',
       image: prod.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400',
       stockCount: prod.stockCount !== undefined ? String(prod.stockCount) : '100',
-      code: prod.code || prod.Code || ''
+      code: prod.code || prod.Code || '',
+      gstPercent: prod.gstPercent !== undefined ? String(prod.gstPercent) : (prod.gst_percent !== undefined ? String(prod.gst_percent) : '5')
     });
 
     // Auto scroll directly to update form
@@ -230,6 +276,8 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
           const price = Number(row.Price || row.price || 0);
           const originalPrice = row.OriginalPrice || row.originalPrice ? Number(row.OriginalPrice || row.originalPrice) : null;
           const discount = row.Discount || row.discount || null;
+          const gstPercentRaw = row.GST || row.gst || row['GST (%)'] || row['GST%'] || row.GstPercent || row.gst_percent || 5;
+          const gstPercent = Number(String(gstPercentRaw).replace(/[^0-9.]/g, '')) || 5;
           const unit = row.Unit || row.unit || '1 Unit';
           const unitPrices = row.UnitPrices || row.unitPrices || '';
           const brand = row.Brand || row.brand || row.BrandTag || row.brandTag || 'Fresh';
@@ -299,7 +347,8 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
             packHi: unit.split(',')[0].trim(),
             image,
             code,
-            stockCount: 100
+            stockCount: 100,
+            gstPercent: gstPercent
           });
           count++;
         });
@@ -308,7 +357,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
         e.target.value = ""; // reset file input
       } catch (err) {
         console.error(err);
-        alert("Failed to parse spreadsheet file. Please check column headers (Name, Price, OriginalPrice, Discount, Unit, UnitPrices, Brand, Image).");
+        alert("Failed to parse spreadsheet file. Please check column headers (Name, Price, OriginalPrice, Discount, Unit, UnitPrices, Brand, Image, GST).");
       }
     };
     reader.readAsBinaryString(file);
@@ -337,6 +386,8 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
           const price = Number(item.price || item.Price || 0);
           const originalPrice = item.originalPrice || item.OriginalPrice ? Number(item.originalPrice || item.OriginalPrice) : null;
           const discount = item.discount || item.Discount || null;
+          const gstPercentRaw = item.gstPercent || item.gst || item.gst_percent || item.GST || item.GstPercent || 5;
+          const gstPercent = Number(String(gstPercentRaw).replace(/[^0-9.]/g, '')) || 5;
           const unit = item.unit || item.Unit || '1 Unit';
           const unitPrices = item.unitPrices || item.UnitPrices || '';
           const brand = item.brand || item.Brand || item.brandTag || 'Fresh';
@@ -408,7 +459,8 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
             packHi: unit.split(',')[0].trim(),
             image,
             code,
-            stockCount
+            stockCount,
+            gstPercent: gstPercent
           });
           count++;
         });
@@ -441,7 +493,12 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
                          (p.brand && p.brand.trim().toLowerCase() === filterBrand.trim().toLowerCase()) ||
                          (p.subEn && p.subEn.trim().toLowerCase() === filterBrand.trim().toLowerCase());
 
-    return textMatches && categoryMatches && promoMatches && brandMatches;
+    const hasImg = hasCustomProductImage(p);
+    const imageMatches = filterImageStatus === 'all' || 
+                         (filterImageStatus === 'with-image' && hasImg) ||
+                         (filterImageStatus === 'no-image' && !hasImg);
+
+    return textMatches && categoryMatches && promoMatches && brandMatches && imageMatches;
   });
 
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage) || 1;
@@ -603,6 +660,54 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
                     onChange={(e) => setProductForm({ ...productForm, code: e.target.value })}
                     className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-cyan-300 font-mono placeholder:text-slate-700 uppercase"
                   />
+                </div>
+
+                <div className="space-y-1.5 md:col-span-2 bg-slate-950/60 p-3 rounded-xl border border-cyan-500/20">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[9px] font-black text-amber-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <span>GST Rate (%) / जीएसटी दर</span>
+                      <span className="text-[8px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">Tax Slab</span>
+                    </label>
+                    <span className="text-[9px] text-slate-400 font-mono">Current: <strong className="text-cyan-300 font-bold">{productForm.gstPercent || 0}%</strong></span>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="flex items-center gap-1">
+                      {[
+                        { label: '0% (Exempt)', val: '0' },
+                        { label: '5% (Food/Ess)', val: '5' },
+                        { label: '12% (Packaged)', val: '12' },
+                        { label: '18% (Standard)', val: '18' },
+                        { label: '28% (Luxury)', val: '28' }
+                      ].map((slab) => (
+                        <button
+                          key={slab.val}
+                          type="button"
+                          onClick={() => setProductForm({ ...productForm, gstPercent: slab.val })}
+                          className={`flex-1 py-1.5 px-1 rounded-lg text-[9px] font-bold transition-all cursor-pointer ${
+                            String(productForm.gstPercent) === slab.val
+                              ? 'bg-amber-400 text-slate-950 shadow-md font-black shadow-amber-400/20'
+                              : 'bg-white/5 hover:bg-white/10 text-slate-300 border border-white/5'
+                          }`}
+                        >
+                          {slab.val}%
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        placeholder="Custom GST %"
+                        value={productForm.gstPercent}
+                        onChange={(e) => setProductForm({ ...productForm, gstPercent: e.target.value })}
+                        className="w-full bg-slate-950 border border-amber-500/30 rounded-xl px-3 py-1.5 text-xs text-amber-300 font-mono placeholder:text-slate-700"
+                      />
+                      <span className="text-xs text-amber-400 font-mono font-bold">%</span>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-1 md:col-span-2">
@@ -817,6 +922,26 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
             </select>
           </div>
 
+          {/* Image status filter (With Image / Missing Image) */}
+          <div className="flex items-center gap-1.5 text-xs text-slate-400 font-bold">
+            <span>Image:</span>
+            <select 
+              value={filterImageStatus}
+              onChange={(e) => setFilterImageStatus(e.target.value)}
+              className={`border font-extrabold text-[11px] rounded-lg px-2.5 py-1.5 outline-none cursor-pointer transition-all ${
+                filterImageStatus === 'no-image'
+                  ? 'bg-amber-950/60 border-amber-500/50 text-amber-300'
+                  : filterImageStatus === 'with-image'
+                  ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300'
+                  : 'bg-slate-950 border-white/10 text-white'
+              }`}
+            >
+              <option value="all">🖼️ All Products ({products.length})</option>
+              <option value="with-image">📷 With Image ({withImageCount})</option>
+              <option value="no-image">⚠️ Missing Image ({noImageCount})</option>
+            </select>
+          </div>
+
         </div>
       </div>
 
@@ -831,6 +956,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
               <th className="p-4">Mapped Prices map</th>
               <th className="p-4">Base price</th>
               <th className="p-4">Original price</th>
+              <th className="p-4 text-center">GST Rate (%)</th>
               <th className="p-4">Stock Qty</th>
               <th className="p-4">Promo Ribbon</th>
               <th className="p-4 text-right">Actions</th>
@@ -839,7 +965,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
           <tbody className="divide-y divide-white/5 font-medium">
             {filteredProducts.length === 0 ? (
               <tr>
-                <td colSpan="9" className="p-8 text-center text-slate-500 font-black uppercase text-[10px] tracking-wider font-mono">
+                <td colSpan="10" className="p-8 text-center text-slate-500 font-black uppercase text-[10px] tracking-wider font-mono">
                   No matching catalog indexes found on system nodes.
                 </td>
               </tr>
@@ -880,6 +1006,11 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
                   </td>
                   <td className="p-4">
                     <span className="text-slate-500 font-mono line-through">{p.originalPrice ? `₹${p.originalPrice}` : '—'}</span>
+                  </td>
+                  <td className="p-4 text-center">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded font-mono font-black text-xs bg-amber-500/15 border border-amber-500/30 text-amber-300">
+                      {p.gstPercent !== undefined ? p.gstPercent : (p.gst_percent !== undefined ? p.gst_percent : 5)}%
+                    </span>
                   </td>
                   <td className="p-4">
                     <span className={`font-mono font-black px-2 py-1 rounded text-xs border ${
@@ -932,10 +1063,25 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
         {/* Pagination Controls */}
         {filteredProducts.length > 0 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-950 px-4 py-3 border-t border-white/10 text-xs font-semibold text-slate-400 font-sans">
-            <div>
-              Showing <span className="text-white font-extrabold">{Math.min(filteredProducts.length, (currentPage - 1) * itemsPerPage + 1)}</span> to{' '}
-              <span className="text-white font-extrabold">{Math.min(filteredProducts.length, currentPage * itemsPerPage)}</span> of{' '}
-              <span className="text-white font-extrabold">{filteredProducts.length}</span> products
+            <div className="flex flex-wrap items-center gap-3">
+              <div>
+                Showing <span className="text-white font-extrabold">{filteredProducts.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</span> to{' '}
+                <span className="text-white font-extrabold">{Math.min(filteredProducts.length, currentPage * itemsPerPage)}</span> of{' '}
+                <span className="text-white font-extrabold">{filteredProducts.length}</span> products
+              </div>
+              <div className="flex items-center gap-1.5 text-slate-400">
+                <span>Per page:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                  className="bg-slate-900 border border-white/10 text-white font-bold text-[11px] rounded-lg px-2 py-1 outline-none cursor-pointer"
+                >
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value={200}>200</option>
+                </select>
+              </div>
             </div>
             <div className="flex items-center gap-1">
               <button
@@ -946,28 +1092,39 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
               >
                 ◀ Prev
               </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNo => {
-                if (totalPages > 6 && pageNo !== 1 && pageNo !== totalPages && Math.abs(pageNo - currentPage) > 1) {
-                  if (pageNo === 2 || pageNo === totalPages - 1) {
-                    return <span key={pageNo} className="px-1.5 select-none text-[10px]" style={{ color: '#64748b' }}>..</span>;
-                  }
-                  return null;
+              {(() => {
+                const pages = [];
+                if (totalPages <= 7) {
+                  for (let i = 1; i <= totalPages; i++) pages.push(i);
+                } else {
+                  pages.push(1);
+                  const start = Math.max(2, currentPage - 1);
+                  const end = Math.min(totalPages - 1, currentPage + 1);
+                  if (start > 2) pages.push('ellipsis-start');
+                  for (let i = start; i <= end; i++) pages.push(i);
+                  if (end < totalPages - 1) pages.push('ellipsis-end');
+                  pages.push(totalPages);
                 }
-                return (
-                  <button
-                    key={pageNo}
-                    type="button"
-                    onClick={() => setCurrentPage(pageNo)}
-                    className={`w-8 h-8 rounded-xl font-bold transition-all text-[11px] ${
-                      currentPage === pageNo
-                        ? 'bg-cyan-500 text-slate-950 font-black scale-105'
-                        : 'hover:bg-white/5 text-slate-300 border border-transparent'
-                    }`}
-                  >
-                    {pageNo}
-                  </button>
-                );
-              })}
+                return pages.map((pVal, idx) => {
+                  if (typeof pVal === 'string') {
+                    return <span key={`${pVal}-${idx}`} className="px-1.5 select-none text-[10px] text-slate-500">..</span>;
+                  }
+                  return (
+                    <button
+                      key={pVal}
+                      type="button"
+                      onClick={() => setCurrentPage(pVal)}
+                      className={`w-8 h-8 rounded-xl font-bold transition-all text-[11px] ${
+                        currentPage === pVal
+                          ? 'bg-cyan-500 text-slate-950 font-black scale-105 shadow-md shadow-cyan-500/20'
+                          : 'hover:bg-white/5 text-slate-300 border border-transparent'
+                      }`}
+                    >
+                      {pVal}
+                    </button>
+                  );
+                });
+              })()}
               <button
                 type="button"
                 disabled={currentPage === totalPages}

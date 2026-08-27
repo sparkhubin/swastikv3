@@ -158,4 +158,44 @@ router.post("/database/restore", async (req, res) => {
   }
 });
 
+// 3. Database Status & Sync Endpoint
+router.get("/database/status", async (req, res) => {
+  try {
+    let engine = "SQLite (Local File)";
+    if (db.isMySQL) engine = "MySQL (Active Pool)";
+    else if (db.isPostgres) engine = "PostgreSQL (Active Pool)";
+
+    const productCount = await db.query("SELECT COUNT(*) as count FROM product");
+    const orderCount = await db.query("SELECT COUNT(*) as count FROM " + (db.isMySQL ? "`order`" : '"order"'));
+
+    res.json({
+      success: true,
+      activeEngine: engine,
+      isMySQL: db.isMySQL,
+      isPostgres: db.isPostgres,
+      dualSyncEnabled: true,
+      stats: {
+        products: productCount[0]?.count || productCount[0]?.['count(*)'] || 0,
+        orders: orderCount[0]?.count || orderCount[0]?.['count(*)'] || 0
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 4. Trigger Instant Migration Sync (SQLite -> MySQL)
+router.post("/database/sync", async (req, res) => {
+  try {
+    const report = await db.syncDatabases("sqlite_to_mysql");
+    res.json({
+      success: true,
+      message: "Databases successfully synchronized!",
+      report
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;

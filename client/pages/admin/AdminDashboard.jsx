@@ -57,6 +57,7 @@ import PagesManager from './PagesManager';
 import SecurityManager from './SecurityManager';
 import SliderManager from './SliderManager';
 import PaymentReports from './PaymentReports';
+import GstReportsManager from './GstReportsManager';
 import LocationGroupsManager from './LocationGroupsManager';
 import MargIntegration from './MargIntegration';
 import PaymentSettings from './PaymentSettings';
@@ -359,10 +360,10 @@ export default function AdminDashboard({ onViewChange }) {
     (loggedInStaff.permissions && loggedInStaff.permissions.includes('staff'))
   );
 
-  const allAdminTabs = ["dashboard", "products", "categories", "orders", "offers", "membership", "customers", "partners", "reviews", "pages", "staff", "delivery", "payment-reports", "sliders", "locations", "marg-billing", "payment-settings"];
+  const allAdminTabs = ["dashboard", "products", "categories", "orders", "offers", "membership", "customers", "partners", "reviews", "pages", "staff", "delivery", "payment-reports", "gst-reports", "sliders", "locations", "marg-billing", "payment-settings"];
 
   const authorizedTabs = userRole === 'delivery'
-    ? ['delivery', 'payment-reports']
+    ? ['delivery', 'payment-reports', 'gst-reports']
     : (isRootAdmin
         ? allAdminTabs
         : (loggedInStaff?.permissions && loggedInStaff.permissions.length > 0
@@ -987,22 +988,22 @@ export default function AdminDashboard({ onViewChange }) {
             )}
 
             {/* 7. Settings & Integrations */}
-            {['staff', 'payment-settings', 'payment-reports', 'marg-billing', 'pages'].some(t => authorizedTabs.includes(t)) && (
+            {['staff', 'payment-settings', 'payment-reports', 'gst-reports', 'marg-billing', 'pages'].some(t => authorizedTabs.includes(t)) && (
               <div className="relative w-full lg:w-auto z-40">
                 <button
                   type="button"
                   onClick={() => setOpenMenuId(openMenuId === 'system-settings' ? null : 'system-settings')}
                   className={`w-full lg:w-auto px-3 py-2 rounded-xl text-[11px] font-bold transition-all border flex items-center justify-between lg:justify-start gap-1.5 cursor-pointer ${
-                    ['staff', 'payment-settings', 'payment-reports', 'marg-billing', 'pages'].includes(activeTab)
+                    ['staff', 'payment-settings', 'payment-reports', 'gst-reports', 'marg-billing', 'pages'].includes(activeTab)
                       ? (isAdminDark ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40 shadow-inner font-black' : 'bg-emerald-100 text-emerald-900 border-emerald-300 font-black')
                       : (isAdminDark ? 'border-transparent text-slate-300 hover:text-white hover:bg-slate-800/60' : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100')
                   }`}
                 >
-                  <span className="flex items-center gap-1.5"><Shield className="h-4 w-4" /> {isHindi ? "सेटिंग्स" : "Settings"}</span>
+                  <span className="flex items-center gap-1.5"><Shield className="h-4 w-4" /> {isHindi ? "सेटिंग्स व टैक्स" : "Settings & Tax"}</span>
                   <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${openMenuId === 'system-settings' ? 'rotate-180' : ''}`} />
                 </button>
                 {(openMenuId === 'system-settings' || isAdminMenuOpen) && (
-                  <div className={`lg:absolute lg:left-0 lg:mt-2 lg:w-60 rounded-xl p-1.5 shadow-xl z-50 space-y-1 text-xs border ${
+                  <div className={`lg:absolute lg:left-0 lg:mt-2 lg:w-64 rounded-xl p-1.5 shadow-xl z-50 space-y-1 text-xs border ${
                     isAdminMenuOpen ? 'w-full bg-slate-900/40 border-white/5 pl-4 mt-1' : (isAdminDark ? 'bg-slate-900 border-white/10' : 'bg-white border-slate-200')
                   }`}>
                     {authorizedTabs.includes('staff') && (
@@ -1031,6 +1032,20 @@ export default function AdminDashboard({ onViewChange }) {
                       >
                         <span className="flex items-center gap-2"><CreditCard className="h-3.5 w-3.5 text-emerald-500" /> {isHindi ? "पेमेंट गेटवे सेटिंग्स" : "Payment Gateway"}</span>
                         <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>Cashfree</span>
+                      </button>
+                    )}
+                    {authorizedTabs.includes('gst-reports') && (
+                      <button
+                        type="button"
+                        onClick={() => { setActiveTab('gst-reports'); setOpenMenuId(null); setIsAdminMenuOpen(false); }}
+                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${
+                          activeTab === 'gst-reports'
+                            ? (isAdminDark ? 'bg-emerald-500/20 text-emerald-300 font-black' : 'bg-emerald-100 text-emerald-900 font-black')
+                            : (isAdminDark ? 'text-slate-300 hover:bg-slate-800/60 hover:text-white' : 'text-slate-700 hover:bg-slate-100')
+                        }`}
+                      >
+                        <span className="flex items-center gap-2"><FileText className="h-3.5 w-3.5 text-emerald-400 font-black" /> {isHindi ? "जीएसटी रिपोर्ट (CA रिटर्न)" : "GST Tax Report (CA)"}</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-black uppercase">CA Portal</span>
                       </button>
                     )}
                     {authorizedTabs.includes('payment-reports') && (
@@ -1560,6 +1575,10 @@ export default function AdminDashboard({ onViewChange }) {
 
             {activeTab === 'payment-reports' && (
               <PaymentReports userRole={userRole} loggedInStaff={loggedInStaff} />
+            )}
+
+            {activeTab === 'gst-reports' && (
+              <GstReportsManager userRole={userRole} />
             )}
 
             {activeTab === 'offers' && (

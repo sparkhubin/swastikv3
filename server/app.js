@@ -23,6 +23,7 @@ import whatsappRouter from "./routes/whatsapp.js";
 import margRouter from "./routes/marg.js";
 import configRouter from "./routes/config.js";
 import settingsRouter from "./routes/settings.js";
+import customersRouter from "./routes/customers.js";
 import backupRouter from "./routes/backup.js";
 import notificationsRouter from "./routes/notifications.js";
 
@@ -31,14 +32,9 @@ export async function createServer() {
   const PORT = 3000;
 
   app.use(cors({
-    origin: [
-      "https://localhost",
-      "capacitor://localhost",
-      "http://localhost",
-      "https://swastiksupermarket.com"
-    ],
+    origin: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
     credentials: true,
   }));
   
@@ -46,6 +42,10 @@ export async function createServer() {
   // Serve uploaded assets statically
   app.use("/uploads", express.static(uploadsDir));
   app.use(express.json());
+
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
 
   // Client error logger to help debug local/preview environment issues
   app.post("/api/log-error", (req, res) => {
@@ -88,6 +88,7 @@ export async function createServer() {
   app.use("/api", margRouter);
   app.use("/api", configRouter);
   app.use("/api", settingsRouter);
+  app.use("/api", customersRouter);
   app.use("/api", backupRouter);
   app.use("/api", notificationsRouter);
 

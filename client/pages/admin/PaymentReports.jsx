@@ -84,9 +84,9 @@ export default function PaymentReports({ userRole, loggedInStaff }) {
   const [deliveryCodStatusFilter, setDeliveryCodStatusFilter] = useState('All'); // All, PENDING_CLEARANCE, CLEARED_TO_ADMIN
   const [deliverySearch, setDeliverySearch] = useState('');
 
-  // Pagination states
+  // Pagination states (default 50 items per page)
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
+  const itemsPerPage = 50;
 
   // Reset all filters
   const resetFilters = () => {

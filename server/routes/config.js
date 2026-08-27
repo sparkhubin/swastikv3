@@ -40,9 +40,17 @@ router.post("/upload", upload.single("file"), async (req, res) => {
   }
 
   const file = req.file;
-  const fileExt = path.extname(file.originalname) || ".jpg";
+  let fileExt = path.extname(file.originalname) || "";
+  if (!fileExt) {
+    if (file.mimetype === "image/webp") fileExt = ".webp";
+    else if (file.mimetype === "image/png") fileExt = ".png";
+    else if (file.mimetype === "image/gif") fileExt = ".gif";
+    else fileExt = ".jpg";
+  }
+
   const uniqueId = Math.floor(100000 + Math.random() * 900000);
   const fileName = `uploads_${uniqueId}${fileExt}`;
+  const contentType = file.mimetype || (fileExt === ".webp" ? "image/webp" : (fileExt === ".png" ? "image/png" : "image/jpeg"));
 
   if (isR2ConfiguredAndValid()) {
     console.log(`Uploading ${fileName} to Cloudflare R2 bucket: ${process.env.CLOUDFLARE_R2_BUCKET_NAME}`);
@@ -61,7 +69,7 @@ router.post("/upload", upload.single("file"), async (req, res) => {
         Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME,
         Key: fileName,
         Body: file.buffer,
-        ContentType: file.mimetype,
+        ContentType: contentType,
       });
 
       await s3.send(command);

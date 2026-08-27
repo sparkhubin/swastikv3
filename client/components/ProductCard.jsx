@@ -3,6 +3,7 @@ import { ShoppingCart, Check, Plus, Minus } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
 import { useData } from '../context/DataContext';
+import { resolveProductImage, markImageFailed, DEFAULT_PRODUCT_FALLBACK } from '../utils/imageHelper';
 
 export default function ProductCard({ product }) {
   const { language, t } = useLanguage();
@@ -10,23 +11,17 @@ export default function ProductCard({ product }) {
   const { r2PublicUrl } = useData();
   const [isAdded, setIsAdded] = useState(false);
 
-  // Dynamic image resolution with smart sequential multi-extension fallbacks (.png -> .jpg -> .jpeg -> .webp -> product.image -> fallback)
-  const extensions = ['.png', '.jpg', '.jpeg', '.webp'];
-  const [attemptIndex, setAttemptIndex] = useState(0);
+  // Fast direct image resolution with immediate fallback on failure
+  const [imgSrc, setImgSrc] = useState(() => resolveProductImage(product, r2PublicUrl, 300));
 
-  const code = product.code || product.Code;
-  let imgSrc;
-  if (code && r2PublicUrl && attemptIndex < extensions.length) {
-    imgSrc = `${r2PublicUrl.replace(/\/$/, '')}/${code}${extensions[attemptIndex]}`;
-  } else if (attemptIndex === extensions.length) {
-    imgSrc = product.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400';
-  } else {
-    imgSrc = 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400';
-  }
+  React.useEffect(() => {
+    setImgSrc(resolveProductImage(product, r2PublicUrl, 300));
+  }, [product, r2PublicUrl]);
 
-  const handleImageError = () => {
-    if (attemptIndex <= extensions.length) {
-      setAttemptIndex(prev => prev + 1);
+  const handleImageError = (e) => {
+    if (imgSrc && imgSrc !== DEFAULT_PRODUCT_FALLBACK) {
+      markImageFailed(imgSrc);
+      setImgSrc(DEFAULT_PRODUCT_FALLBACK);
     }
   };
 
@@ -73,6 +68,8 @@ export default function ProductCard({ product }) {
           src={imgSrc}
           onError={handleImageError}
           alt={name}
+          loading="lazy"
+          decoding="async"
           className={`h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 ${
             isOutOfStock 
               ? 'brightness-90 grayscale' 
@@ -123,16 +120,6 @@ export default function ProductCard({ product }) {
         <h4 className="mt-1 font-bold text-xs sm:text-sm leading-snug line-clamp-2 text-slate-800" style={{ minHeight: '2.4rem' }}>
           {name}
         </h4>
-        
-        {/* Single Unit Size Display */}
-        <div className="mt-1.5 mb-2 flex items-center min-h-[22px]">
-          <label className="text-[9px] text-slate-500 font-extrabold uppercase mr-1.5 tracking-wide">
-            {language === 'hi' ? 'मात्रा:' : 'Size:'}
-          </label>
-          <span className="text-xs font-extrabold text-emerald-700 font-mono">
-            {displayUnit}
-          </span>
-        </div>
 
         {/* Price & Action Area */}
         <div className="mt-auto pt-2 border-t border-slate-100">

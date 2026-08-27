@@ -1,108 +1,228 @@
 import pg from "pg";
 const { Pool } = pg;
 import sqlite3 from "sqlite3";
+import mysql from "mysql2/promise";
 import path from "path";
 import fs from "fs";
 
 let pgPool = null;
 let sqliteDb = null;
+let mysqlPool = null;
+
+// Determine Primary Database Driver
 const isPostgres = !!process.env.DATABASE_URL;
+const isMySQLConfigured = process.env.DB_TYPE === "mysql" || !!process.env.MYSQL_DATABASE || !!process.env.MYSQL_HOST;
 
 export const db = {
   isPostgres,
+  isMySQL: false,
+  isDualSyncEnabled: process.env.MYSQL_SYNC_ENABLED === "true" || true, // Sync to backup SQLite by default if secondary exists
 
   async init() {
-    if (this.isPostgres) {
+    // 1. Check if MySQL is configured
+    if (isMySQLConfigured && !process.env.DATABASE_URL) {
+      console.log("🔌 Connecting to MySQL Database Engine...");
+      try {
+        mysqlPool = mysql.createPool({
+          host: process.env.MYSQL_HOST || "localhost",
+          port: Number(process.env.MYSQL_PORT || 3306),
+          user: process.env.MYSQL_USER || "root",
+          password: process.env.MYSQL_PASSWORD || "",
+          database: process.env.MYSQL_DATABASE || "swastik_supermarket",
+          waitForConnections: true,
+          connectionLimit: 15,
+          queueLimit: 0,
+          connectTimeout: 4000
+        });
+
+        // Test connection
+        const conn = await mysqlPool.getConnection();
+        console.log("✓ MySQL Database connected successfully!");
+        conn.release();
+        this.isMySQL = true;
+        this.isPostgres = false;
+
+        // Also initialize local SQLite as background backup/replica
+        this.initSQLite(true);
+      } catch (err) {
+        console.log(`ℹ️ MySQL connection failed (${err.message}). Falling back to local SQLite database...`);
+        this.isMySQL = false;
+        mysqlPool = null;
+        this.initSQLite();
+      }
+    } 
+    // 2. Check if PostgreSQL (DATABASE_URL) is configured
+    else if (this.isPostgres) {
       console.log("🔌 Connecting to PostgreSQL Database...");
       pgPool = new Pool({
         connectionString: process.env.DATABASE_URL,
         ssl: process.env.DATABASE_URL.includes("localhost") || process.env.DATABASE_URL.includes("127.0.0.1") ? false : { rejectUnauthorized: false },
-        connectionTimeoutMillis: 3000 // 3 seconds timeout to prevent hanging on startup in local environments
+        connectionTimeoutMillis: 3000
       });
       
       try {
         const client = await pgPool.connect();
         console.log("✓ PostgreSQL Database connected successfully!");
         client.release();
+        // Also init SQLite as backup
+        this.initSQLite(true);
       } catch (err) {
         console.log("ℹ️ Info: PostgreSQL was not reachable (" + err.message + "). Falling back to local SQLite database...");
         this.isPostgres = false;
         pgPool = null;
         this.initSQLite();
       }
-    } else {
+    } 
+    // 3. Default to SQLite
+    else {
       this.initSQLite();
     }
 
-    // Initialize Schema
+    // Initialize Schema on active databases
     await this.setupSchema();
   },
 
-  initSQLite() {
-    const dbPath = path.join(process.cwd(), "swastik_local.db");
-    console.log(`🔌 Connecting to local SQLite Database at: ${dbPath}`);
-    sqliteDb = new sqlite3.Database(dbPath);
-    console.log("✓ SQLite Database connected successfully!");
+  initSQLite(isBackupMode = false) {
+    if (!sqliteDb) {
+      const dbPath = path.join(process.cwd(), "swastik_local.db");
+      if (!isBackupMode) {
+        console.log(`🔌 Connecting to local SQLite Database at: ${dbPath}`);
+      } else {
+        console.log(`💾 Connected local SQLite sync mirror at: ${dbPath}`);
+      }
+      sqliteDb = new sqlite3.Database(dbPath);
+      if (!isBackupMode) {
+        console.log("✓ SQLite Database connected successfully!");
+      }
+    }
   },
 
+  // Read Queries (Read from Primary MySQL / Postgres / SQLite)
   async query(sql, params = []) {
-    let formattedSql = sql;
-    if (this.isPostgres) {
-      let index = 1;
-      formattedSql = sql.replace(/\?/g, () => `$${index++}`);
+    // 1. MySQL Handler
+    if (this.isMySQL && mysqlPool) {
+      try {
+        // Replace Postgres-style or handle standard '?'
+        const formattedSql = sql.replace(/"order"/g, "`order`").replace(/"user"/g, "`user`");
+        const [rows] = await mysqlPool.execute(formattedSql, params);
+        return Array.isArray(rows) ? rows : [];
+      } catch (err) {
+        console.error(`MySQL Query Error during: ${sql}`, err.message);
+        // Fallback to SQLite if query fails
+        if (sqliteDb) {
+          return this.querySQLite(sql, params);
+        }
+        throw err;
+      }
     }
 
+    // 2. Postgres Handler
     if (this.isPostgres && pgPool) {
+      let index = 1;
+      const formattedSql = sql.replace(/\?/g, () => `$${index++}`);
       const res = await pgPool.query(formattedSql, params);
       return res.rows;
-    } else if (sqliteDb) {
-      return new Promise((resolve, reject) => {
-        sqliteDb.all(formattedSql, params, (err, rows) => {
-          if (err) {
-            console.error(`SQLite Error during: ${formattedSql}`, err);
-            reject(err);
-          } else {
-            resolve(rows);
-          }
-        });
-      });
     }
+
+    // 3. SQLite Handler
+    if (sqliteDb) {
+      return this.querySQLite(sql, params);
+    }
+
     throw new Error("Database not initialized");
   },
 
+  querySQLite(sql, params = []) {
+    return new Promise((resolve, reject) => {
+      sqliteDb.all(sql, params, (err, rows) => {
+        if (err) {
+          console.error(`SQLite Error during: ${sql}`, err.message);
+          reject(err);
+        } else {
+          resolve(rows || []);
+        }
+      });
+    });
+  },
+
+  // Write Execution with Dual-Write Sync Engine
   async execute(sql, params = [], quiet = false) {
-    let formattedSql = sql;
-    if (this.isPostgres) {
-      let index = 1;
-      formattedSql = sql.replace(/\?/g, () => `$${index++}`);
+    let result = { lastID: null, changes: 0 };
+    let primarySuccess = false;
+
+    // 1. Execute on MySQL if active
+    if (this.isMySQL && mysqlPool) {
+      try {
+        const formattedSql = sql.replace(/"order"/g, "`order`").replace(/"user"/g, "`user`");
+        const [res] = await mysqlPool.execute(formattedSql, params);
+        result = { lastID: res.insertId, changes: res.affectedRows };
+        primarySuccess = true;
+      } catch (err) {
+        if (!quiet) {
+          console.error(`MySQL Execute Error during: ${sql}`, err.message);
+        }
+        if (!sqliteDb) throw err;
+      }
+    } 
+    // 2. Execute on PostgreSQL if active
+    else if (this.isPostgres && pgPool) {
+      try {
+        let index = 1;
+        const formattedSql = sql.replace(/\?/g, () => `$${index++}`);
+        const res = await pgPool.query(formattedSql, params);
+        result = { lastID: null, changes: res.rowCount };
+        primarySuccess = true;
+      } catch (err) {
+        if (!quiet) {
+          console.error(`PostgreSQL Execute Error during: ${sql}`, err.message);
+        }
+        if (!sqliteDb) throw err;
+      }
     }
 
-    if (this.isPostgres && pgPool) {
-      const res = await pgPool.query(formattedSql, params);
-      return res;
-    } else if (sqliteDb) {
-      return new Promise((resolve, reject) => {
-        sqliteDb.run(formattedSql, params, function (err) {
-          if (err) {
-            if (!quiet) {
-              console.error(`SQLite Error during: ${formattedSql}`, err);
+    // 3. Dual-Write Sync to SQLite (or Primary SQLite if no remote DB)
+    if (sqliteDb) {
+      try {
+        const sqliteResult = await new Promise((resolve, reject) => {
+          // Standardize SQL for SQLite
+          const cleanSql = sql.replace(/`order`/g, '"order"').replace(/`user`/g, '"user"');
+          sqliteDb.run(cleanSql, params, function (err) {
+            if (err) {
+              if (!quiet && !primarySuccess) {
+                console.error(`SQLite Error during: ${cleanSql}`, err.message);
+              }
+              reject(err);
+            } else {
+              resolve({ lastID: this.lastID, changes: this.changes });
             }
-            reject(err);
-          } else {
-            resolve({ lastID: this.lastID, changes: this.changes });
-          }
+          });
         });
-      });
+
+        if (!primarySuccess) {
+          result = sqliteResult;
+        }
+      } catch (sqliteErr) {
+        if (!primarySuccess) throw sqliteErr;
+      }
     }
-    throw new Error("Database not initialized");
+
+    return result;
   },
 
   async setupSchema() {
     const isPg = this.isPostgres;
-    const serialType = isPg ? "SERIAL PRIMARY KEY" : "INTEGER PRIMARY KEY AUTOINCREMENT";
-    const textType = isPg ? "TEXT" : "TEXT";
-    const booleanType = isPg ? "BOOLEAN" : "INTEGER";
-    const numericType = isPg ? "DECIMAL(10,2)" : "REAL";
+    const isMy = this.isMySQL;
+
+    let serialType = "INTEGER PRIMARY KEY AUTOINCREMENT";
+    if (isPg) serialType = "SERIAL PRIMARY KEY";
+    if (isMy) serialType = "INT AUTO_INCREMENT PRIMARY KEY";
+
+    const textType = "TEXT";
+    const booleanType = isPg ? "BOOLEAN" : "INT";
+    const numericType = isPg ? "DECIMAL(10,2)" : (isMy ? "DECIMAL(10,2)" : "REAL");
+
+    const orderTableName = isMy ? "`order`" : '"order"';
+    const userTableName = isMy ? "`user`" : '"user"';
 
     const queries = [
       // 1. Role Table
@@ -114,7 +234,7 @@ export const db = {
       );`,
 
       // 2. User Table
-      `CREATE TABLE IF NOT EXISTS "user" (
+      `CREATE TABLE IF NOT EXISTS ${userTableName} (
         id ${serialType},
         full_name VARCHAR(150) NOT NULL,
         phone_number VARCHAR(20) NOT NULL UNIQUE,
@@ -143,6 +263,7 @@ export const db = {
         unit_prices ${textType},
         pack_en VARCHAR(100),
         pack_hi VARCHAR(100),
+        gst_percent ${numericType} DEFAULT 5,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );`,
@@ -174,7 +295,7 @@ export const db = {
       );`,
 
       // 6. Order Table
-      `CREATE TABLE IF NOT EXISTS "order" (
+      `CREATE TABLE IF NOT EXISTS ${orderTableName} (
         id VARCHAR(50) PRIMARY KEY,
         user_id INT,
         order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -272,111 +393,88 @@ export const db = {
 
     for (const q of queries) {
       try {
-        await this.execute(q);
+        await this.execute(q, [], true);
       } catch (err) {
-        console.error("Error running schema init query:", q, "Error:", err.message);
+        console.error("Schema init notice:", err.message);
       }
     }
 
-    // Ensure order table has discount and payment columns
-    let existingOrderCols = [];
-    try {
-      if (this.isPostgres) {
-        const cols = await this.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'order'`);
-        existingOrderCols = cols.map(c => (c.column_name || '').toLowerCase());
-      } else {
-        const cols = await this.query(`PRAGMA table_info("order")`);
-        existingOrderCols = cols.map(c => (c.name || '').toLowerCase());
-      }
-    } catch (e) {}
-
-    const alterOrderColumns = [
-      { name: 'referral_discount', sql: `ALTER TABLE "order" ADD COLUMN referral_discount REAL DEFAULT 0.0;` },
-      { name: 'applied_points', sql: `ALTER TABLE "order" ADD COLUMN applied_points INT DEFAULT 0;` },
-      { name: 'coupon_discount', sql: `ALTER TABLE "order" ADD COLUMN coupon_discount REAL DEFAULT 0.0;` },
-      { name: 'coupon_code', sql: `ALTER TABLE "order" ADD COLUMN coupon_code VARCHAR(100) DEFAULT '';` },
-      { name: 'celebration_discount', sql: `ALTER TABLE "order" ADD COLUMN celebration_discount REAL DEFAULT 0.0;` },
-      { name: 'celebration_offer_name', sql: `ALTER TABLE "order" ADD COLUMN celebration_offer_name VARCHAR(255) DEFAULT '';` },
-      { name: 'customer_email', sql: `ALTER TABLE "order" ADD COLUMN customer_email VARCHAR(255) DEFAULT '';` },
-      { name: 'payment_method', sql: `ALTER TABLE "order" ADD COLUMN payment_method VARCHAR(50) DEFAULT 'COD';` },
-      { name: 'payment_status', sql: `ALTER TABLE "order" ADD COLUMN payment_status VARCHAR(50) DEFAULT 'UNPAID';` }
-    ];
-
-    for (const item of alterOrderColumns) {
-      if (!existingOrderCols.includes(item.name.toLowerCase())) {
-        try {
-          await this.execute(item.sql, [], true);
-        } catch (err) {
-          // Ignore if already exists
-        }
-      }
-    }
-
-    // Ensure payment_settings table has Razorpay columns
-    let existingPaymentCols = [];
-    try {
-      if (this.isPostgres) {
-        const cols = await this.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'payment_settings'`);
-        existingPaymentCols = cols.map(c => (c.column_name || '').toLowerCase());
-      } else {
-        const cols = await this.query(`PRAGMA table_info("payment_settings")`);
-        existingPaymentCols = cols.map(c => (c.name || '').toLowerCase());
-      }
-    } catch (e) {}
-
-    const alterPaymentColumns = [
-      { name: 'razorpay_enabled', sql: `ALTER TABLE payment_settings ADD COLUMN razorpay_enabled ${isPg ? 'BOOLEAN DEFAULT TRUE' : 'INT DEFAULT 1'};` },
-      { name: 'razorpay_key_id', sql: `ALTER TABLE payment_settings ADD COLUMN razorpay_key_id VARCHAR(255) DEFAULT '';` },
-      { name: 'razorpay_key_secret', sql: `ALTER TABLE payment_settings ADD COLUMN razorpay_key_secret VARCHAR(255) DEFAULT '';` },
-      { name: 'active_gateway', sql: `ALTER TABLE payment_settings ADD COLUMN active_gateway VARCHAR(50) DEFAULT 'RAZORPAY';` }
-    ];
-
-    for (const item of alterPaymentColumns) {
-      if (!existingPaymentCols.includes(item.name.toLowerCase())) {
-        try {
-          await this.execute(item.sql, [], true);
-        } catch (err) {
-          // Ignore if already exists
-        }
-      }
-    }
-    
     // Seed default roles if not present
-    const roles = await this.query("SELECT * FROM role");
-    if (roles.length === 0) {
-      console.log("🌱 Seeding default roles into the SQL Database...");
-      await this.execute("INSERT INTO role (name, description) VALUES (?, ?)", ["user", "Standard Customer Account"]);
-      await this.execute("INSERT INTO role (name, description) VALUES (?, ?)", ["admin", "Administrator Dashboard Account"]);
-    }
+    try {
+      const roles = await this.query("SELECT * FROM role");
+      if (roles.length === 0) {
+        console.log("🌱 Seeding default roles into the Database...");
+        await this.execute("INSERT INTO role (name, description) VALUES (?, ?)", ["user", "Standard Customer Account"]);
+        await this.execute("INSERT INTO role (name, description) VALUES (?, ?)", ["admin", "Administrator Dashboard Account"]);
+      }
+    } catch (e) {}
 
     // Seed default payment settings if not present
-    const pSet = await this.query("SELECT * FROM payment_settings");
-    if (pSet.length === 0) {
-      console.log("🌱 Seeding default payment settings into SQL Database...");
-      await this.execute(
-        "INSERT INTO payment_settings (id, enabled, app_id, secret_key, environment) VALUES (?, ?, ?, ?, ?)",
-        [1, 1, "", "", "TEST"]
-      );
-    }
+    try {
+      const pSet = await this.query("SELECT * FROM payment_settings");
+      if (pSet.length === 0) {
+        console.log("🌱 Seeding default payment settings into Database...");
+        await this.execute(
+          "INSERT INTO payment_settings (id, enabled, app_id, secret_key, environment) VALUES (?, ?, ?, ?, ?)",
+          [1, 1, "", "", "TEST"]
+        );
+      }
+    } catch (e) {}
 
     // Seed default marg settings if not present
-    const mSet = await this.query("SELECT * FROM marg_settings");
-    if (mSet.length === 0) {
-      console.log("🌱 Seeding default MARG settings into SQL Database...");
-      await this.execute(
-        "INSERT INTO marg_settings (id, api_token, points_ratio, auto_notify_whatsapp, simulate_delay) VALUES (?, ?, ?, ?, ?)",
-        [1, "SWASTIK_MARG_SECURE_TOKEN_2026", 10.0, 1, 500]
-      );
+    try {
+      const mSet = await this.query("SELECT * FROM marg_settings");
+      if (mSet.length === 0) {
+        console.log("🌱 Seeding default MARG settings into Database...");
+        await this.execute(
+          "INSERT INTO marg_settings (id, api_token, points_ratio, auto_notify_whatsapp, simulate_delay) VALUES (?, ?, ?, ?, ?)",
+          [1, "SWASTIK_MARG_SECURE_TOKEN_2026", 10.0, 1, 500]
+        );
+      }
+    } catch (e) {}
+  },
+
+  // 1-Click Migration Sync: SQLite -> MySQL or MySQL -> SQLite
+  async syncDatabases(direction = "sqlite_to_mysql") {
+    if (!mysqlPool || !sqliteDb) {
+      throw new Error("Both MySQL and SQLite must be connected to run sync.");
     }
+
+    const tablesToSync = ['product', 'partner', 'review', 'payment_settings', 'marg_settings', 'app_settings'];
+    const syncReport = {};
+
+    if (direction === "sqlite_to_mysql") {
+      console.log("🔄 Starting SQLite -> MySQL Sync...");
+      for (const t of tablesToSync) {
+        const rows = await this.querySQLite(`SELECT * FROM ${t === 'order' ? '"order"' : t}`);
+        let inserted = 0;
+        for (const row of rows) {
+          const keys = Object.keys(row);
+          const placeholders = keys.map(() => '?').join(', ');
+          const values = Object.values(row);
+          const columns = keys.map(k => `\`${k}\``).join(', ');
+          const updateClause = keys.map(k => `\`${k}\` = VALUES(\`${k}\`)`).join(', ');
+
+          const mySqlInsert = `INSERT INTO \`${t}\` (${columns}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updateClause}`;
+          try {
+            await mysqlPool.execute(mySqlInsert, values);
+            inserted++;
+          } catch (e) {
+            console.error(`Sync error on table ${t}:`, e.message);
+          }
+        }
+        syncReport[t] = { total: rows.length, synced: inserted };
+      }
+    }
+
+    return syncReport;
   },
 
   async seedProductsIfEmpty(fallbackProducts) {
     try {
-      // Fetch existing products to avoid duplicates
       const existing = await this.query("SELECT code, name_en FROM product");
       const existingCodes = new Set(existing.map(row => String(row.code || row.name_en || "").trim().toLowerCase()));
 
-      let insertedCount = 0;
       let nextId = 1;
       const maxIdResult = await this.query("SELECT MAX(id) as max_id FROM product");
       if (maxIdResult && maxIdResult[0] && maxIdResult[0].max_id) {
@@ -392,52 +490,41 @@ export const db = {
       }
 
       if (productsToInsert.length > 0) {
-        console.log(`🌱 Seeding ${productsToInsert.length} missing products into SQL Database...`);
-        await this.execute("BEGIN TRANSACTION");
-        try {
-          for (const p of productsToInsert) {
-            const currentId = p.id && p.id >= nextId ? p.id : nextId++;
-            if (currentId >= nextId) {
-              nextId = currentId + 1;
-            }
-            await this.execute(
-              `INSERT INTO product (
-                id, code, name_en, name_hi, category, sub_en, sub_hi, 
-                price, original_price, discount_tag, image_url, stock_count, 
-                unit, unit_prices, pack_en, pack_hi
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [
-                currentId,
-                p.code || "",
-                p.nameEn || p.name || "",
-                p.nameHi || p.name || "",
-                p.category || "swastik",
-                p.subEn || p.brand || "General",
-                p.subHi || p.brand || "General",
-                p.price || 0,
-                p.originalPrice || null,
-                p.discountTag || "",
-                p.imageUrl || p.image || "",
-                p.stockCount || 100,
-                p.unit || "",
-                p.unitPrices || "",
-                p.packEn || "",
-                p.packHi || ""
-              ]
-            );
-            insertedCount++;
+        console.log(`🌱 Seeding ${productsToInsert.length} missing products into Database...`);
+        for (const p of productsToInsert) {
+          const currentId = p.id && p.id >= nextId ? p.id : nextId++;
+          if (currentId >= nextId) {
+            nextId = currentId + 1;
           }
-          await this.execute("COMMIT");
-          console.log(`✓ Missing product seeding completed! Uploaded ${insertedCount} items successfully.`);
-        } catch (innerErr) {
-          try {
-            await this.execute("ROLLBACK");
-          } catch (rbErr) {}
-          console.error("Error during transaction seeding, rolled back:", innerErr.message);
-          throw innerErr;
+          await this.execute(
+            `INSERT INTO product (
+              id, code, name_en, name_hi, category, sub_en, sub_hi, 
+              price, original_price, discount_tag, image_url, stock_count, 
+              unit, unit_prices, pack_en, pack_hi
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              currentId,
+              p.code || "",
+              p.nameEn || p.name || "",
+              p.nameHi || p.name || "",
+              p.category || "swastik",
+              p.subEn || p.brand || "General",
+              p.subHi || p.brand || "General",
+              p.price || 0,
+              p.originalPrice || null,
+              p.discountTag || "",
+              p.imageUrl || p.image || "",
+              p.stockCount || 100,
+              p.unit || "",
+              p.unitPrices || "",
+              p.packEn || "",
+              p.packHi || ""
+            ]
+          );
         }
+        console.log(`✓ Missing product seeding completed! Uploaded ${productsToInsert.length} items.`);
       } else {
-        console.log("✓ All fallback products are already present in SQL Database.");
+        console.log("✓ All fallback products are already present in Database.");
       }
     } catch (err) {
       console.error("Error seeding products:", err.message);
@@ -448,7 +535,7 @@ export const db = {
     try {
       const existing = await this.query("SELECT id FROM partner LIMIT 1");
       if (existing.length === 0 && fallbackPartners.length > 0) {
-        console.log("🌱 Seeding corporate partners into SQL Database...");
+        console.log("🌱 Seeding corporate partners into Database...");
         for (const pt of fallbackPartners) {
           await this.execute(
             "INSERT INTO partner (id, name, photo, designation, about) VALUES (?, ?, ?, ?, ?)",
@@ -466,7 +553,7 @@ export const db = {
     try {
       const existing = await this.query("SELECT id FROM review LIMIT 1");
       if (existing.length === 0 && fallbackReviews.length > 0) {
-        console.log("🌱 Seeding guest reviews into SQL Database...");
+        console.log("🌱 Seeding guest reviews into Database...");
         for (const rv of fallbackReviews) {
           await this.execute(
             `INSERT INTO review (
@@ -495,12 +582,12 @@ export const db = {
 
   async seedOrdersIfEmpty(fallbackOrders) {
     try {
-      const existing = await this.query("SELECT id FROM \"order\" LIMIT 1");
+      const existing = await this.query("SELECT id FROM " + (this.isMySQL ? "`order`" : '"order"') + " LIMIT 1");
       if (existing.length === 0 && fallbackOrders.length > 0) {
-        console.log("🌱 Seeding sample orders into SQL Database...");
+        console.log("🌱 Seeding sample orders into Database...");
         for (const o of fallbackOrders) {
           await this.execute(
-            `INSERT INTO "order" (
+            `INSERT INTO ${this.isMySQL ? "`order`" : '"order"'} (
               id, user_id, order_date, is_active, step_level, status_label, 
               subtotal, delivery_fee, gst_amount, grand_total, 
               delivery_partner_name, delivery_partner_phone, dispatch_hub, 

@@ -159,7 +159,16 @@ export const CartProvider = ({ children }) => {
   };
   const deliveryFee = calculateDeliveryFee(distance, subtotal);
 
-  const gst = Math.round(subtotal * 0.18 * 100) / 100;
+  // Dynamic GST calculation based on item-wise GST rates
+  const itemGstTotal = cartItems.reduce((acc, item) => {
+    const price = getUnitPrice(item.product, item.selectedUnit);
+    const rate = item.product?.gstPercent !== undefined 
+      ? Number(item.product.gstPercent) 
+      : (item.product?.gst_percent !== undefined ? Number(item.product.gst_percent) : 5);
+    const itemTax = (price * (item.quantity || 1) * rate) / 100;
+    return acc + itemTax;
+  }, 0);
+  const gst = Math.round(itemGstTotal * 100) / 100;
   const couponDiscount = (() => {
     if (!appliedCoupon || subtotal <= 0) return 0;
     if (appliedCoupon.discountType === 'percentage') {

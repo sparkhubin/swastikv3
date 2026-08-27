@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { useLanguage } from '../../context/LanguageContext';
 import { useData } from '../../context/DataContext';
@@ -30,6 +30,7 @@ import {
   Gift
 } from 'lucide-react';
 import R2ImageUploader from './R2ImageUploader';
+import QuickTemplateSender from './QuickTemplateSender';
 
 const metaApprovalTemplates = [
   {
@@ -113,27 +114,6 @@ const metaApprovalTemplates = [
         body: 'नमस्ते {{1}}, स्वस्तिक सुपरमार्केट में आपका स्वागत है! आपके खाते में ₹{{2}} प्रोमो पॉइंट्स एक्टिव कर दिए गए हैं। ये {{3}} तक वैध हैं। ताजी उपज, डेयरी और राशन के सामान के लिए अभी इस्तेमाल करें!',
         samples: ['बलराम', '150', '30 दिन'],
         buttons: ['अभी खरीदें', 'बैलेंस जांचें']
-      }
-    }
-  },
-  {
-    id: 'order_dispatch_alert',
-    name: 'Order Dispatch Notification',
-    category: 'UTILITY',
-    categoryColor: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
-    description: 'Automated notification dispatched immediately when order leaves the warehouse with our rider.',
-    languages: {
-      en_US: {
-        header: 'None',
-        body: 'Hello {{1}}, your Swastik order {{2}} has been handed over to our delivery partner! Total bill amount is {{3}}. You can track or contact your rider directly from the Swastik app.',
-        samples: ['Balram', 'SW-1082', '₹530'],
-        buttons: ['Track Order', 'Contact Shop']
-      },
-      hi_IN: {
-        header: 'None',
-        body: 'नमस्ते {{1}}, आपका स्वस्तिक ऑर्डर {{2}} हमारे डिलीवरी पार्टनर को सौंप दिया गया है! कुल बिल राशि {{3}} है। आप सीधे स्वस्तिक ऐप से राइडर को कॉल या ट्रैक कर सकते हैं।',
-        samples: ['बलराम', 'SW-1082', '₹530'],
-        buttons: ['ऑर्डर ट्रैक करें', 'दुकान से संपर्क करें']
       }
     }
   },
@@ -433,6 +413,95 @@ export default function CustomersManager() {
     printWindow.document.close();
   };
 
+  // Direct WhatsApp Modal State
+  const [directWaCust, setDirectWaCust] = useState(null);
+  const [directWaMsg, setDirectWaMsg] = useState('');
+  const [directWaSending, setDirectWaSending] = useState(false);
+  const [directWaSuccess, setDirectWaSuccess] = useState('');
+
+  const openDirectWa = (cust, templateType = 'welcome') => {
+    if (!cust) return;
+    setDirectWaCust(cust);
+    const cleanPh = (cust.phone || '').replace(/[^0-9]/g, '');
+    const pointsBal = cust.points !== undefined ? cust.points : 100;
+    const custName = cust.name || 'Valued Customer';
+
+    let msg = '';
+    if (templateType === 'welcome') {
+      msg = `*Namaste ${custName}!* 🙏\n\nWelcome to *Swastik Supermarket*! ✨\nYour account has been activated with *${pointsBal} Welcome Points* (Worth ₹${pointsBal}).\n\n🛒 Enjoy fresh groceries, daily staples, and supermarket deals delivered right to your doorstep.\n\n🌐 Order Online: https://swastiksupermarket.com\n📞 Helpline: +91 94845 40001`;
+    } else if (templateType === 'points') {
+      msg = `*Swastik Loyalty Rewards Update* ⭐\n\nDear *${custName}*,\nYou have *${pointsBal} Swastik Points* available in your wallet!\n\n💡 You can redeem these points for instant discounts on your next order.\n\n🛍️ Shop Now: https://swastiksupermarket.com`;
+    } else if (templateType === 'prime') {
+      msg = `*Swastik Prime Gold VIP Invitation* 👑\n\nDear *${custName}*,\nUpgrade to *Swastik Prime Membership* today and enjoy:\n✅ Unlimited Free Fast Delivery\n✅ Extra VIP Points & Discounts\n✅ Dedicated Support\n\n🌟 Claim Your VIP Pass: https://swastiksupermarket.com`;
+    } else if (templateType === 'order_care') {
+      msg = `*Order Assistance & Care - Swastik Supermarket* 🛍️\n\nHello *${custName}*,\nThank you for shopping with us! If you need any assistance regarding your order or grocery deliveries, please feel free to reply directly to this message.\n\nHave a wonderful day!`;
+    } else if (templateType === 'birthday') {
+      msg = `*Happy Birthday ${custName}!* 🎂🎉\n\nWishing you a joyful day filled with happiness from all of us at *Swastik Supermarket*!\n🎁 We have added special bonus celebration points to your account for your birthday shopping.\n\nCelebrate with us: https://swastiksupermarket.com`;
+    } else {
+      msg = `*Namaste ${custName}!* 🙏\n\nGreetings from *Swastik Supermarket*.\nHow may we help you with your grocery shopping today?\n\n🌐 Visit: https://swastiksupermarket.com`;
+    }
+
+    setDirectWaMsg(msg);
+    setDirectWaSuccess('');
+  };
+
+  const handleSendDirectWa = async (method = 'api') => {
+    if (!directWaCust || !directWaMsg.trim()) return;
+    const cleanDigits = (directWaCust.phone || '').replace(/[^0-9]/g, '');
+    const phoneWith91 = cleanDigits.startsWith('91') && cleanDigits.length === 12 ? cleanDigits : `91${cleanDigits.slice(-10)}`;
+
+    if (method === 'web') {
+      const waUrl = `https://wa.me/${phoneWith91}?text=${encodeURIComponent(directWaMsg)}`;
+      window.open(waUrl, '_blank');
+      setDirectWaSuccess('WhatsApp Web / App chat launched in new tab!');
+      setTimeout(() => setDirectWaSuccess(''), 4000);
+      return;
+    }
+
+    setDirectWaSending(true);
+    setDirectWaSuccess('');
+    try {
+      const res = await fetch('/api/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: directWaCust.phone,
+          customerPhone: directWaCust.phone,
+          customerName: directWaCust.name,
+          message: directWaMsg,
+          type: 'direct_marketing'
+        })
+      });
+      if (res.ok) {
+        setDirectWaSuccess('✓ WhatsApp message dispatched successfully via Meta API!');
+        setTimeout(() => {
+          setDirectWaCust(null);
+          setDirectWaSuccess('');
+        }, 2200);
+      } else {
+        // Fallback to web link if API configuration is missing
+        const waUrl = `https://wa.me/${phoneWith91}?text=${encodeURIComponent(directWaMsg)}`;
+        window.open(waUrl, '_blank');
+        setDirectWaSuccess('Message opened in WhatsApp Web / App!');
+        setTimeout(() => {
+          setDirectWaCust(null);
+          setDirectWaSuccess('');
+        }, 2500);
+      }
+    } catch (e) {
+      console.warn("Direct WA error, falling back to Web:", e);
+      const waUrl = `https://wa.me/${phoneWith91}?text=${encodeURIComponent(directWaMsg)}`;
+      window.open(waUrl, '_blank');
+      setDirectWaSuccess('Message opened in WhatsApp Web / App!');
+      setTimeout(() => {
+        setDirectWaCust(null);
+        setDirectWaSuccess('');
+      }, 2500);
+    } finally {
+      setDirectWaSending(false);
+    }
+  };
+
   // Search parameters for directory
   const [dirSearch, setDirSearch] = useState('');
   const [uploadingCustId, setUploadingCustId] = useState(null);
@@ -460,9 +529,9 @@ export default function CustomersManager() {
     }
   }, [selectedDetailCust]);
 
-  // Pagination states
+  // Pagination states (default 50 items per page)
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
+  const itemsPerPage = 50;
 
   React.useEffect(() => {
     setCurrentPage(1);
@@ -781,14 +850,14 @@ export default function CustomersManager() {
 
     let recipients = [];
     if (targetType === 'individual') {
-      const targetC = customers.find(c => c.id === Number(selectedTargetCustId));
+      const targetC = allCustomersList.find(c => c.id === Number(selectedTargetCustId));
       if (targetC) recipients = [targetC];
     } else {
       const targetG = groups.find(g => g.id === Number(selectedTargetGroupId));
       if (targetG) {
-        recipients = customers.filter(c => targetG.memberIds.includes(c.id));
+        recipients = allCustomersList.filter(c => targetG.memberIds.includes(c.id));
       } else if (selectedTargetGroupId === 'all') {
-        recipients = [...customers];
+        recipients = [...allCustomersList];
       }
     }
 
@@ -843,10 +912,47 @@ export default function CustomersManager() {
     });
   };
 
+  const cleanPhone = (ph) => {
+    if (!ph) return "";
+    return String(ph).replace(/[^0-9]/g, "");
+  };
+
+  // Unified list of all registered, signed up, and order customers
+  const allCustomersList = useMemo(() => {
+    const list = [...(customers || [])];
+    (orders || []).forEach(o => {
+      const oPhoneDigits = cleanPhone(o.customerPhone || o.customerMobile);
+      if (oPhoneDigits && oPhoneDigits.length >= 5) {
+        const found = list.find(c => cleanPhone(c.phone).endsWith(oPhoneDigits.slice(-10)));
+        if (!found) {
+          const newId = list.length > 0 ? Math.max(...list.map(c => Number(c.id) || 0)) + 1 : 101;
+          const regDate = o.orderDate ? String(o.orderDate).split('T')[0] : new Date().toISOString().split('T')[0];
+          list.push({
+            id: newId,
+            name: o.customerName || `Customer ${oPhoneDigits.slice(-4)}`,
+            phone: o.customerPhone || (oPhoneDigits.length === 10 ? `+91 ${oPhoneDigits}` : oPhoneDigits),
+            email: o.customerEmail || `${(o.customerName || 'customer').toLowerCase().replace(/\s+/g, '')}@swastik.com`,
+            address: o.shippingAddress || "",
+            status: 'Active',
+            registeredAt: regDate,
+            orderCount: 1,
+            totalSpent: Number(o.total || o.subtotal || 0),
+            points: 100,
+            isPrimeActive: false,
+            dob: "",
+            anniversary: ""
+          });
+        }
+      }
+    });
+    return list;
+  }, [customers, orders]);
+
   // Searching customer directory list
-  const filteredCustomers = customers.filter(c => 
-    c.name.toLowerCase().includes(dirSearch.toLowerCase()) ||
-    c.phone.includes(dirSearch)
+  const filteredCustomers = allCustomersList.filter(c => 
+    (c.name || '').toLowerCase().includes(dirSearch.toLowerCase()) ||
+    (c.phone || '').includes(dirSearch) ||
+    (c.email || '').toLowerCase().includes(dirSearch.toLowerCase())
   );
 
   const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage) || 1;
@@ -862,17 +968,12 @@ export default function CustomersManager() {
   }, [filteredCustomers.length, totalPages, currentPage]);
 
   // Search filter for custom select 2 dropdown individual customer selection
-  const select2FilteredCustomers = customers.filter(c => 
-    c.name.toLowerCase().includes(select2Search.toLowerCase()) ||
-    c.phone.includes(select2Search)
+  const select2FilteredCustomers = allCustomersList.filter(c => 
+    (c.name || '').toLowerCase().includes(select2Search.toLowerCase()) ||
+    (c.phone || '').includes(select2Search)
   );
 
-  const selectedCustDetails = customers.find(c => c.id === Number(selectedTargetCustId));
-
-  const cleanPhone = (ph) => {
-    if (!ph) return "";
-    return ph.replace(/[^0-9]/g, "");
-  };
+  const selectedCustDetails = allCustomersList.find(c => c.id === Number(selectedTargetCustId));
 
   const getCustomerStats = (cust) => {
     const custOrders = orders.filter(o => {
@@ -966,6 +1067,18 @@ export default function CustomersManager() {
             className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap ${activeSubTab === 'broadcast' ? 'bg-cyan-500 text-slate-950 font-black' : 'text-slate-400 hover:text-white'}`}
           >
             Send Broadcast
+          </button>
+          <button 
+            type="button"
+            onClick={() => setActiveSubTab('quick_custom_sender')}
+            className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap flex items-center gap-1.5 ${
+              activeSubTab === 'quick_custom_sender' 
+                ? 'bg-gradient-to-r from-emerald-400 to-cyan-400 text-slate-950 font-black shadow-lg shadow-emerald-500/20' 
+                : 'text-emerald-400 hover:text-white border border-emerald-500/30 hover:border-emerald-400'
+            }`}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            <span>⚡ Quick Meta Template & Mobile Upload</span>
           </button>
           <button 
             type="button"
@@ -1094,6 +1207,16 @@ export default function CustomersManager() {
                         </td>
                         <td className="p-4">
                           <div className="flex flex-col items-center gap-2">
+                            {/* Direct WhatsApp Messaging Button */}
+                            <button 
+                              type="button"
+                              onClick={() => openDirectWa(cust, 'welcome')}
+                              className="w-full max-w-[130px] px-2.5 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 hover:border-emerald-500/50 text-emerald-300 hover:text-emerald-200 text-[9px] font-black uppercase tracking-wider rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-95 shadow-sm"
+                            >
+                              <MessageSquare className="h-3 w-3 text-emerald-400" />
+                              <span>WhatsApp Msg</span>
+                            </button>
+
                             {/* CRM Dynamic Drawer Trigger */}
                             <button 
                               type="button"
@@ -1173,28 +1296,39 @@ export default function CustomersManager() {
                 >
                   ◀ Prev
                 </button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNo => {
-                  if (totalPages > 6 && pageNo !== 1 && pageNo !== totalPages && Math.abs(pageNo - currentPage) > 1) {
-                    if (pageNo === 2 || pageNo === totalPages - 1) {
-                      return <span key={pageNo} className="px-1.5 select-none text-[10px]" style={{ color: '#64748b' }}>..</span>;
-                    }
-                    return null;
+                {(() => {
+                  const pages = [];
+                  if (totalPages <= 7) {
+                    for (let i = 1; i <= totalPages; i++) pages.push(i);
+                  } else {
+                    pages.push(1);
+                    const start = Math.max(2, currentPage - 1);
+                    const end = Math.min(totalPages - 1, currentPage + 1);
+                    if (start > 2) pages.push('ellipsis-start');
+                    for (let i = start; i <= end; i++) pages.push(i);
+                    if (end < totalPages - 1) pages.push('ellipsis-end');
+                    pages.push(totalPages);
                   }
-                  return (
-                    <button
-                      key={pageNo}
-                      type="button"
-                      onClick={() => setCurrentPage(pageNo)}
-                      className={`w-8 h-8 rounded-xl font-bold transition-all text-[11px] ${
-                        currentPage === pageNo
-                          ? 'bg-cyan-500 text-slate-950 font-black scale-105'
-                          : 'hover:bg-white/5 text-slate-300 border border-transparent'
-                      }`}
-                    >
-                      {pageNo}
-                    </button>
-                  );
-                })}
+                  return pages.map((pVal, idx) => {
+                    if (typeof pVal === 'string') {
+                      return <span key={`${pVal}-${idx}`} className="px-1.5 select-none text-[10px] text-slate-500">..</span>;
+                    }
+                    return (
+                      <button
+                        key={pVal}
+                        type="button"
+                        onClick={() => setCurrentPage(pVal)}
+                        className={`w-8 h-8 rounded-xl font-bold transition-all text-[11px] ${
+                          currentPage === pVal
+                            ? 'bg-cyan-500 text-slate-950 font-black scale-105 shadow-md shadow-cyan-500/20'
+                            : 'hover:bg-white/5 text-slate-300 border border-transparent'
+                        }`}
+                      >
+                        {pVal}
+                      </button>
+                    );
+                  });
+                })()}
                 <button
                   type="button"
                   disabled={currentPage === totalPages}
@@ -1296,7 +1430,7 @@ export default function CustomersManager() {
               <div className="space-y-1">
                 <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Assign Customers List</label>
                 <div className="bg-slate-950 border border-white/10 p-2.5 rounded-xl max-h-40 overflow-y-auto space-y-1.5 shadow-inner">
-                  {customers.map(c => {
+                  {allCustomersList.map(c => {
                     const checked = selectedGroupMembers.includes(c.id);
                     return (
                       <label key={c.id} className="flex items-center gap-2 cursor-pointer hover:bg-white/5 p-1 rounded transition-all text-xs text-slate-300">
@@ -1373,7 +1507,7 @@ export default function CustomersManager() {
                       ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-44 overflow-y-auto pr-1">
                           {g.memberIds.map(mid => {
-                            const matchingC = customers.find(c => c.id === mid);
+                            const matchingC = allCustomersList.find(c => c.id === mid);
                             if (!matchingC) return null;
                             return (
                               <div key={mid} className="bg-slate-950 border border-white/5 p-2 rounded-xl flex justify-between items-center text-[10px] text-slate-300">
@@ -1442,7 +1576,7 @@ export default function CustomersManager() {
                   onChange={(e) => setSelectedTargetGroupId(e.target.value)}
                   className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none cursor-pointer font-bold text-cyan-300"
                 >
-                  <option value="all">🌐 Broadcast to All customers ({customers.length})</option>
+                  <option value="all">🌐 Broadcast to All customers ({allCustomersList.length})</option>
                   {groups.map(g => (
                     <option key={g.id} value={g.id}>👥 {g.name} ({g.memberIds.length} members)</option>
                   ))}
@@ -1641,6 +1775,13 @@ export default function CustomersManager() {
             </div>
           </div>
 
+        </div>
+      )}
+
+      {/* Subtab: Quick Meta Template & Bulk Mobile Upload Sender */}
+      {activeSubTab === 'quick_custom_sender' && (
+        <div className="animate-fade-in pb-12">
+          <QuickTemplateSender existingCustomers={allCustomersList} groups={groups} />
         </div>
       )}
 
@@ -1985,13 +2126,23 @@ export default function CustomersManager() {
                   <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Inspect Order Logs, Bills & Modify Identity Coordinates</p>
                 </div>
               </div>
-              <button 
-                type="button"
-                onClick={() => setSelectedDetailCust(null)}
-                className="p-1.5 rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-all active:scale-95 cursor-pointer"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => openDirectWa(selectedDetailCust, 'welcome')}
+                  className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-black uppercase tracking-wider rounded-xl flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-sm"
+                >
+                  <MessageSquare className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>WhatsApp Chat</span>
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setSelectedDetailCust(null)}
+                  className="p-1.5 rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-all active:scale-95 cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
 
             {/* Modal Body (Grid layout) */}
@@ -2505,6 +2656,154 @@ export default function CustomersManager() {
                   {isHindi ? "प्राइम वीआईपी स्थिति निष्क्रिय करें" : "Disable Prime VIP Status"}
                 </button>
               )}
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Quick Direct WhatsApp Marketing & Chat Modal */}
+      {directWaCust && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-slate-900 border border-emerald-500/30 rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col">
+            
+            {/* Modal Header */}
+            <div className="border-b border-white/10 px-6 py-4 flex items-center justify-between bg-gradient-to-r from-emerald-950/40 via-slate-950/60 to-slate-950/40">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                  <MessageSquare className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white flex items-center gap-2">
+                    <span>Direct WhatsApp Messenger</span>
+                    <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-mono">
+                      Meta WhatsApp
+                    </span>
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-bold">
+                    Recipient: <span className="text-white">{directWaCust.name}</span> (<span className="text-cyan-300 font-mono">{directWaCust.phone}</span>)
+                  </p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setDirectWaCust(null)}
+                className="p-1.5 rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-all active:scale-95 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-4">
+              
+              {/* Quick Template Switcher */}
+              <div className="space-y-1.5">
+                <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">
+                  Choose Quick Template:
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openDirectWa(directWaCust, 'welcome')}
+                    className="p-2 bg-slate-950 hover:bg-slate-800 border border-white/10 hover:border-emerald-500/30 rounded-xl text-left transition-all cursor-pointer"
+                  >
+                    <span className="text-[10px] font-black text-emerald-300 block">🎁 Welcome Gift</span>
+                    <span className="text-[8px] text-slate-400 font-bold block">100 Points Welcome</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openDirectWa(directWaCust, 'points')}
+                    className="p-2 bg-slate-950 hover:bg-slate-800 border border-white/10 hover:border-amber-500/30 rounded-xl text-left transition-all cursor-pointer"
+                  >
+                    <span className="text-[10px] font-black text-amber-300 block">⭐ Points Balance</span>
+                    <span className="text-[8px] text-slate-400 font-bold block">{directWaCust.points || 100} PTS in Wallet</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openDirectWa(directWaCust, 'prime')}
+                    className="p-2 bg-slate-950 hover:bg-slate-800 border border-white/10 hover:border-yellow-500/30 rounded-xl text-left transition-all cursor-pointer"
+                  >
+                    <span className="text-[10px] font-black text-yellow-300 block">👑 Prime VIP</span>
+                    <span className="text-[8px] text-slate-400 font-bold block">Free Fast Delivery</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openDirectWa(directWaCust, 'order_care')}
+                    className="p-2 bg-slate-950 hover:bg-slate-800 border border-white/10 hover:border-cyan-500/30 rounded-xl text-left transition-all cursor-pointer"
+                  >
+                    <span className="text-[10px] font-black text-cyan-300 block">🛍️ Order Care</span>
+                    <span className="text-[8px] text-slate-400 font-bold block">Help & Assistance</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openDirectWa(directWaCust, 'birthday')}
+                    className="p-2 bg-slate-950 hover:bg-slate-800 border border-white/10 hover:border-pink-500/30 rounded-xl text-left transition-all cursor-pointer"
+                  >
+                    <span className="text-[10px] font-black text-pink-300 block">🎂 Birthday Greeting</span>
+                    <span className="text-[8px] text-slate-400 font-bold block">Festive Bonus Points</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openDirectWa(directWaCust, 'custom')}
+                    className="p-2 bg-slate-950 hover:bg-slate-800 border border-white/10 hover:border-indigo-500/30 rounded-xl text-left transition-all cursor-pointer"
+                  >
+                    <span className="text-[10px] font-black text-indigo-300 block">📝 Custom Note</span>
+                    <span className="text-[8px] text-slate-400 font-bold block">Free typing</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Message text area */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+                    Message Content (WhatsApp Format):
+                  </label>
+                  <span className="text-[8px] font-mono text-slate-500">
+                    Supports *bold*, _italic_ & emojis
+                  </span>
+                </div>
+                <textarea
+                  rows="6"
+                  value={directWaMsg}
+                  onChange={(e) => setDirectWaMsg(e.target.value)}
+                  className="w-full bg-slate-950 border border-white/15 focus:border-emerald-400 rounded-2xl p-3.5 text-xs text-white leading-relaxed font-sans outline-none resize-none shadow-inner"
+                  placeholder="Type your WhatsApp notification message here..."
+                />
+              </div>
+
+              {/* Feedback toast / alert */}
+              {directWaSuccess && (
+                <div className="p-3 bg-emerald-500/15 border border-emerald-500/30 rounded-xl text-emerald-300 text-xs font-bold text-center animate-fade-in flex items-center justify-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-emerald-400" />
+                  <span>{directWaSuccess}</span>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={directWaSending || !directWaMsg.trim()}
+                  onClick={() => handleSendDirectWa('api')}
+                  className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 font-black text-xs uppercase tracking-wider py-3 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Send className="h-4 w-4" />
+                  <span>{directWaSending ? "Dispatched..." : "Send via Meta API"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={!directWaMsg.trim()}
+                  onClick={() => handleSendDirectWa('web')}
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-emerald-300 font-black text-xs uppercase tracking-wider py-3 rounded-xl transition-all border border-emerald-500/30 active:scale-95 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <MessageSquare className="h-4 w-4 text-emerald-400" />
+                  <span>Open WhatsApp Web</span>
+                </button>
+              </div>
+
             </div>
 
           </div>

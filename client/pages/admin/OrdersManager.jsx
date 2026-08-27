@@ -60,8 +60,50 @@ export default function OrdersManager({ userRole }) {
     const custEmail = order.customerEmail || order.email || "N/A";
 
     const items = order.items || [];
-    const subtotal = Number(order.subtotal || order.total || 0);
-    const gst = Number(order.gst || Math.round(subtotal * 0.05));
+    
+    // Calculate slab-wise GST and item-level details
+    const slabMap = {};
+    let computedTaxable = 0;
+    let computedGst = 0;
+
+    const mappedItems = items.map((it, idx) => {
+      const rate = it.gstPercent !== undefined ? Number(it.gstPercent) : 5;
+      const qty = Number(it.qty || it.quantity || 1);
+      const unitPrice = Number(it.price || 0);
+      const lineTaxable = Math.round(unitPrice * qty * 100) / 100;
+      const taxAmount = Math.round(((lineTaxable * rate) / 100) * 100) / 100;
+      const cgst = Math.round((taxAmount / 2) * 100) / 100;
+      const sgst = Math.round((taxAmount - cgst) * 100) / 100;
+      const lineTotal = Math.round((lineTaxable + taxAmount) * 100) / 100;
+
+      computedTaxable += lineTaxable;
+      computedGst += taxAmount;
+
+      if (!slabMap[rate]) {
+        slabMap[rate] = { slab: rate, taxable: 0, cgst: 0, sgst: 0, totalTax: 0 };
+      }
+      slabMap[rate].taxable += lineTaxable;
+      slabMap[rate].cgst += cgst;
+      slabMap[rate].sgst += sgst;
+      slabMap[rate].totalTax += taxAmount;
+
+      return {
+        ...it,
+        rate,
+        qty,
+        unitPrice,
+        lineTaxable,
+        taxAmount,
+        cgst,
+        sgst,
+        lineTotal
+      };
+    });
+
+    const subtotal = Number(order.subtotal || computedTaxable || 0);
+    const gst = Number(order.gst || computedGst || 0);
+    const cgstTotal = Math.round((gst / 2) * 100) / 100;
+    const sgstTotal = Math.round((gst - cgstTotal) * 100) / 100;
     const deliveryFee = Number(order.deliveryFee || 0);
     const referralDiscount = Number(order.referralDiscount || 0);
     const couponDiscount = Number(order.couponDiscount || 0);
@@ -78,30 +120,31 @@ export default function OrdersManager({ userRole }) {
           <title>Tax Invoice - #${order.id} - ${storeName}</title>
           <style>
             * { box-sizing: border-box; }
-            body { font-family: 'Segoe UI', Arial, sans-serif; background: #ffffff; color: #0f172a; margin: 0; padding: 24px; font-size: 12px; line-height: 1.4; }
-            .invoice-box { max-width: 800px; margin: 0 auto; border: 2px solid #cbd5e1; padding: 28px; border-radius: 16px; background: #ffffff; }
-            .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0284c7; padding-bottom: 18px; margin-bottom: 18px; }
-            .brand-logo-title { display: flex; align-items: center; gap: 14px; }
-            .brand-logo-title img { max-height: 55px; max-width: 120px; object-fit: contain; border-radius: 8px; border: 1px solid #e2e8f0; }
-            .brand-name { font-size: 22px; font-weight: 900; color: #0284c7; text-transform: uppercase; margin: 0; letter-spacing: 0.5px; }
-            .store-contact { font-size: 11px; color: #475569; margin-top: 4px; font-weight: 500; }
+            body { font-family: 'Segoe UI', Arial, sans-serif; background: #ffffff; color: #0f172a; margin: 0; padding: 24px; font-size: 11px; line-height: 1.4; }
+            .invoice-box { max-width: 860px; margin: 0 auto; border: 2px solid #cbd5e1; padding: 24px; border-radius: 14px; background: #ffffff; }
+            .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0284c7; padding-bottom: 14px; margin-bottom: 14px; }
+            .brand-logo-title { display: flex; align-items: center; gap: 12px; }
+            .brand-logo-title img { max-height: 50px; max-width: 110px; object-fit: contain; border-radius: 6px; border: 1px solid #e2e8f0; }
+            .brand-name { font-size: 20px; font-weight: 900; color: #0284c7; text-transform: uppercase; margin: 0; letter-spacing: 0.5px; }
+            .store-contact { font-size: 10px; color: #475569; margin-top: 3px; font-weight: 500; }
             .invoice-heading { text-align: right; }
-            .tax-badge { font-size: 20px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 1px; }
-            .inv-no { font-size: 12px; font-weight: 800; color: #0284c7; margin-top: 4px; font-family: monospace; }
-            .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
-            .meta-card { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px; }
-            .card-head { font-size: 11px; font-weight: 800; text-transform: uppercase; color: #0284c7; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 8px; letter-spacing: 0.5px; }
-            .row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 11px; }
+            .tax-badge { font-size: 18px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 1px; }
+            .inv-no { font-size: 12px; font-weight: 800; color: #0284c7; margin-top: 3px; font-family: monospace; }
+            .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+            .meta-card { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 12px; }
+            .card-head { font-size: 10px; font-weight: 800; text-transform: uppercase; color: #0284c7; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; margin-bottom: 6px; letter-spacing: 0.5px; }
+            .row { display: flex; justify-content: space-between; margin-bottom: 3px; font-size: 10.5px; }
             .row-label { color: #64748b; font-weight: 600; }
             .row-val { color: #0f172a; font-weight: 700; word-break: break-word; text-align: right; }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 20px; }
-            th { background: #0f172a; color: #ffffff; text-transform: uppercase; font-size: 10px; font-weight: 800; padding: 10px 12px; text-align: left; letter-spacing: 0.5px; }
-            td { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 11px; font-weight: 600; }
-            .summary-container { display: flex; justify-content: flex-end; }
-            .summary-box { width: 320px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 16px; }
-            .summary-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 11px; }
-            .total-row { border-top: 2px solid #0f172a; padding-top: 8px; margin-top: 8px; font-size: 15px; font-weight: 900; color: #0284c7; }
-            .footer { margin-top: 26px; text-align: center; border-top: 1px dashed #cbd5e1; padding-top: 16px; font-size: 10px; color: #64748b; }
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; margin-bottom: 14px; }
+            th { background: #0f172a; color: #ffffff; text-transform: uppercase; font-size: 9.5px; font-weight: 800; padding: 8px 10px; text-align: left; letter-spacing: 0.4px; }
+            td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-size: 10.5px; font-weight: 600; }
+            .bottom-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; align-items: start; }
+            .gst-breakdown-card { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 12px; }
+            .summary-box { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 14px; }
+            .summary-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 10.5px; }
+            .total-row { border-top: 2px solid #0f172a; padding-top: 8px; margin-top: 6px; font-size: 14px; font-weight: 900; color: #0284c7; }
+            .footer { margin-top: 20px; text-align: center; border-top: 1px dashed #cbd5e1; padding-top: 12px; font-size: 9.5px; color: #64748b; }
             @media print {
               body { padding: 0; background: #fff; }
               .invoice-box { border: none; padding: 0; }
@@ -126,14 +169,14 @@ export default function OrdersManager({ userRole }) {
                 <div class="tax-badge">TAX INVOICE</div>
                 <div class="inv-no">ORDER #${order.id}</div>
                 <div style="font-size: 10px; color: #64748b; margin-top: 2px;">
-                  Date: ${order.orderDate ? new Date(order.orderDate).toLocaleDateString() : new Date().toLocaleDateString()}
+                  Date: ${order.orderDate ? new Date(order.orderDate).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB')}
                 </div>
               </div>
             </div>
 
             <div class="meta-grid">
               <div class="meta-card">
-                <div class="card-head">CUSTOMER DETAILS (ग्राहक जानकारी)</div>
+                <div class="card-head">CUSTOMER DETAILS (ग्राहक विवरण)</div>
                 <div class="row"><span class="row-label">Customer Name:</span> <span class="row-val">${custName}</span></div>
                 <div class="row"><span class="row-label">Mobile Number:</span> <span class="row-val">${custPhone}</span></div>
                 <div class="row"><span class="row-label">Delivery Address:</span> <span class="row-val">${custAddress}</span></div>
@@ -142,58 +185,94 @@ export default function OrdersManager({ userRole }) {
 
               <div class="meta-card">
                 <div class="card-head">ORDER & PAYMENT SUMMARY</div>
-                <div class="row"><span class="row-label">Payment Method:</span> <span class="row-val">${order.paymentMethod || 'COD'}</span></div>
+                <div class="row"><span class="row-label">Payment Mode:</span> <span class="row-val">${order.paymentMethod || 'COD'}</span></div>
                 <div class="row"><span class="row-label">Payment Status:</span> <span class="row-val" style="color:${(order.paymentStatus||'').toUpperCase()==='PAID' ? '#16a34a' : '#d97706'}">${order.paymentStatus || 'PENDING'}</span></div>
                 <div class="row"><span class="row-label">Order Status:</span> <span class="row-val">${order.status || 'CONFIRMED'}</span></div>
-                <div class="row"><span class="row-label">Assigned Rider:</span> <span class="row-val">${order.deliveryPartnerName || 'Swastik Rider'} (${order.deliveryPartnerPhone || '+91 95400 12099'})</span></div>
+                <div class="row"><span class="row-label">Dispatch Rider:</span> <span class="row-val">${order.deliveryPartnerName || 'Swastik Rider'} (${order.deliveryPartnerPhone || '+91 95400 12099'})</span></div>
               </div>
             </div>
 
             <table>
               <thead>
                 <tr>
-                  <th>#</th>
-                  <th>Item Name</th>
-                  <th>Weight/Size</th>
+                  <th style="width:30px;">#</th>
+                  <th>Item Description</th>
+                  <th>Pack / Unit</th>
                   <th style="text-align:center;">Qty</th>
-                  <th style="text-align:right;">Unit Price</th>
-                  <th style="text-align:right;">Total</th>
+                  <th style="text-align:right;">Rate (₹)</th>
+                  <th style="text-align:center;">GST %</th>
+                  <th style="text-align:right;">Taxable Amt</th>
+                  <th style="text-align:right;">Tax (CGST+SGST)</th>
+                  <th style="text-align:right;">Total (₹)</th>
                 </tr>
               </thead>
               <tbody>
-                ${items.map((it, idx) => `
+                ${mappedItems.map((it, idx) => `
                   <tr>
                     <td>${idx + 1}</td>
                     <td><b>${it.nameEn || it.nameHi || it.name || 'Grocery Item'}</b></td>
                     <td>${it.weight || it.unit || '1 Unit'}</td>
-                    <td style="text-align:center;"><b>${it.qty || it.quantity || 1}</b></td>
-                    <td style="text-align:right;">₹${it.price || 0}</td>
-                    <td style="text-align:right; font-weight:800;">₹${(it.price || 0) * (it.qty || it.quantity || 1)}</td>
+                    <td style="text-align:center;"><b>${it.qty}</b></td>
+                    <td style="text-align:right;">₹${it.unitPrice.toFixed(2)}</td>
+                    <td style="text-align:center;"><span style="background:#e0f2fe; color:#0369a1; padding:2px 6px; border-radius:4px; font-weight:700;">${it.rate}%</span></td>
+                    <td style="text-align:right;">₹${it.lineTaxable.toFixed(2)}</td>
+                    <td style="text-align:right; color:#64748b;">₹${it.taxAmount.toFixed(2)}</td>
+                    <td style="text-align:right; font-weight:800; color:#0f172a;">₹${it.lineTotal.toFixed(2)}</td>
                   </tr>
                 `).join('')}
               </tbody>
             </table>
 
-            <div class="summary-container">
+            <div class="bottom-grid">
+              <!-- GST Rate-wise computation box -->
+              <div class="gst-breakdown-card">
+                <div class="card-head">GST TAX BREAKDOWN (कर विवरण)</div>
+                <table style="margin: 0; font-size: 10px;">
+                  <thead>
+                    <tr style="background:#334155;">
+                      <th style="padding:4px 6px; font-size:9px;">Rate</th>
+                      <th style="padding:4px 6px; font-size:9px; text-align:right;">Taxable Value</th>
+                      <th style="padding:4px 6px; font-size:9px; text-align:right;">CGST</th>
+                      <th style="padding:4px 6px; font-size:9px; text-align:right;">SGST</th>
+                      <th style="padding:4px 6px; font-size:9px; text-align:right;">Total Tax</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${Object.values(slabMap).map(s => `
+                      <tr>
+                        <td style="padding:4px 6px; font-weight:700;">${s.slab}%</td>
+                        <td style="padding:4px 6px; text-align:right;">₹${s.taxable.toFixed(2)}</td>
+                        <td style="padding:4px 6px; text-align:right;">₹${s.cgst.toFixed(2)}</td>
+                        <td style="padding:4px 6px; text-align:right;">₹${s.sgst.toFixed(2)}</td>
+                        <td style="padding:4px 6px; text-align:right; font-weight:700; color:#0284c7;">₹${s.totalTax.toFixed(2)}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Grand Total Summary box -->
               <div class="summary-box">
-                <div class="summary-row"><span class="row-label">Subtotal:</span> <span class="row-val">₹${subtotal}</span></div>
-                <div class="summary-row"><span class="row-label">GST Tax:</span> <span class="row-val">₹${gst}</span></div>
-                <div class="summary-row"><span class="row-label">Delivery Fee:</span> <span class="row-val">${deliveryFee === 0 ? 'FREE' : `₹${deliveryFee}`}</span></div>
-                ${referralDiscount > 0 ? `<div class="summary-row" style="color:#d97706;"><span class="row-label">Referral Discount:</span> <span class="row-val">-₹${referralDiscount}</span></div>` : ''}
-                ${couponDiscount > 0 ? `<div class="summary-row" style="color:#16a34a;"><span class="row-label">Coupon Discount:</span> <span class="row-val">-₹${couponDiscount}</span></div>` : ''}
-                ${celebrationDiscount > 0 ? `<div class="summary-row" style="color:#9333ea;"><span class="row-label">Celebration Discount:</span> <span class="row-val">-₹${celebrationDiscount}</span></div>` : ''}
+                <div class="summary-row"><span class="row-label">Taxable Subtotal:</span> <span class="row-val">₹${subtotal.toFixed(2)}</span></div>
+                <div class="summary-row"><span class="row-label">CGST (Central Tax):</span> <span class="row-val">₹${cgstTotal.toFixed(2)}</span></div>
+                <div class="summary-row"><span class="row-label">SGST (State Tax):</span> <span class="row-val">₹${sgstTotal.toFixed(2)}</span></div>
+                <div class="summary-row" style="font-weight:700;"><span class="row-label">Total GST Tax:</span> <span class="row-val" style="color:#0284c7;">₹${gst.toFixed(2)}</span></div>
+                <div class="summary-row"><span class="row-label">Delivery Charges:</span> <span class="row-val">${deliveryFee === 0 ? 'FREE' : `₹${deliveryFee.toFixed(2)}`}</span></div>
+                ${referralDiscount > 0 ? `<div class="summary-row" style="color:#d97706;"><span class="row-label">Loyalty Points Discount:</span> <span class="row-val">-₹${referralDiscount.toFixed(2)}</span></div>` : ''}
+                ${couponDiscount > 0 ? `<div class="summary-row" style="color:#16a34a;"><span class="row-label">Coupon Discount:</span> <span class="row-val">-₹${couponDiscount.toFixed(2)}</span></div>` : ''}
+                ${celebrationDiscount > 0 ? `<div class="summary-row" style="color:#9333ea;"><span class="row-label">Celebration Discount:</span> <span class="row-val">-₹${celebrationDiscount.toFixed(2)}</span></div>` : ''}
                 
                 <div class="summary-row total-row">
-                  <span>Grand Total:</span>
-                  <span>₹${grandTotal}</span>
+                  <span>Grand Total (कुल राशि):</span>
+                  <span>₹${grandTotal.toFixed(2)}</span>
                 </div>
               </div>
             </div>
 
             <div class="footer">
-              <p style="font-weight: 800; color: #0284c7; margin-bottom: 4px;">THANK YOU FOR SHOPPING AT ${storeName.toUpperCase()}!</p>
-              <p>This is an official computer-generated tax invoice. Goods once sold are backed by our 100% Quality & Freshness Guarantee.</p>
-              <p style="font-size: 9px; font-family: monospace; color: #94a3b8; margin-top: 6px;">STORE HELPLINE: ${storePhone} | WEBSITE: SWASTIKSUPERMARKET.COM</p>
+              <p style="font-weight: 800; color: #0284c7; margin-bottom: 2px;">THANK YOU FOR SHOPPING AT ${storeName.toUpperCase()}!</p>
+              <p>This is a computer-generated tax invoice under the GST Act. All taxes are calculated as per applicable rates.</p>
+              <p style="font-size: 8.5px; font-family: monospace; color: #94a3b8; margin-top: 4px;">GSTIN: ${storeGst} | FSSAI LIC: ${storeFssai} | STORE HELPLINE: ${storePhone}</p>
             </div>
           </div>
 
@@ -317,9 +396,9 @@ export default function OrdersManager({ userRole }) {
   const [tpLogs, setTpLogs] = useState([]);
   const [isTpSending, setIsTpSending] = useState(false);
 
-  // Pagination states
+  // Pagination states (default 50 items per page)
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
+  const itemsPerPage = 50;
 
   React.useEffect(() => {
     setCurrentPage(1);
@@ -1204,28 +1283,39 @@ export default function OrdersManager({ userRole }) {
               >
                 ◀ Prev
               </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNo => {
-                if (totalPages > 6 && pageNo !== 1 && pageNo !== totalPages && Math.abs(pageNo - currentPage) > 1) {
-                  if (pageNo === 2 || pageNo === totalPages - 1) {
-                    return <span key={pageNo} className="px-1.5 select-none text-[10px]" style={{ color: '#64748b' }}>..</span>;
-                  }
-                  return null;
+              {(() => {
+                const pages = [];
+                if (totalPages <= 7) {
+                  for (let i = 1; i <= totalPages; i++) pages.push(i);
+                } else {
+                  pages.push(1);
+                  const start = Math.max(2, currentPage - 1);
+                  const end = Math.min(totalPages - 1, currentPage + 1);
+                  if (start > 2) pages.push('ellipsis-start');
+                  for (let i = start; i <= end; i++) pages.push(i);
+                  if (end < totalPages - 1) pages.push('ellipsis-end');
+                  pages.push(totalPages);
                 }
-                return (
-                  <button
-                    key={pageNo}
-                    type="button"
-                    onClick={() => setCurrentPage(pageNo)}
-                    className={`w-8 h-8 rounded-xl font-bold transition-all text-[11px] ${
-                      currentPage === pageNo
-                        ? 'bg-cyan-500 text-slate-950 font-black scale-105'
-                        : 'hover:bg-white/5 text-slate-300 border border-transparent'
-                    }`}
-                  >
-                    {pageNo}
-                  </button>
-                );
-              })}
+                return pages.map((pVal, idx) => {
+                  if (typeof pVal === 'string') {
+                    return <span key={`${pVal}-${idx}`} className="px-1.5 select-none text-[10px] text-slate-500">..</span>;
+                  }
+                  return (
+                    <button
+                      key={pVal}
+                      type="button"
+                      onClick={() => setCurrentPage(pVal)}
+                      className={`w-8 h-8 rounded-xl font-bold transition-all text-[11px] ${
+                        currentPage === pVal
+                          ? 'bg-cyan-500 text-slate-950 font-black scale-105 shadow-md shadow-cyan-500/20'
+                          : 'hover:bg-white/5 text-slate-300 border border-transparent'
+                      }`}
+                    >
+                      {pVal}
+                    </button>
+                  );
+                });
+              })()}
               <button
                 type="button"
                 disabled={currentPage === totalPages}

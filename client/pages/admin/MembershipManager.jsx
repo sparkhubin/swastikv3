@@ -328,7 +328,7 @@ export default function MembershipManager({ userRole, isAdminDark = true }) {
                   </td>
                 </tr>
               ) : (
-                filteredCustomers.slice(0, 25).map((cust) => (
+                filteredCustomers.slice(0, 50).map((cust) => (
                   <tr key={cust.id} className={`transition-colors ${isAdminDark ? 'hover:bg-slate-800/50' : 'hover:bg-slate-50/70'}`}>
                     <td className={`p-3 font-semibold ${isAdminDark ? 'text-white' : 'text-slate-900'}`}>{cust.name || 'Unnamed Customer'}</td>
                     <td className={`p-3 font-mono ${isAdminDark ? 'text-slate-300' : 'text-slate-600'}`}>{cust.phone || '-'}</td>

@@ -3,6 +3,7 @@ import Account from './Account';
 import { useLanguage } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
 import { useData } from '../context/DataContext';
+import { resolveProductImage, markImageFailed, DEFAULT_PRODUCT_FALLBACK } from '../utils/imageHelper';
 import { 
   Trash2, 
   MapPin, 
@@ -97,22 +98,16 @@ const checkTimeInSlot = (startTime, endTime) => {
 };
 
 const CartItemImage = ({ product, r2PublicUrl, className }) => {
-  const extensions = ['.png', '.jpg', '.jpeg', '.webp'];
-  const [attemptIndex, setAttemptIndex] = React.useState(0);
+  const [imgSrc, setImgSrc] = React.useState(() => resolveProductImage(product, r2PublicUrl, 200));
 
-  const code = product?.code || product?.Code;
-  let imgSrc;
-  if (code && r2PublicUrl && attemptIndex < extensions.length) {
-    imgSrc = `${r2PublicUrl.replace(/\/$/, '')}/${code}${extensions[attemptIndex]}`;
-  } else if (attemptIndex === extensions.length) {
-    imgSrc = product?.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400';
-  } else {
-    imgSrc = 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400';
-  }
+  React.useEffect(() => {
+    setImgSrc(resolveProductImage(product, r2PublicUrl, 200));
+  }, [product, r2PublicUrl]);
 
   const handleImageError = () => {
-    if (attemptIndex <= extensions.length) {
-      setAttemptIndex(prev => prev + 1);
+    if (imgSrc && imgSrc !== DEFAULT_PRODUCT_FALLBACK) {
+      markImageFailed(imgSrc);
+      setImgSrc(DEFAULT_PRODUCT_FALLBACK);
     }
   };
 
@@ -121,6 +116,8 @@ const CartItemImage = ({ product, r2PublicUrl, className }) => {
       src={imgSrc} 
       onError={handleImageError} 
       alt={product?.nameEn} 
+      loading="lazy"
+      decoding="async"
       className={className}
       referrerPolicy="no-referrer"
     />
@@ -129,7 +126,7 @@ const CartItemImage = ({ product, r2PublicUrl, className }) => {
 
 export default function CartCheckout({ onViewChange }) {
   const { t, language, isHindi } = useLanguage();
-  const { orders, addOrder, offers, contactSettings, products, referralSettings, locationGroups, celebrationSettings, customers, addCustomer, updateCustomer, r2PublicUrl, paymentEnabled, paymentEnvironment } = useData();
+  const { orders, addOrder, offers, contactSettings, products, referralSettings, locationGroups, celebrationSettings, customers, addCustomer, upsertCustomer, updateCustomer, r2PublicUrl, paymentEnabled, paymentEnvironment } = useData();
 
   const {
     cartItems,
@@ -1048,7 +1045,8 @@ export default function CartCheckout({ onViewChange }) {
         nameHi: item.product.nameHi,
         price: Number(getUnitPrice(item.product, item.selectedUnit)),
         qty: Number(item.quantity),
-        weight: item.selectedUnit || (language === 'hi' ? (item.product.packHi || "100gm") : (item.product.packEn || "100gm"))
+        weight: item.selectedUnit || (language === 'hi' ? (item.product.packHi || "100gm") : (item.product.packEn || "100gm")),
+        gstPercent: item.product?.gstPercent !== undefined ? Number(item.product.gstPercent) : (item.product?.gst_percent !== undefined ? Number(item.product.gst_percent) : 5)
       }))
     };
 

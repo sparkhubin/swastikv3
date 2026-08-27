@@ -585,6 +585,19 @@ export function DataProvider({ children }) {
     }
 
     try {
+      const custRes = await fetch('/api/customers');
+      if (custRes.ok) {
+        const custData = await custRes.json();
+        if (Array.isArray(custData) && custData.length > 0) {
+          setCustomers(custData);
+          localStorage.setItem('swastik_customers', JSON.stringify(custData));
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to fetch customers from /api/customers:", e);
+    }
+
+    try {
       const prodRes = await fetch('/api/products');
       if (prodRes.ok) {
         const data = await prodRes.json();
@@ -1026,16 +1039,129 @@ export function DataProvider({ children }) {
     setContactMessages(prev => prev.map(m => m.id === Number(id) ? { ...m, ...updated } : m));
   };
 
-  // Dynamic customers register
+  // Dynamic customers register & synchronization with backend
+  const upsertCustomer = async (custData) => {
+    if (!custData) return null;
+    const cleanDigits = (ph) => ph ? String(ph).replace(/[^0-9]/g, "") : "";
+    const rawPhone = custData.phone || custData.phoneNumber || custData.mobile || "";
+    const phoneDigits = cleanDigits(rawPhone);
+    const formattedPhone = rawPhone.startsWith('+') ? rawPhone : (phoneDigits.length === 10 ? `+91 ${phoneDigits}` : rawPhone);
+    const rawName = (custData.name || custData.fullName || `Customer ${phoneDigits.slice(-4)}`).trim();
+
+    let targetCust = null;
+    setCustomers(prev => {
+      const existingIdx = prev.findIndex(c => cleanDigits(c.phone).endsWith(phoneDigits.slice(-10)));
+      if (existingIdx >= 0) {
+        const current = prev[existingIdx];
+        targetCust = {
+          ...current,
+          ...custData,
+          id: current.id,
+          name: rawName || current.name,
+          phone: formattedPhone || current.phone,
+          email: custData.email !== undefined ? custData.email : current.email,
+          address: custData.address !== undefined ? custData.address : (current.address || ""),
+          points: custData.points !== undefined ? custData.points : (current.points || 0),
+          isPrimeActive: custData.isPrimeActive !== undefined ? Boolean(custData.isPrimeActive) : Boolean(current.isPrimeActive),
+          primeMembershipNo: custData.primeMembershipNo !== undefined ? custData.primeMembershipNo : (current.primeMembershipNo || ""),
+          dob: custData.dob !== undefined ? custData.dob : (current.dob || ""),
+          anniversary: custData.anniversary !== undefined ? custData.anniversary : (current.anniversary || ""),
+          password: custData.password !== undefined ? custData.password : (current.password || ""),
+          image: custData.image !== undefined ? custData.image : (current.image || ""),
+          orderCount: custData.orderCount !== undefined ? custData.orderCount : (current.orderCount || 0),
+          totalSpent: custData.totalSpent !== undefined ? custData.totalSpent : (current.totalSpent || 0)
+        };
+        const updatedList = [...prev];
+        updatedList[existingIdx] = targetCust;
+        localStorage.setItem('swastik_customers', JSON.stringify(updatedList));
+        return updatedList;
+      } else {
+        const newId = prev.length > 0 ? Math.max(...prev.map(c => Number(c.id) || 0)) + 1 : 101;
+        targetCust = {
+          id: newId,
+          name: rawName,
+          phone: formattedPhone,
+          email: custData.email || `${rawName.toLowerCase().replace(/\s+/g, '')}@swastik.com`,
+          address: custData.address || "",
+          status: custData.status || 'Active',
+          points: custData.points !== undefined ? custData.points : 100,
+          firstLoginPointsAwarded: custData.firstLoginPointsAwarded !== undefined ? custData.firstLoginPointsAwarded : 100,
+          referralPointsAwarded: custData.referralPointsAwarded || 0,
+          referredBy: custData.referredBy || "",
+          isPrimeActive: Boolean(custData.isPrimeActive),
+          primeMembershipNo: custData.primeMembershipNo || "",
+          dob: custData.dob || "",
+          anniversary: custData.anniversary || "",
+          password: custData.password || "",
+          image: custData.image || "",
+          registeredAt: custData.registeredAt || new Date().toISOString().split('T')[0],
+          orderCount: custData.orderCount || 0,
+          totalSpent: custData.totalSpent || 0
+        };
+        const updatedList = [targetCust, ...prev];
+        localStorage.setItem('swastik_customers', JSON.stringify(updatedList));
+        return updatedList;
+      }
+    });
+
+    // Notify listeners
+    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new CustomEvent('swastik_customers_updated', { detail: custData }));
+
+    // Send to backend REST API
+    try {
+      await fetch('/api/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(custData)
+      });
+    } catch (e) {
+      console.warn("Could not push customer to /api/customers:", e);
+    }
+
+    return targetCust;
+  };
+
   const addCustomer = (cust) => {
-    const newId = customers.length > 0 ? Math.max(...customers.map(c => c.id)) + 1 : 101;
-    setCustomers(prev => [...prev, { ...cust, id: newId, registeredAt: new Date().toISOString().split('T')[0], orderCount: 0, totalSpent: 0 }]);
+    return upsertCustomer(cust);
   };
-  const updateCustomer = (id, updated) => {
-    setCustomers(prev => prev.map(c => c.id === Number(id) ? { ...c, ...updated } : c));
+
+  const updateCustomer = async (id, updated) => {
+    const custId = Number(id);
+    setCustomers(prev => {
+      const updatedList = prev.map(c => c.id === custId ? { ...c, ...updated } : c);
+      localStorage.setItem('swastik_customers', JSON.stringify(updatedList));
+      return updatedList;
+    });
+
+    window.dispatchEvent(new Event('storage'));
+
+    try {
+      await fetch(`/api/customers/${custId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated)
+      });
+    } catch (e) {
+      console.warn(`Could not update customer ${custId} on backend:`, e);
+    }
   };
-  const deleteCustomer = (id) => {
-    setCustomers(prev => prev.filter(c => c.id !== Number(id)));
+
+  const deleteCustomer = async (id) => {
+    const custId = Number(id);
+    setCustomers(prev => {
+      const updatedList = prev.filter(c => c.id !== custId);
+      localStorage.setItem('swastik_customers', JSON.stringify(updatedList));
+      return updatedList;
+    });
+
+    window.dispatchEvent(new Event('storage'));
+
+    try {
+      await fetch(`/api/customers/${custId}`, { method: 'DELETE' });
+    } catch (e) {
+      console.warn(`Could not delete customer ${custId} on backend:`, e);
+    }
   };
 
   // ------------------------------------
@@ -1262,6 +1388,7 @@ export function DataProvider({ children }) {
       customers,
       setCustomers,
       addCustomer,
+      upsertCustomer,
       updateCustomer,
       deleteCustomer,
       aboutSettings,

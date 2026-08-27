@@ -1,0 +1,59 @@
+// Fast and resilient Product Image resolution utility with in-memory failure caching and thumbnail optimization
+
+export const DEFAULT_PRODUCT_FALLBACK = 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=75&w=300';
+export const GENERIC_PLACEHOLDER_KEY = 'photo-1542838132-92c53300491e';
+
+// Global cache of failed image URLs so we never retry broken/404 links repeatedly
+const failedUrlCache = new Set();
+
+/**
+ * Checks whether a product has an actual assigned / custom product image
+ */
+export function hasCustomProductImage(product) {
+  if (!product) return false;
+  const raw = product.imageUrl || product.image || '';
+  if (!raw || typeof raw !== 'string') return false;
+  const trimmed = raw.trim();
+  if (!trimmed) return false;
+  if (failedUrlCache.has(trimmed)) return false;
+  // If it is the default generic unsplash fallback image, consider it as no custom image
+  if (trimmed.includes(GENERIC_PLACEHOLDER_KEY)) return false;
+  return true;
+}
+
+/**
+ * Resolves the fastest, optimized image URL for a product
+ */
+export function resolveProductImage(product, r2PublicUrl, size = 300) {
+  if (!product) return DEFAULT_PRODUCT_FALLBACK;
+
+  const raw = (product.imageUrl || product.image || '').trim();
+
+  // If a valid custom image URL is present and not failed
+  if (raw && !failedUrlCache.has(raw)) {
+    if (raw.includes('images.unsplash.com') && !raw.includes('w=')) {
+      return `${raw}&auto=format&fit=crop&q=75&w=${size}`;
+    }
+    return raw;
+  }
+
+  // If code and R2 public URL exist, check if R2 URL hasn't failed yet
+  const code = (product.code || product.Code || '').trim();
+  if (code && r2PublicUrl) {
+    const r2Url = `${r2PublicUrl.replace(/\/$/, '')}/${code}.png`;
+    if (!failedUrlCache.has(r2Url)) {
+      return r2Url;
+    }
+  }
+
+  return DEFAULT_PRODUCT_FALLBACK;
+}
+
+/**
+ * Handle image error and return fallback
+ */
+export function markImageFailed(url) {
+  if (url && typeof url === 'string') {
+    failedUrlCache.add(url);
+  }
+}

@@ -3,6 +3,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
 import { useData } from '../context/DataContext';
 import ProductCard from '../components/ProductCard';
+import { resolveProductImage, markImageFailed, DEFAULT_PRODUCT_FALLBACK } from '../utils/imageHelper';
 import { 
   Search, 
   SlidersHorizontal, 
@@ -35,7 +36,7 @@ async function getCapacitorSpeech() {
 export default function Shop({ categoryFilterState, onCategoryFilterChange, searchQueryProp, onSearchQueryChange }) {
   const { t, language } = useLanguage();
   const isHindi = language === 'hi';
-  const { products, categories: dynamicCategories } = useData();
+  const { products, categories: dynamicCategories, r2PublicUrl } = useData();
   const [searchQuery, setSearchQuery] = useState(searchQueryProp || '');
 
   React.useEffect(() => {
@@ -56,8 +57,8 @@ export default function Shop({ categoryFilterState, onCategoryFilterChange, sear
   const [selectedPricePreset, setSelectedPricePreset] = useState('all'); // all, under-100, 100-300, 300-1000, over-1000
   const [onlyDiscounted, setOnlyDiscounted] = useState(false);
 
-  // Dynamic products display limit list
-  const [productsLimit, setProductsLimit] = useState(8);
+  // Dynamic products display limit list (increased to 50 default)
+  const [productsLimit, setProductsLimit] = useState(50);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   // Voice Search states
@@ -370,9 +371,9 @@ export default function Shop({ categoryFilterState, onCategoryFilterChange, sear
   const handleLoadMore = () => {
     setIsLoadingMore(true);
     setTimeout(() => {
-      setProductsLimit(prev => prev + 8);
+      setProductsLimit(prev => prev + 50);
       setIsLoadingMore(false);
-    }, 450);
+    }, 300);
   };
 
   return (
@@ -710,8 +711,14 @@ export default function Shop({ categoryFilterState, onCategoryFilterChange, sear
                     {/* Left: Product Image */}
                     <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden bg-slate-50 border border-slate-200 shrink-0">
                       <img
-                        src={prod.image}
+                        src={resolveProductImage(prod, r2PublicUrl, 200)}
                         alt={name}
+                        loading="lazy"
+                        decoding="async"
+                        onError={(e) => {
+                          markImageFailed(e.target.src);
+                          e.target.src = DEFAULT_PRODUCT_FALLBACK;
+                        }}
                         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                         referrerPolicy="no-referrer"
                       />
@@ -730,11 +737,6 @@ export default function Shop({ categoryFilterState, onCategoryFilterChange, sear
                       <h4 className="font-extrabold text-sm leading-snug text-slate-900 mt-0.5">
                         {name}
                       </h4>
-                      {packSize && (
-                        <span className="text-xs text-slate-500 font-medium block mt-0.5">
-                          {packSize}
-                        </span>
-                      )}
                       
                       <div className="mt-1.5 flex items-baseline justify-center sm:justify-start gap-2">
                         <span className="text-base font-black text-slate-900">

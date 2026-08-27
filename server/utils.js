@@ -346,7 +346,8 @@ export function mapProduct(p) {
     unit: p.unit,
     unitPrices: p.unit_prices,
     packEn: p.pack_en,
-    packHi: p.pack_hi
+    packHi: p.pack_hi,
+    gstPercent: p.gst_percent !== undefined && p.gst_percent !== null ? Number(p.gst_percent) : 5
   };
 }
 
@@ -458,7 +459,8 @@ export async function sendWhatsappMessageUnified(
   otpCode = undefined,
   templateName = undefined,
   templateParams = [],
-  mediaUrl = undefined
+  mediaUrl = undefined,
+  languageCode = "en_US"
 ) {
   const metaPhoneId = process.env.META_WHATSAPP_PHONE_NUMBER_ID;
   const metaToken = process.env.META_WHATSAPP_ACCESS_TOKEN;
@@ -519,7 +521,7 @@ export async function sendWhatsappMessageUnified(
         template: {
           name: activeTpl,
           language: {
-            code: "en"
+            code: languageCode || "en_US"
           },
           ...(components.length > 0 ? { components } : {})
         }

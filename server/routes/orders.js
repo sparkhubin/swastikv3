@@ -17,9 +17,33 @@ router.get("/orders", async (req, res) => {
   }
 });
 
+router.get("/orders/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const rows = await db.query('SELECT * FROM "order" WHERE id = ?', [id]);
+    if (rows.length > 0) {
+      res.json(await mapOrder(rows[0]));
+    } else {
+      res.status(404).json({ error: "Order not found" });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post("/orders", async (req, res) => {
   try {
     const o = req.body;
+    let targetOrderId = o.id ? Number(o.id) : Math.floor(1000 + Math.random() * 9000);
+
+    // Check if ID exists, generate new if needed
+    if (!o.id) {
+      const checkExists = await db.query('SELECT id FROM "order" WHERE id = ?', [targetOrderId]);
+      if (checkExists.length > 0) {
+        targetOrderId = Math.floor(10000 + Math.random() * 90000);
+      }
+    }
+
     await db.execute(
       `INSERT INTO "order" (
         id, user_id, order_date, is_active, step_level, status_label, 
@@ -31,16 +55,16 @@ router.post("/orders", async (req, res) => {
         celebration_discount, celebration_offer_name, payment_method, payment_status
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        o.id,
+        targetOrderId,
         o.userId || null,
         o.orderDate || new Date().toISOString(),
         o.isActive !== undefined ? (o.isActive ? 1 : 0) : 1,
         o.step !== undefined ? o.step : 0,
-        o.status || o.status_label || "Confirmed",
+        o.status || o.status_label || "Placed",
         o.subtotal || 0,
         o.deliveryFee || 0,
         o.gst || o.gst_amount || 0,
-        o.total || o.grand_total || 0,
+        o.total || o.grandTotal || o.grand_total || 0,
         o.deliveryPartnerName || "",
         o.deliveryPartnerPhone || "",
         o.hubName || o.dispatch_hub || "",
@@ -70,19 +94,19 @@ router.post("/orders", async (req, res) => {
             order_id, product_id, name_en, name_hi, price, qty, weight_label
           ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [
-            o.id,
-            item.productId || 0,
+            targetOrderId,
+            item.productId || item.id || 0,
             item.nameEn || item.name || "",
             item.nameHi || item.name || "",
             item.price || 0,
-            item.qty || 1,
-            item.weight || item.weight_label || "N/A"
+            item.quantity || item.qty || 1,
+            item.weight || item.weight_label || item.unit || "N/A"
           ]
         );
       }
     }
 
-    const rows = await db.query('SELECT * FROM "order" WHERE id = ?', [o.id]);
+    const rows = await db.query('SELECT * FROM "order" WHERE id = ?', [targetOrderId]);
 
     // Create In-App Notifications for Admin, Customer, and Delivery Staff
     try {
@@ -209,10 +233,15 @@ router.post("/orders", async (req, res) => {
   }
 });
 
-router.put("/orders/:id/transit", async (req, res) => {
+router.put(["/orders/:id", "/orders/:id/transit"], async (req, res) => {
   const id = req.params.id;
   const updateData = req.body;
   try {
+    const existingRows = await db.query('SELECT * FROM "order" WHERE id = ?', [id]);
+    const prevOrder = existingRows[0] || {};
+    const oldStatus = (prevOrder.status_label || "").toLowerCase();
+    const oldStep = prevOrder.step_level !== undefined ? Number(prevOrder.step_level) : -1;
+
     const fieldsToUpdate = [];
     const params = [];
     
@@ -306,15 +335,17 @@ router.put("/orders/:id/transit", async (req, res) => {
     }
     
     const rows = await db.query('SELECT * FROM "order" WHERE id = ?', [id]);
+    const orderRec = rows[0] || {};
+    const newStatus = (updateData.status || orderRec.status_label || "").toLowerCase();
+    const newStep = updateData.step !== undefined ? Number(updateData.step) : (orderRec.step_level !== undefined ? Number(orderRec.step_level) : -1);
 
-    // Dispatch Order Status Update Notifications
+    // Dispatch Order Status In-App Notifications
     try {
-      const orderRec = rows[0] || {};
       const statusLabel = updateData.status || orderRec.status_label || "Updated";
       const targetPhone = updateData.customerPhone || updateData.customerMobile || orderRec.customer_phone || "";
       const partnerName = updateData.deliveryPartnerName || orderRec.delivery_partner_name || "Swastik Rider";
 
-      // 1. Customer Notification
+      // 1. Customer In-App Notification
       if (targetPhone) {
         await db.execute(
           `INSERT INTO notification (recipient_role, recipient_phone, order_id, title_en, title_hi, message_en, message_hi, type, is_read)
@@ -330,7 +361,7 @@ router.put("/orders/:id/transit", async (req, res) => {
         );
       }
 
-      // 2. Admin Notification
+      // 2. Admin In-App Notification
       await db.execute(
         `INSERT INTO notification (recipient_role, recipient_phone, order_id, title_en, title_hi, message_en, message_hi, type, is_read)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
@@ -344,7 +375,7 @@ router.put("/orders/:id/transit", async (req, res) => {
         ]
       );
 
-      // 3. Delivery Staff Notification
+      // 3. Delivery Staff In-App Notification
       await db.execute(
         `INSERT INTO notification (recipient_role, recipient_phone, order_id, title_en, title_hi, message_en, message_hi, type, is_read)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
@@ -358,10 +389,7 @@ router.put("/orders/:id/transit", async (req, res) => {
         ]
       );
 
-      // 4. WhatsApp Notifications Dispatch for Status Changes
-      const deliveryPartnerPhone = updateData.deliveryPartnerPhone || orderRec.delivery_partner_phone || "+91 95400 12099";
-      const adminPhone = process.env.ADMIN_WHATSAPP_PHONE || "+91 98101 20299";
-
+      // 4. WhatsApp Notifications: STRICT SINGLE-TIME DELIVERY MESSAGE ONLY FOR CUSTOMER
       let targetName = updateData.customerName || orderRec.customer_name;
       if ((!targetName || targetName === "Simulated Customer" || targetName === "Valued Customer" || targetName === "Customer") && targetPhone) {
         try {
@@ -376,52 +404,23 @@ router.put("/orders/:id/transit", async (req, res) => {
       }
       if (!targetName) targetName = "Valued Customer";
 
-      if (targetPhone) {
+      // Check if order transitioned to DELIVERED
+      const wasDeliveredBefore = oldStatus.includes("delivered") || oldStatus.includes("completed") || oldStep === 2 || oldStep === 3;
+      const isDeliveredNow = newStatus.includes("delivered") || newStatus.includes("completed") || newStep === 2 || newStep === 3;
+
+      if (isDeliveredNow && !wasDeliveredBefore && targetPhone) {
+        // Customer ONLY receives delivery message once when marked delivered
         sendWhatsappMessageUnified(
           targetPhone,
-          `📦 *Order Update Notice!* (#${id})\n\nDear ${targetName},\nYour order status has been updated to: *${statusLabel}*\nAssigned Rider: ${partnerName}\n\nThank you for choosing Swastik Supermarket! 🛒`,
+          `🎉 *Order Delivered!* (#${id})\n\nDear ${targetName},\nYour order of *₹${orderRec.grand_total || 0}* from Swastik Supermarket has been delivered successfully! 🚚✨\n\nThank you for shopping with us! Have a wonderful day.`,
           false,
           undefined,
-          "order_dispatch_alert",
-          [targetName, id, String(orderRec.grand_total || 0)]
-        ).catch(err => console.error("[Auto WhatsApp Update Customer Error]:", err.message));
-      }
-
-      if (adminPhone) {
-        sendWhatsappMessageUnified(
-          adminPhone,
-          `✏️ *ORDER STATUS UPDATED* (#${id})\n\nNew Status: *${statusLabel}*\nRider: ${partnerName}\nCustomer: ${targetName}${targetPhone ? ` (${targetPhone})` : ''}`,
-          false
-        ).catch(err => console.error("[Auto WhatsApp Update Admin Error]:", err.message));
-      }
-
-      if (deliveryPartnerPhone) {
-        sendWhatsappMessageUnified(
-          deliveryPartnerPhone,
-          `🛵 *TASK STATUS UPDATED* (#${id})\n\nStatus: *${statusLabel}*\nCustomer: ${targetName}${targetPhone ? ` (${targetPhone})` : ''}\nDelivery Address: ${orderRec.shipping_address || 'Store Pickup'}`,
-          false
-        ).catch(err => console.error("[Auto WhatsApp Update Delivery Error]:", err.message));
+          "thank_you_template",
+          [targetName, String(id), String(orderRec.grand_total || 0)]
+        ).catch(err => console.error("[Auto WhatsApp Delivery Customer Error]:", err.message));
       }
     } catch (notifErr) {
       console.error("[In-App Notification Update Error]:", notifErr.message);
-    }
-
-    // Trigger order_dispatch_alert if step is updated to 1 or status indicates dispatch
-    if (updateData.step === 1 || (updateData.status && (updateData.status.toLowerCase().includes("dispatch") || updateData.status.toLowerCase().includes("transit") || updateData.status.toLowerCase().includes("out for delivery")))) {
-      const targetPhone = updateData.customerPhone || updateData.customerMobile || (rows[0] ? rows[0].customer_phone : null);
-      const targetName = updateData.customerName || (rows[0] ? rows[0].customer_name : "Valued Customer");
-      const totalAmount = updateData.total || updateData.grandTotal || (rows[0] ? rows[0].grand_total : 1200);
-      
-      if (targetPhone) {
-        sendWhatsappMessageUnified(
-          targetPhone,
-          `Hello ${targetName}, your Swastik order ${id} has been handed over to our delivery partner! Total bill amount is ${totalAmount}. You can track or contact your rider directly from the Swastik app.`,
-          false,
-          undefined,
-          "order_dispatch_alert",
-          [targetName, id, String(totalAmount)]
-        ).catch(err => console.error("[Auto WhatsApp] order_dispatch_alert dispatch error:", err.message));
-      }
     }
 
     if (rows.length > 0) {
