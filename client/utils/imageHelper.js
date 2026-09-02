@@ -7,6 +7,25 @@ export const GENERIC_PLACEHOLDER_KEY = 'photo-1542838132-92c53300491e';
 const failedUrlCache = new Set();
 
 /**
+ * Resolves any image URL (including relative /uploads/ paths) to a valid absolute URL
+ * when frontend and backend run on different domains or ports.
+ */
+export function resolveImageUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  if (!trimmed) return '';
+
+  if (trimmed.startsWith('/uploads/')) {
+    const rawApiUrl = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_API_URL : '';
+    if (rawApiUrl && (rawApiUrl.startsWith('http://') || rawApiUrl.startsWith('https://'))) {
+      const cleanBase = rawApiUrl.endsWith('/') ? rawApiUrl.slice(0, -1) : rawApiUrl;
+      return `${cleanBase}${trimmed}`;
+    }
+  }
+  return trimmed;
+}
+
+/**
  * Checks whether a product has an actual assigned / custom product image
  */
 export function hasCustomProductImage(product) {
@@ -27,10 +46,14 @@ export function hasCustomProductImage(product) {
 export function resolveProductImage(product, r2PublicUrl, size = 300) {
   if (!product) return DEFAULT_PRODUCT_FALLBACK;
 
-  const raw = (product.imageUrl || product.image || '').trim();
+  let raw = (product.imageUrl || product.image || '').trim();
 
   // If a valid custom image URL is present and not failed
   if (raw && !failedUrlCache.has(raw)) {
+    // Automatically resolve relative /uploads/ path if frontend is on a separate server
+    if (raw.startsWith('/uploads/')) {
+      raw = resolveImageUrl(raw);
+    }
     if (raw.includes('images.unsplash.com') && !raw.includes('w=')) {
       return `${raw}&auto=format&fit=crop&q=75&w=${size}`;
     }
@@ -57,3 +80,4 @@ export function markImageFailed(url) {
     failedUrlCache.add(url);
   }
 }
+

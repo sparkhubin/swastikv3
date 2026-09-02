@@ -359,10 +359,10 @@ export default function Account({ onViewChange }) {
         const orderId = `PRIME_RZP_${Date.now()}`;
         const newPrimeOrder = {
           id: orderId,
-          customerName: profile?.fullName || profile?.name || "Swastik VIP Member",
-          customerPhone: profile?.phone || "+91 95400 12099",
-          customerEmail: profile?.email || "vip@swastik.com",
-          shippingAddress: "Swastik Digital VIP Prime Pass Account",
+          customerName: profile?.fullName || profile?.name || (contactSettings?.brandName ? `${contactSettings.brandName} Member` : "VIP Member"),
+          customerPhone: profile?.phone || contactSettings?.phone || "+91 99999 88888",
+          customerEmail: profile?.email || contactSettings?.email || "customer@example.com",
+          shippingAddress: "Digital VIP Prime Pass Account",
           subtotal: primeFee,
           deliveryFee: 0,
           gst: 0,
@@ -378,17 +378,17 @@ export default function Account({ onViewChange }) {
           items: [
             {
               productId: 9999,
-              name: 'Swastik Prime Gold Membership (1 Year Pass)',
-              nameEn: 'Swastik Prime Gold Membership (1 Year Pass)',
-              nameHi: 'स्वास्तिक प्राइम गोल्ड मेंबरशिप (१ वर्ष पास)',
+              name: `${contactSettings?.brandName || 'Store'} Prime Gold Membership (1 Year Pass)`,
+              nameEn: `${contactSettings?.brandName || 'Store'} Prime Gold Membership (1 Year Pass)`,
+              nameHi: `${contactSettings?.brandName || 'स्टोर'} प्राइम गोल्ड मेंबरशिप (१ वर्ष पास)`,
               price: primeFee,
               qty: 1,
               quantity: 1,
               weight: '1 Year Access'
             }
           ],
-          deliveryPartnerName: 'Swastik Prime System',
-          deliveryPartnerPhone: '+91 95400 12099',
+          deliveryPartnerName: `${contactSettings?.brandName || 'Store'} System`,
+          deliveryPartnerPhone: contactSettings?.phone || '+91 99999 88888',
           hubName: 'VIP Membership Desk',
           eta: 'Instant Activation'
         };
@@ -399,9 +399,9 @@ export default function Account({ onViewChange }) {
           body: JSON.stringify({
             orderId: orderId,
             amount: primeFee,
-            customerName: profile?.fullName || profile?.name || "Swastik VIP Member",
-            customerPhone: profile?.phone || "+91 95400 12099",
-            customerEmail: profile?.email || "vip@swastik.com"
+            customerName: profile?.fullName || profile?.name || "VIP Member",
+            customerPhone: profile?.phone || contactSettings?.phone || "+91 99999 88888",
+            customerEmail: profile?.email || contactSettings?.email || "customer@example.com"
           })
         });
 
@@ -453,9 +453,9 @@ export default function Account({ onViewChange }) {
               }
             },
             prefill: {
-              name: profile?.fullName || "Swastik Member",
+              name: profile?.fullName || "Member",
               contact: (profile?.phone || "").replace(/\D/g, "").slice(-10) || "9999988888",
-              email: profile?.email || "vip@swastik.com"
+              email: profile?.email || contactSettings?.email || "customer@example.com"
             },
             theme: { color: "#0284c7" },
             modal: {
@@ -502,10 +502,10 @@ export default function Account({ onViewChange }) {
 
         const newPrimeOrder = {
           id: orderId,
-          customerName: profile?.fullName || profile?.name || "Swastik VIP Member",
-          customerPhone: profile?.phone || "+91 95400 12099",
-          customerEmail: profile?.email || "vip@swastik.com",
-          shippingAddress: "Swastik Digital VIP Prime Pass Account",
+          customerName: profile?.fullName || profile?.name || (contactSettings?.brandName ? `${contactSettings.brandName} Member` : "VIP Member"),
+          customerPhone: profile?.phone || contactSettings?.phone || "+91 99999 88888",
+          customerEmail: profile?.email || contactSettings?.email || "customer@example.com",
+          shippingAddress: "Digital VIP Prime Pass Account",
           subtotal: primeFee,
           deliveryFee: 0,
           gst: 0,
@@ -521,17 +521,17 @@ export default function Account({ onViewChange }) {
           items: [
             {
               productId: 9999,
-              name: 'Swastik Prime Gold Membership (1 Year Pass)',
-              nameEn: 'Swastik Prime Gold Membership (1 Year Pass)',
-              nameHi: 'स्वास्तिक प्राइम गोल्ड मेंबरशिप (१ वर्ष पास)',
+              name: `${contactSettings?.brandName || 'Store'} Prime Gold Membership (1 Year Pass)`,
+              nameEn: `${contactSettings?.brandName || 'Store'} Prime Gold Membership (1 Year Pass)`,
+              nameHi: `${contactSettings?.brandName || 'स्टोर'} प्राइम गोल्ड मेंबरशिप (१ वर्ष पास)`,
               price: primeFee,
               qty: 1,
               quantity: 1,
               weight: '1 Year Access'
             }
           ],
-          deliveryPartnerName: 'Swastik Prime System',
-          deliveryPartnerPhone: '+91 95400 12099',
+          deliveryPartnerName: `${contactSettings?.brandName || 'Store'} System`,
+          deliveryPartnerPhone: contactSettings?.phone || '+91 99999 88888',
           hubName: 'VIP Membership Desk',
           eta: 'Instant Activation'
         };
@@ -544,9 +544,9 @@ export default function Account({ onViewChange }) {
           body: JSON.stringify({
             orderId: orderId,
             amount: primeFee,
-            customerName: profile?.fullName || profile?.name || "Swastik VIP Member",
-            customerPhone: profile?.phone || "+91 95400 12099",
-            customerEmail: profile?.email || "vip@swastik.com"
+            customerName: profile?.fullName || profile?.name || "VIP Member",
+            customerPhone: profile?.phone || contactSettings?.phone || "+91 99999 88888",
+            customerEmail: profile?.email || contactSettings?.email || "customer@example.com"
           })
         });
 
@@ -601,10 +601,10 @@ export default function Account({ onViewChange }) {
 
       const newPrimeOrder = {
         id: orderId,
-        customerName: profile?.fullName || profile?.name || "Swastik VIP Member",
-        customerPhone: profile?.phone || "+91 95400 12099",
-        customerEmail: profile?.email || "vip@swastik.com",
-        shippingAddress: "Swastik Store Counter / COD",
+        customerName: profile?.fullName || profile?.name || (contactSettings?.brandName ? `${contactSettings.brandName} Member` : "VIP Member"),
+        customerPhone: profile?.phone || contactSettings?.phone || "+91 99999 88888",
+        customerEmail: profile?.email || contactSettings?.email || "customer@example.com",
+        shippingAddress: "Store Counter / COD",
         subtotal: primeFee,
         deliveryFee: 0,
         gst: 0,
@@ -620,17 +620,17 @@ export default function Account({ onViewChange }) {
         items: [
           {
             productId: 9999,
-            name: 'Swastik Prime Gold Membership (1 Year Pass - Cash)',
-            nameEn: 'Swastik Prime Gold Membership (1 Year Pass - Cash)',
-            nameHi: 'स्वास्तिक प्राइम गोल्ड मेंबरशिप (१ वर्ष पास - नकद)',
+            name: `${contactSettings?.brandName || 'Store'} Prime Gold Membership (1 Year Pass - Cash)`,
+            nameEn: `${contactSettings?.brandName || 'Store'} Prime Gold Membership (1 Year Pass - Cash)`,
+            nameHi: `${contactSettings?.brandName || 'स्टोर'} प्राइम गोल्ड मेंबरशिप (१ वर्ष पास - नकद)`,
             price: primeFee,
             qty: 1,
             quantity: 1,
             weight: '1 Year Access'
           }
         ],
-        deliveryPartnerName: 'Store Counter Sales Desk',
-        deliveryPartnerPhone: '+91 95400 12099',
+        deliveryPartnerName: `${contactSettings?.brandName || 'Store'} Sales Desk`,
+        deliveryPartnerPhone: contactSettings?.phone || '+91 99999 88888',
         hubName: 'Main Store Hub',
         eta: 'Offline Cash Confirmed'
       };
@@ -731,26 +731,31 @@ export default function Account({ onViewChange }) {
     } catch (e) {
       console.warn("Failed to parse swastik_profile from localStorage:", e);
     }
+    const defaultName = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEFAULT_USER_NAME) || "Guest User";
+    const defaultEmail = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEFAULT_USER_EMAIL) || "user@example.com";
+    const defaultPhone = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEFAULT_USER_PHONE) || "+91 98765 43210";
+    const defaultAddr = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEFAULT_USER_ADDRESS) || "";
+
     return parsed ? {
-      fullName: parsed.fullName || "Abhishek Sharma",
-      email: parsed.email || "abhishek.sharma@example.com",
-      phone: parsed.phone || "+91 98765 43210",
-      address: parsed.address || "123, Sector 4, MG Road, Noida, Uttar Pradesh - 201301",
-      points: parsed.points !== undefined ? parsed.points : 120,
+      fullName: parsed.fullName || defaultName,
+      email: parsed.email || defaultEmail,
+      phone: parsed.phone || defaultPhone,
+      address: parsed.address || defaultAddr,
+      points: parsed.points !== undefined ? parsed.points : 100,
       firstLoginPointsAwarded: parsed.firstLoginPointsAwarded !== undefined ? parsed.firstLoginPointsAwarded : 100,
-      referralPointsAwarded: parsed.referralPointsAwarded !== undefined ? parsed.referralPointsAwarded : 20,
+      referralPointsAwarded: parsed.referralPointsAwarded !== undefined ? parsed.referralPointsAwarded : 0,
       referredBy: parsed.referredBy || "",
       dob: parsed.dob || "",
       anniversary: parsed.anniversary || "",
       isPrimeActive: parsed.isPrimeActive !== undefined ? parsed.isPrimeActive : false
     } : {
-      fullName: "Abhishek Sharma",
-      email: "abhishek.sharma@example.com",
-      phone: "+91 98765 43210",
-      address: "123, Sector 4, MG Road, Noida, Uttar Pradesh - 201301",
-      points: 120,
+      fullName: defaultName,
+      email: defaultEmail,
+      phone: defaultPhone,
+      address: defaultAddr,
+      points: 100,
       firstLoginPointsAwarded: 100,
-      referralPointsAwarded: 20,
+      referralPointsAwarded: 0,
       referredBy: "",
       dob: "",
       anniversary: "",

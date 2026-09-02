@@ -66,7 +66,7 @@ const ListProductImage = ({ p, r2PublicUrl }) => {
 
 export default function ProductsManager({ searchQuery, setSearchQuery, userRole }) {
   const { isHindi } = useLanguage();
-  const { products, addProduct, updateProduct, deleteProduct, clearAllProducts, categories, r2PublicUrl } = useData();
+  const { products, addProduct, updateProduct, deleteProduct, clearAllProducts, categories, r2PublicUrl, contactSettings } = useData();
 
   // Selected edit ID state
   const [editingProdId, setEditingProdId] = useState(null);
@@ -975,7 +975,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
                   <td className="p-4 flex items-center gap-3">
                     <ListProductImage p={p} r2PublicUrl={r2PublicUrl} />
                     <div className="space-y-0.5">
-                      <span className="text-[8px] font-black font-mono text-slate-500 block leading-none uppercase">{p.subEn || 'Swastik Stock'}</span>
+                      <span className="text-[8px] font-black font-mono text-slate-500 block leading-none uppercase">{p.subEn || (contactSettings?.brandName ? `${contactSettings.brandName} Stock` : 'In Stock')}</span>
                       <h4 className="text-white font-extrabold uppercase tracking-tight text-xs">{p.nameEn || p.nameHi}</h4>
                       <span className="text-[8px] font-bold text-slate-400 block font-mono">ID: {p.id} {(p.code || p.Code) ? `| CODE: ${p.code || p.Code}` : ''}</span>
                     </div>

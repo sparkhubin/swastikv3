@@ -11,7 +11,7 @@ import { isOrder1HourLocked } from '../../utils/orderLock';
 
 export default function DeliveryDashboard({ userRole, onNavigateToReports }) {
   const { isHindi } = useLanguage();
-  const { orders = [], updateOrder, staff = [] } = useData();
+  const { orders = [], updateOrder, staff = [], contactSettings } = useData();
 
   // Retrieve logged-in staff from storage or fallback
   const loggedInStaff = useMemo(() => {
@@ -285,7 +285,7 @@ export default function DeliveryDashboard({ userRole, onNavigateToReports }) {
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-black uppercase tracking-widest text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-md">
-                  {isHindi ? 'स्वास्तिक डिलीवरी पार्टनर' : 'Swastik Delivery Executive'}
+                  {isHindi ? `${contactSettings?.brandName || 'स्टोर'} डिलीवरी पार्टनर` : `${contactSettings?.brandName || 'Store'} Delivery Executive`}
                 </span>
                 <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
                   isOnDuty ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
@@ -606,15 +606,15 @@ export default function DeliveryDashboard({ userRole, onNavigateToReports }) {
                         {isHindi ? 'ग्राहक विवरण' : 'Customer Info'}
                       </span>
                       <div className="font-bold text-white text-xs">
-                        {order.customerName || 'Swastik Customer'}
+                        {order.customerName || `${contactSettings?.brandName || 'Store'} Customer`}
                       </div>
                       <div className="flex items-center gap-2 pt-1">
                         <a
-                          href={`tel:${order.customerPhone || '+919540012099'}`}
+                          href={`tel:${order.customerPhone || contactSettings?.phone || ''}`}
                           className="px-2.5 py-1 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 rounded-lg text-[10px] font-black flex items-center gap-1 transition active:scale-95"
                         >
                           <Phone className="h-3 w-3" />
-                          <span>{order.customerPhone || '+91 95400 12099'}</span>
+                          <span>{order.customerPhone || contactSettings?.phone || 'Call Customer'}</span>
                         </a>
                       </div>
                     </div>

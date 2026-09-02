@@ -184,7 +184,7 @@ router.post("/marg/bill", upload.any(), async (req, res) => {
       try {
         const localPath = path.join(uploadsDir, fileName);
         fs.writeFileSync(localPath, file.buffer);
-        const host = req.get("x-forwarded-host") || req.get("host") || "swastiksupermarket.com";
+        const host = req.get("x-forwarded-host") || req.get("host") || process.env.STORE_DOMAIN || "localhost:3000";
         const protocol = req.secure || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
         uploadedPdfUrl = `${protocol}://${host}/uploads/${fileName}`;
         console.log(`✓ Fallback uploaded MARG PDF locally to disk: ${uploadedPdfUrl}`);

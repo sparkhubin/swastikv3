@@ -28,7 +28,7 @@ export const db = {
           port: Number(process.env.MYSQL_PORT || 3306),
           user: process.env.MYSQL_USER || "root",
           password: process.env.MYSQL_PASSWORD || "",
-          database: process.env.MYSQL_DATABASE || "swastik_supermarket",
+          database: process.env.MYSQL_DATABASE || process.env.DB_NAME || "swastik_supermarket",
           waitForConnections: true,
           connectionLimit: 15,
           queueLimit: 0,

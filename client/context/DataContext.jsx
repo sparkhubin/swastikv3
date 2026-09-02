@@ -35,29 +35,42 @@ const initialCustomers = [
   { id: 105, name: 'Rajesh G', phone: '+91 94451 00010', email: 'rajesh.farm@yahoo.com', registeredAt: '2026-05-02', orderCount: 0, totalSpent: 0, status: 'Inactive', dob: '', anniversary: '' }
 ];
 
+// Environment-driven dynamic store settings
+const envStoreName = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_STORE_NAME) || 'Swastik Supermarket';
+const envTagline = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_STORE_TAGLINE) || 'Aapka Apna Bazaar';
+const envAddress = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_STORE_ADDRESS) || 'Survey no. 100 Sanjit road opposite of Saraswati school , Mandsaur, India, Madhya Pradesh';
+const envPhone = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_STORE_PHONE) || '094845 40001';
+const envEmail = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_STORE_EMAIL) || 'info.swastiksupermarket@gmail.com';
+const envWebsite = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_STORE_WEBSITE) || 'https://www.swastiksupermarket.com';
+const envGst = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_STORE_GST) || '23AAAAA1111A1Z1';
+const envLicense = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_STORE_LICENSE) || 'FSSAI-12345678901234';
+const envLogo = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_STORE_LOGO) || '/swastik-logo.svg';
+const envLat = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_STORE_LAT) ? parseFloat(import.meta.env.VITE_STORE_LAT) : 24.0723;
+const envLng = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_STORE_LNG) ? parseFloat(import.meta.env.VITE_STORE_LNG) : 75.0698;
+
 // About info details configurations
 const initialAboutSettings = {
   titleEn: 'Crafting Freshness Since 2018',
   titleHi: '2018 से ताजगी का निर्माण',
-  storyEn: 'Swastik Supermarket was established with a singular vision - to bridge the gap between premium sustainable local organic farmers and urban households directly in less than 15 minutes. We source daily, test for purity, and employ eco-friendly logistic delivery coordinates to guarantee high-integrity groceries for your kitchen.',
-  storyHi: 'स्वास्तिक सुपरमार्केट की स्थापना एक अनूठे लक्ष्य के साथ की गई थी - प्रीमियम टिकाऊ स्थानीय जैविक किसानों और शहर के घरों के बीच की दूरी को 15 मिनट से भी कम समय में सीधे पाटना। हम दैनिक रूप से सामग्री मंगवाते हैं, शुद्धता का परीक्षण करते हैं, और आपकी रसोई के लिए उच्च सत्यता वाली किराने के सामान की गारंटी के लिए इको-फ्रेंडली लॉजिस्टिक डिलीवरी का उपयोग करते हैं।'
+  storyEn: `${envStoreName} was established with a singular vision - to bridge the gap between premium sustainable local organic farmers and urban households directly in less than 15 minutes. We source daily, test for purity, and employ eco-friendly logistic delivery coordinates to guarantee high-integrity groceries for your kitchen.`,
+  storyHi: `${envStoreName} की स्थापना एक अनूठे लक्ष्य के साथ की गई थी - प्रीमियम टिकाऊ स्थानीय जैविक किसानों और शहर के घरों के बीच की दूरी को 15 मिनट से भी कम समय में सीधे पाटना। हम दैनिक रूप से सामग्री मंगवाते हैं, शुद्धता का परीक्षण करते हैं, और आपकी रसोई के लिए उच्च सत्यता वाली किराने के सामान की गारंटी के लिए इको-फ्रेंडली लॉजिस्टिक डिलीवरी का उपयोग करते हैं।`
 };
 
 // Unified dynamic contact address block
 const initialContactSettings = {
-  brandName: 'Swastik Supermarket',
-  tagline: 'Aapka Apna Bazaar',
+  brandName: envStoreName,
+  tagline: envTagline,
   subtitle: 'Drop us a line if you have queries regarding bulk orders, delay offsets, or partnership propositions.',
-  address: 'Survey no. 100 Sanjit road opposite of Saraswati school , Mandsaur, India, Madhya Pradesh',
-  phone: '094845 40001',
-  email: 'info.swastiksupermarket@gmail.com',
-  website: 'https://www.swastiksupermarket.com',
-  gst: '23AAAAA1111A1Z1',
-  license: 'FSSAI-12345678901234',
-  logo: '/swastik-logo.svg',
+  address: envAddress,
+  phone: envPhone,
+  email: envEmail,
+  website: envWebsite,
+  gst: envGst,
+  license: envLicense,
+  logo: envLogo,
   banner: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD7zupgGDM4rLNPqaVUDi49IYYmDPm8we0M1paGQ0P1xQM4TgUKOW1hAxsPwEJYVlslYIGGelWSHP2AbAsD6tdQUi8psCrpIgqLdnWEBRUvnn1y3phC3GMAX5nlBQrVq6HZdqDsrg-Fo2h5dwMQoYw6-xL1HRXQIkTg089XtLVzO2aMDTUftCLWp9Y9HDjOsAaK-LlpwxMS7n2AnfWSjTjC__z4UeTSYCXxEQDyAmshwnbevNh58O6yJ3J52NXWKXYTarHYA5spvG5C',
-  latitude: 24.0723,
-  longitude: 75.0698,
+  latitude: envLat,
+  longitude: envLng,
   deliveryChargeNear: 0,
   deliveryChargeMedium: 25,
   deliveryChargeFar: 45,
@@ -1081,7 +1094,7 @@ export function DataProvider({ children }) {
           id: newId,
           name: rawName,
           phone: formattedPhone,
-          email: custData.email || `${rawName.toLowerCase().replace(/\s+/g, '')}@swastik.com`,
+          email: custData.email || `${rawName.toLowerCase().replace(/\s+/g, '')}@example.com`,
           address: custData.address || "",
           status: custData.status || 'Active',
           points: custData.points !== undefined ? custData.points : 100,

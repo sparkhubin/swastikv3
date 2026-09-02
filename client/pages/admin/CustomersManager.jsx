@@ -425,20 +425,23 @@ export default function CustomersManager() {
     const cleanPh = (cust.phone || '').replace(/[^0-9]/g, '');
     const pointsBal = cust.points !== undefined ? cust.points : 100;
     const custName = cust.name || 'Valued Customer';
+    const bName = contactSettings?.brandName || 'Supermarket';
+    const bSite = contactSettings?.website || 'https://example.com';
+    const bPhone = contactSettings?.phone || '';
 
     let msg = '';
     if (templateType === 'welcome') {
-      msg = `*Namaste ${custName}!* 🙏\n\nWelcome to *Swastik Supermarket*! ✨\nYour account has been activated with *${pointsBal} Welcome Points* (Worth ₹${pointsBal}).\n\n🛒 Enjoy fresh groceries, daily staples, and supermarket deals delivered right to your doorstep.\n\n🌐 Order Online: https://swastiksupermarket.com\n📞 Helpline: +91 94845 40001`;
+      msg = `*Namaste ${custName}!* 🙏\n\nWelcome to *${bName}*! ✨\nYour account has been activated with *${pointsBal} Welcome Points* (Worth ₹${pointsBal}).\n\n🛒 Enjoy fresh groceries, daily staples, and supermarket deals delivered right to your doorstep.\n\n🌐 Order Online: ${bSite}${bPhone ? `\n📞 Helpline: ${bPhone}` : ''}`;
     } else if (templateType === 'points') {
-      msg = `*Swastik Loyalty Rewards Update* ⭐\n\nDear *${custName}*,\nYou have *${pointsBal} Swastik Points* available in your wallet!\n\n💡 You can redeem these points for instant discounts on your next order.\n\n🛍️ Shop Now: https://swastiksupermarket.com`;
+      msg = `*${bName} Loyalty Rewards Update* ⭐\n\nDear *${custName}*,\nYou have *${pointsBal} Rewards Points* available in your wallet!\n\n💡 You can redeem these points for instant discounts on your next order.\n\n🛍️ Shop Now: ${bSite}`;
     } else if (templateType === 'prime') {
-      msg = `*Swastik Prime Gold VIP Invitation* 👑\n\nDear *${custName}*,\nUpgrade to *Swastik Prime Membership* today and enjoy:\n✅ Unlimited Free Fast Delivery\n✅ Extra VIP Points & Discounts\n✅ Dedicated Support\n\n🌟 Claim Your VIP Pass: https://swastiksupermarket.com`;
+      msg = `*${bName} Prime VIP Invitation* 👑\n\nDear *${custName}*,\nUpgrade to *${bName} Prime Membership* today and enjoy:\n✅ Unlimited Free Fast Delivery\n✅ Extra VIP Points & Discounts\n✅ Dedicated Support\n\n🌟 Claim Your VIP Pass: ${bSite}`;
     } else if (templateType === 'order_care') {
-      msg = `*Order Assistance & Care - Swastik Supermarket* 🛍️\n\nHello *${custName}*,\nThank you for shopping with us! If you need any assistance regarding your order or grocery deliveries, please feel free to reply directly to this message.\n\nHave a wonderful day!`;
+      msg = `*Order Assistance & Care - ${bName}* 🛍️\n\nHello *${custName}*,\nThank you for shopping with us! If you need any assistance regarding your order or grocery deliveries, please feel free to reply directly to this message.\n\nHave a wonderful day!`;
     } else if (templateType === 'birthday') {
-      msg = `*Happy Birthday ${custName}!* 🎂🎉\n\nWishing you a joyful day filled with happiness from all of us at *Swastik Supermarket*!\n🎁 We have added special bonus celebration points to your account for your birthday shopping.\n\nCelebrate with us: https://swastiksupermarket.com`;
+      msg = `*Happy Birthday ${custName}!* 🎂🎉\n\nWishing you a joyful day filled with happiness from all of us at *${bName}*!\n🎁 We have added special bonus celebration points to your account for your birthday shopping.\n\nCelebrate with us: ${bSite}`;
     } else {
-      msg = `*Namaste ${custName}!* 🙏\n\nGreetings from *Swastik Supermarket*.\nHow may we help you with your grocery shopping today?\n\n🌐 Visit: https://swastiksupermarket.com`;
+      msg = `*Namaste ${custName}!* 🙏\n\nGreetings from *${bName}*.\nHow may we help you with your grocery shopping today?\n\n🌐 Visit: ${bSite}`;
     }
 
     setDirectWaMsg(msg);

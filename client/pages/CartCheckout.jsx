@@ -150,7 +150,7 @@ export default function CartCheckout({ onViewChange }) {
     grandTotal
   } = useCart();
 
-  const [customerEmail, setCustomerEmail] = useState('bilspatidar@gmail.com');
+  const [customerEmail, setCustomerEmail] = useState('');
 
   // --- DYNAMIC PAYMENT GATEWAY CONFIGURATION & RAZORPAY STATES ---
   const [gatewaySettings, setGatewaySettings] = useState({
@@ -454,8 +454,8 @@ export default function CartCheckout({ onViewChange }) {
     }
 
     const loggedInProfile = {
-      fullName: existingCust.name || "Swastik Shopper",
-      email: existingCust.email || `${authMobile}@swastik.com`,
+      fullName: existingCust.name || (contactSettings?.brandName ? `${contactSettings.brandName} Shopper` : "Valued Shopper"),
+      email: existingCust.email || `${authMobile}@example.com`,
       phone: existingCust.phone || `+91 ${authMobile.replace(/^(\+91|91)/, '')}`,
       address: existingCust.address || "",
       points: existingCust.points || 100,
@@ -517,7 +517,7 @@ export default function CartCheckout({ onViewChange }) {
 
     const totalPoints = firstPoints + giftPoints;
     const cleanPhoneStr = `+91 ${authMobile.replace(/^(\+91|91)/, '')}`;
-    const userEmailStr = authEmail || `${authFullName.toLowerCase().replace(/\s+/g, '')}@swastik.com`;
+    const userEmailStr = authEmail || `${authFullName.toLowerCase().replace(/\s+/g, '')}@example.com`;
 
     const newProfile = {
       fullName: authFullName.trim(),
@@ -729,7 +729,7 @@ export default function CartCheckout({ onViewChange }) {
   const [cashfreePaymentStage, setCashfreePaymentStage] = useState('select_method'); // 'select_method', 'processing', 'success', 'failed'
   const [cfSelectedMethod, setCfSelectedMethod] = useState('upi'); // 'upi', 'card', 'netbanking'
   const [cfSimulatorCardNumber, setCfSimulatorCardNumber] = useState('4321 8888 1111 2222');
-  const [cfSimulatorUPI, setCfSimulatorUPI] = useState('bilspatidar@okicici');
+  const [cfSimulatorUPI, setCfSimulatorUPI] = useState((typeof import.meta !== 'undefined' && import.meta.env?.VITE_STORE_UPI_ID) || 'customer@okhdfcbank');
   const [cfSimulatingProgress, setCfSimulatingProgress] = useState('');
 
 
@@ -1151,9 +1151,9 @@ export default function CartCheckout({ onViewChange }) {
               }
             },
             prefill: {
-              name: shippingInfo.fullName || "Swastik Customer",
+              name: shippingInfo.fullName || (contactSettings?.brandName ? `${contactSettings.brandName} Customer` : "Customer"),
               contact: (shippingInfo.phoneNumber || "").replace(/\D/g, "").slice(-10) || "9999988888",
-              email: customerEmail || "customer@swastik.com"
+              email: customerEmail || "customer@example.com"
             },
             theme: {
               color: "#06b6d4"

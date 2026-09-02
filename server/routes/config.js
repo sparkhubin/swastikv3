@@ -92,9 +92,23 @@ router.post("/upload", upload.single("file"), async (req, res) => {
   try {
     const localPath = path.join(uploadsDir, fileName);
     fs.writeFileSync(localPath, file.buffer);
-    const localUrl = `/uploads/${fileName}`;
-    console.log(`✓ Fallback uploaded locally to disk: ${localUrl}`);
-    return res.json({ url: localUrl });
+    
+    // Build full absolute URL so frontend on a separate server/domain or mobile app can load the image
+    let baseUrl = process.env.BACKEND_URL || process.env.UPLOAD_BASE_URL || process.env.PUBLIC_APP_URL || "";
+    if (!baseUrl) {
+      const protocol = req.headers["x-forwarded-proto"] || req.protocol || "http";
+      const host = req.headers["x-forwarded-host"] || req.get("host");
+      baseUrl = `${protocol}://${host}`;
+    }
+    baseUrl = baseUrl.replace(/\/$/, "");
+    const fullUrl = `${baseUrl}/uploads/${fileName}`;
+
+    console.log(`✓ Uploaded locally to disk: ${fullUrl}`);
+    return res.json({ 
+      url: fullUrl,
+      relativeUrl: `/uploads/${fileName}`,
+      fileName
+    });
   } catch (err) {
     console.error("Local file writing failure:", err.message);
     return res.status(500).json({ error: "Failed to store uploaded asset" });
