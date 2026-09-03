@@ -1,6 +1,6 @@
 {
   "name": "Swastik Supermarket",
   "description": "Bilingual Premium Online Grocery Shopping App featuring fresh produce, dairy, bakery, and other essentials with seamless cart, search, filter and account management.",
-  "requestFramePermissions": ["microphone"],
+  "requestFramePermissions": ["microphone", "geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

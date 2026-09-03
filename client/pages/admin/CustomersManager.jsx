@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import R2ImageUploader from './R2ImageUploader';
 import QuickTemplateSender from './QuickTemplateSender';
+import DataDeletionRequestsManager from './DataDeletionRequestsManager';
 
 const metaApprovalTemplates = [
   {
@@ -205,7 +206,7 @@ const metaApprovalTemplates = [
 
 export default function CustomersManager() {
   const { isHindi } = useLanguage();
-  const { customers, addCustomer, updateCustomer, orders = [], primeSettings } = useData();
+  const { customers, addCustomer, updateCustomer, orders = [], primeSettings, dataDeletionRequests = [] } = useData();
 
   // Navigation sub-tabs
   const [activeSubTab, setActiveSubTab] = useState('directory'); // directory | groups | broadcast | meta_templates
@@ -510,6 +511,62 @@ export default function CustomersManager() {
   const [uploadingCustId, setUploadingCustId] = useState(null);
   const [selectedDetailCust, setSelectedDetailCust] = useState(null);
   const [editForm, setEditForm] = useState(null);
+
+  // Walk-in Customer Registration modal state
+  const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
+  const [newCustomerForm, setNewCustomerForm] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    address: '',
+    points: 100,
+    isPrimeActive: false,
+    dob: '',
+    anniversary: ''
+  });
+
+  const handleCreateWalkInCustomer = async (e) => {
+    e.preventDefault();
+    if (!newCustomerForm.name.trim() || !newCustomerForm.phone.trim()) {
+      alert("Customer Name and Mobile Number are required.");
+      return;
+    }
+    const cleanPh = newCustomerForm.phone.replace(/[^0-9]/g, '');
+    if (cleanPh.length < 10) {
+      alert("Please enter a valid 10-digit mobile number.");
+      return;
+    }
+    try {
+      const formattedPhone = cleanPh.length === 10 ? `+91 ${cleanPh}` : newCustomerForm.phone.trim();
+      await addCustomer({
+        name: newCustomerForm.name.trim(),
+        phone: formattedPhone,
+        email: newCustomerForm.email.trim() || `${newCustomerForm.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@customer.com`,
+        address: newCustomerForm.address.trim(),
+        points: Number(newCustomerForm.points) || 100,
+        isPrimeActive: Boolean(newCustomerForm.isPrimeActive),
+        dob: newCustomerForm.dob || '',
+        anniversary: newCustomerForm.anniversary || '',
+        status: 'Active',
+        registeredAt: new Date().toISOString().split('T')[0]
+      });
+      triggerToast(`✓ Walk-in customer "${newCustomerForm.name}" registered to central customer database!`);
+      setShowAddCustomerModal(false);
+      setNewCustomerForm({
+        name: '',
+        phone: '',
+        email: '',
+        address: '',
+        points: 100,
+        isPrimeActive: false,
+        dob: '',
+        anniversary: ''
+      });
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save walk-in customer: " + err.message);
+    }
+  };
 
   React.useEffect(() => {
     if (selectedDetailCust) {
@@ -1097,6 +1154,23 @@ export default function CustomersManager() {
           >
             🎂 Autopilot Greetings
           </button>
+          <button 
+            type="button"
+            onClick={() => setActiveSubTab('data_deletion')}
+            className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap flex items-center gap-1.5 ${
+              activeSubTab === 'data_deletion' 
+                ? 'bg-rose-600 text-white font-black shadow-lg shadow-rose-600/30' 
+                : 'text-rose-400 hover:text-white border border-rose-500/30 hover:border-rose-400'
+            }`}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span>{isHindi ? 'डेटा डिलीट अनुरोध' : 'Data Deletion Requests'}</span>
+            {(dataDeletionRequests || []).filter(r => r.status === 'Pending').length > 0 && (
+              <span className="ml-1 px-1.5 py-0.2 bg-rose-500 text-white text-[10px] font-black rounded-full font-mono animate-pulse">
+                {(dataDeletionRequests || []).filter(r => r.status === 'Pending').length}
+              </span>
+            )}
+          </button>
         </div>
       </div>
 
@@ -1111,15 +1185,25 @@ export default function CustomersManager() {
       {/* Subtab 1: Directory view */}
       {activeSubTab === 'directory' && (
         <div className="space-y-4">
-          <div className="relative">
-            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Search customers database catalog..."
-              value={dirSearch}
-              onChange={(e) => setDirSearch(e.target.value)}
-              className="w-full bg-slate-900 border border-white/10 pl-10 pr-4 py-3 rounded-xl text-xs text-white placeholder-slate-500 outline-none"
-            />
+          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+            <div className="relative flex-1">
+              <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input 
+                type="text" 
+                placeholder="Search customers database catalog..."
+                value={dirSearch}
+                onChange={(e) => setDirSearch(e.target.value)}
+                className="w-full bg-slate-900 border border-white/10 pl-10 pr-4 py-3 rounded-xl text-xs text-white placeholder-slate-500 outline-none focus:border-cyan-400/40"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowAddCustomerModal(true)}
+              className="px-4 py-3 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-2 uppercase tracking-wider shadow-lg shadow-cyan-500/20 cursor-pointer transition-all active:scale-95 shrink-0"
+            >
+              <UserPlus className="h-4 w-4" />
+              <span>+ Add Walk-In Customer</span>
+            </button>
           </div>
 
           <div className="overflow-x-auto border border-white/10 rounded-2xl">
@@ -2116,6 +2200,10 @@ export default function CustomersManager() {
         </div>
       )}
 
+      {activeSubTab === 'data_deletion' && (
+        <DataDeletionRequestsManager />
+      )}
+
       {/* Advanced CRM Customer Details Modal Overlay */}
       {selectedDetailCust && editForm && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
@@ -2809,6 +2897,169 @@ export default function CustomersManager() {
 
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Add Walk-in Customer Modal */}
+      {showAddCustomerModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-white/10 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-scale-in">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-white/10 flex items-center justify-between bg-slate-950/50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-300">
+                  <UserPlus className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                    {isHindi ? "वॉक-इन ग्राहक पंजीकृत करें" : "Register Walk-In Customer"}
+                  </h3>
+                  <p className="text-[10px] text-cyan-400/90 font-bold">
+                    {isHindi ? "वेबसाइट, ऐप और एडमिन के लिए एक ही केंद्रीय डेटाबेस में सुरक्षित" : "Saves to single central database table (shared with website & app)"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddCustomerModal(false)}
+                className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleCreateWalkInCustomer} className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2 space-y-1">
+                  <label className="text-[9.5px] font-black text-slate-400 uppercase tracking-widest block">
+                    {isHindi ? "ग्राहक का नाम *" : "Customer Full Name *"}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Ramesh Sharma"
+                    value={newCustomerForm.name}
+                    onChange={(e) => setNewCustomerForm({ ...newCustomerForm, name: e.target.value })}
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-cyan-400/40 font-semibold"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9.5px] font-black text-slate-400 uppercase tracking-widest block">
+                    {isHindi ? "मोबाइल नंबर (10 अंक) *" : "Mobile Phone (10 digits) *"}
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    maxLength={10}
+                    placeholder="e.g. 9876543210"
+                    value={newCustomerForm.phone}
+                    onChange={(e) => setNewCustomerForm({ ...newCustomerForm, phone: e.target.value.replace(/[^0-9]/g, '') })}
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-cyan-400/40 font-mono font-bold"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9.5px] font-black text-slate-400 uppercase tracking-widest block">
+                    {isHindi ? "प्रारंभिक रिवॉर्ड पॉइंट्स" : "Initial Loyalty Points"}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newCustomerForm.points}
+                    onChange={(e) => setNewCustomerForm({ ...newCustomerForm, points: parseInt(e.target.value) || 0 })}
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-amber-300 outline-none focus:border-amber-400/40 font-mono font-bold"
+                  />
+                </div>
+
+                <div className="sm:col-span-2 space-y-1">
+                  <label className="text-[9.5px] font-black text-slate-400 uppercase tracking-widest block">
+                    {isHindi ? "ईमेल पता (वैकल्पिक)" : "Email Address (Optional)"}
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="customer@example.com"
+                    value={newCustomerForm.email}
+                    onChange={(e) => setNewCustomerForm({ ...newCustomerForm, email: e.target.value })}
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-cyan-400/40"
+                  />
+                </div>
+
+                <div className="sm:col-span-2 space-y-1">
+                  <label className="text-[9.5px] font-black text-slate-400 uppercase tracking-widest block">
+                    {isHindi ? "डिलीवरी / निवास पता (वैकल्पिक)" : "Delivery / Home Address (Optional)"}
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="House / Flat No., Street, Landmark, Area..."
+                    value={newCustomerForm.address}
+                    onChange={(e) => setNewCustomerForm({ ...newCustomerForm, address: e.target.value })}
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-cyan-400/40 resize-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9.5px] font-black text-slate-400 uppercase tracking-widest block">
+                    {isHindi ? "जन्म तिथि (DOB)" : "Date of Birth (DOB)"}
+                  </label>
+                  <input
+                    type="date"
+                    value={newCustomerForm.dob}
+                    onChange={(e) => setNewCustomerForm({ ...newCustomerForm, dob: e.target.value })}
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-cyan-400/40"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9.5px] font-black text-slate-400 uppercase tracking-widest block">
+                    {isHindi ? "विवाह वर्षगांठ (Anniversary)" : "Anniversary Date"}
+                  </label>
+                  <input
+                    type="date"
+                    value={newCustomerForm.anniversary}
+                    onChange={(e) => setNewCustomerForm({ ...newCustomerForm, anniversary: e.target.value })}
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-cyan-400/40"
+                  />
+                </div>
+
+                <div className="sm:col-span-2 p-3 bg-slate-950 border border-amber-500/20 rounded-xl flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-black text-amber-300 block">
+                      👑 {isHindi ? "वीआईपी प्राइम सदस्यता सक्रिय करें" : "VIP Prime Membership"}
+                    </span>
+                    <span className="text-[9.5px] text-slate-400 block">
+                      {isHindi ? "अतिरिक्त छूट और प्राथमिकता डिलीवरी विशेषाधिकार" : "Qualifies for VIP exclusive perks and free express deliveries"}
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={newCustomerForm.isPrimeActive}
+                    onChange={(e) => setNewCustomerForm({ ...newCustomerForm, isPrimeActive: e.target.checked })}
+                    className="w-4 h-4 accent-amber-400 cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setShowAddCustomerModal(false)}
+                  className="px-4 py-2.5 rounded-xl border border-white/10 text-slate-300 hover:text-white hover:bg-white/5 text-xs font-bold uppercase transition-all cursor-pointer"
+                >
+                  {isHindi ? "रद्द करें" : "Cancel"}
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs uppercase tracking-wider transition-all shadow-lg shadow-cyan-500/20 cursor-pointer flex items-center gap-1.5 active:scale-95"
+                >
+                  <CheckCircle className="h-4 w-4" />
+                  <span>{isHindi ? "डेटाबेस में सहेजें" : "Save Walk-In Customer"}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -23,7 +23,7 @@ export default function OrdersTab({
     if (!matchesSearch) return false;
     
     if (orderStatusFilter === 'active') {
-      return o.status === 'Processing' || o.status === 'Dispatched' || o.status === 'In Transit' || o.status === 'Pending';
+      return o.status === 'Processing' || o.status === 'Dispatched' || o.status === 'In Transit' || o.status === 'Pending' || o.status === 'Placed' || o.status === 'Confirmed' || o.status === 'Paid' || o.status === 'Pending Payment';
     } else if (orderStatusFilter === 'completed') {
       return o.status === 'Delivered' || o.status === 'Completed';
     }

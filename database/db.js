@@ -317,6 +317,14 @@ export const db = {
         is_marg_bill ${booleanType} DEFAULT ${isPg ? 'FALSE' : 0},
         points_earned INT DEFAULT 0,
         pdf_url ${textType},
+        referral_discount ${numericType} DEFAULT 0.0,
+        applied_points INT DEFAULT 0,
+        coupon_discount ${numericType} DEFAULT 0.0,
+        coupon_code VARCHAR(100) DEFAULT '',
+        celebration_discount ${numericType} DEFAULT 0.0,
+        celebration_offer_name VARCHAR(255) DEFAULT '',
+        payment_method VARCHAR(50) DEFAULT 'COD',
+        payment_status VARCHAR(50) DEFAULT 'UNPAID',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );`,
@@ -399,6 +407,9 @@ export const db = {
       }
     }
 
+    // Auto-migrate schema columns across all active engines
+    await this.migrateSchema();
+
     // Seed default roles if not present
     try {
       const roles = await this.query("SELECT * FROM role");
@@ -432,6 +443,124 @@ export const db = {
         );
       }
     } catch (e) {}
+  },
+
+  // Auto-migration to ensure all tables have required columns across SQLite, MySQL, and PostgreSQL
+  async migrateSchema() {
+    const orderColumns = [
+      { name: "total", sqlite: "REAL DEFAULT 0.0", pg: "NUMERIC(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
+      { name: "grand_total", sqlite: "REAL DEFAULT 0.0", pg: "NUMERIC(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
+      { name: "referral_discount", sqlite: "REAL DEFAULT 0.0", pg: "NUMERIC(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
+      { name: "applied_points", sqlite: "INT DEFAULT 0", pg: "INT DEFAULT 0", my: "INT DEFAULT 0" },
+      { name: "coupon_discount", sqlite: "REAL DEFAULT 0.0", pg: "NUMERIC(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
+      { name: "coupon_code", sqlite: "TEXT DEFAULT ''", pg: "VARCHAR(100) DEFAULT ''", my: "VARCHAR(100) DEFAULT ''" },
+      { name: "celebration_discount", sqlite: "REAL DEFAULT 0.0", pg: "NUMERIC(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
+      { name: "celebration_offer_name", sqlite: "TEXT DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
+      { name: "payment_method", sqlite: "TEXT DEFAULT 'COD'", pg: "VARCHAR(50) DEFAULT 'COD'", my: "VARCHAR(50) DEFAULT 'COD'" },
+      { name: "payment_status", sqlite: "TEXT DEFAULT 'UNPAID'", pg: "VARCHAR(50) DEFAULT 'UNPAID'", my: "VARCHAR(50) DEFAULT 'UNPAID'" },
+      { name: "customer_email", sqlite: "TEXT DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
+      { name: "is_marg_bill", sqlite: "INT DEFAULT 0", pg: "BOOLEAN DEFAULT FALSE", my: "INT DEFAULT 0" },
+      { name: "points_earned", sqlite: "INT DEFAULT 0", pg: "INT DEFAULT 0", my: "INT DEFAULT 0" },
+      { name: "pdf_url", sqlite: "TEXT", pg: "TEXT", my: "TEXT" }
+    ];
+
+    // 1. SQLite Schema Migration
+    if (sqliteDb) {
+      try {
+        const existingSQLite = await new Promise((resolve) => {
+          sqliteDb.all('PRAGMA table_info("order")', (err, rows) => {
+            if (err) resolve([]);
+            else resolve(rows || []);
+          });
+        });
+        const existingColNames = new Set(existingSQLite.map((c) => c.name));
+        for (const col of orderColumns) {
+          if (!existingColNames.has(col.name)) {
+            try {
+              await new Promise((resolve, reject) => {
+                sqliteDb.run(`ALTER TABLE "order" ADD COLUMN ${col.name} ${col.sqlite}`, (err) => {
+                  if (err && !err.message.includes("duplicate column")) reject(err);
+                  else resolve();
+                });
+              });
+              console.log(`✓ SQLite migrated: added column ${col.name} to "order" table.`);
+            } catch (colErr) {
+              console.warn(`Notice SQLite column add ${col.name}:`, colErr.message);
+            }
+          }
+        }
+
+        // Synchronize total and grand_total values across all orders
+        await new Promise((resolve) => {
+          sqliteDb.run(`UPDATE "order" SET total = grand_total WHERE (total IS NULL OR total = 0) AND grand_total > 0`, () => resolve());
+        });
+        await new Promise((resolve) => {
+          sqliteDb.run(`UPDATE "order" SET grand_total = total WHERE (grand_total IS NULL OR grand_total = 0) AND total > 0`, () => resolve());
+        });
+
+        // Repair orders with null IDs (e.g. from previous type mismatch)
+        await new Promise((resolve) => {
+          sqliteDb.run(`UPDATE "order" SET id = 'SW-7001' WHERE id IS NULL AND customer_name = 'Balram Patidar'`, () => resolve());
+        });
+        await new Promise((resolve) => {
+          sqliteDb.run(`DELETE FROM "order" WHERE id IS NULL AND customer_name LIKE '%Test Rzp%'`, () => resolve());
+        });
+        await new Promise((resolve) => {
+          sqliteDb.run(`UPDATE "order" SET id = 'SW-' || (1000 + abs(random() % 9000)) WHERE id IS NULL`, () => resolve());
+        });
+
+        // Ensure Balram Patidar's order item is linked in order_item table
+        const bpItems = await new Promise((resolve) => {
+          sqliteDb.all(`SELECT id FROM order_item WHERE order_id = 'SW-7001'`, (err, rows) => resolve(rows || []));
+        });
+        if (bpItems.length === 0) {
+          await new Promise((resolve) => {
+            sqliteDb.run(
+              `INSERT INTO order_item (order_id, product_id, name_en, name_hi, price, qty, weight_label)
+               VALUES ('SW-7001', 115, 'AMUL MASTI BUTTERMILK 200ML', 'अमूल मस्ती छाछ 200 मिली', 15, 1, '200ml')`,
+              () => resolve()
+            );
+          });
+        }
+      } catch (err) {
+        console.warn("Notice during SQLite schema migration:", err.message);
+      }
+    }
+
+    // 2. MySQL Schema Migration if active
+    if (this.isMySQL && mysqlPool) {
+      try {
+        const [existingMyCols] = await mysqlPool.query("SHOW COLUMNS FROM `order`");
+        const existingMyNames = new Set((existingMyCols || []).map((c) => c.Field));
+        for (const col of orderColumns) {
+          if (!existingMyNames.has(col.name)) {
+            try {
+              await mysqlPool.query(`ALTER TABLE \`order\` ADD COLUMN \`${col.name}\` ${col.my}`);
+              console.log(`✓ MySQL migrated: added column ${col.name} to \`order\` table.`);
+            } catch (myErr) {
+              console.warn(`Notice MySQL column add ${col.name}:`, myErr.message);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Notice during MySQL schema migration:", err.message);
+      }
+    }
+
+    // 3. PostgreSQL Schema Migration if active
+    if (this.isPostgres && pgPool) {
+      try {
+        for (const col of orderColumns) {
+          try {
+            await pgPool.query(`ALTER TABLE "order" ADD COLUMN IF NOT EXISTS ${col.name} ${col.pg}`);
+          } catch (pgErr) {
+            console.warn(`Notice PG column add ${col.name}:`, pgErr.message);
+          }
+        }
+      } catch (err) {
+        console.warn("Notice during PG schema migration:", err.message);
+      }
+    }
   },
 
   // 1-Click Migration Sync: SQLite -> MySQL or MySQL -> SQLite

@@ -66,7 +66,7 @@ const ListProductImage = ({ p, r2PublicUrl }) => {
 
 export default function ProductsManager({ searchQuery, setSearchQuery, userRole }) {
   const { isHindi } = useLanguage();
-  const { products, addProduct, updateProduct, deleteProduct, clearAllProducts, categories, r2PublicUrl, contactSettings } = useData();
+  const { products, addProduct, updateProduct, deleteProduct, clearAllProducts, categories, r2PublicUrl, contactSettings, setContactSettings } = useData();
 
   // Selected edit ID state
   const [editingProdId, setEditingProdId] = useState(null);
@@ -859,9 +859,35 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
 
       {/* 2. List Filters Block */}
       <div className="bg-slate-900 border border-white/10 p-4 rounded-2xl flex flex-wrap gap-4 items-center justify-between">
-        <div className="flex items-center gap-1">
-          <Filter className="h-4 w-4 text-cyan-400" />
-          <span className="text-xs font-black uppercase tracking-wider text-white">Filter Catalog Index</span>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1">
+            <Filter className="h-4 w-4 text-cyan-400" />
+            <span className="text-xs font-black uppercase tracking-wider text-white">Filter Catalog Index</span>
+          </div>
+
+          {/* Quick live toggle for Website Display: All vs Photo Only */}
+          <div className="flex items-center gap-1.5 bg-slate-950 border border-cyan-500/30 px-2.5 py-1 rounded-xl">
+            <span className="text-[9.5px] font-black uppercase text-cyan-300">
+              📸 Website:
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                const nextVal = !contactSettings?.showOnlyWithPhoto;
+                setContactSettings(prev => ({ ...prev, showOnlyWithPhoto: nextVal }));
+              }}
+              className={`text-[9px] font-bold px-2 py-0.5 rounded-lg transition-all cursor-pointer ${
+                contactSettings?.showOnlyWithPhoto
+                  ? 'bg-cyan-400 text-slate-950 font-black shadow'
+                  : 'bg-white/10 text-slate-300 hover:text-white'
+              }`}
+              title="Click to toggle whether customer website shows only items with photos or all items"
+            >
+              {contactSettings?.showOnlyWithPhoto
+                ? `Only With Photo (${withImageCount})`
+                : `All Items (${products.length})`}
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-3 items-center">

@@ -3,7 +3,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
 import { useData } from '../context/DataContext';
 import ProductCard from '../components/ProductCard';
-import { resolveProductImage, markImageFailed, DEFAULT_PRODUCT_FALLBACK } from '../utils/imageHelper';
+import { resolveProductImage, markImageFailed, DEFAULT_PRODUCT_FALLBACK, hasCustomProductImage } from '../utils/imageHelper';
 import { 
   Search, 
   SlidersHorizontal, 
@@ -36,7 +36,7 @@ async function getCapacitorSpeech() {
 export default function Shop({ categoryFilterState, onCategoryFilterChange, searchQueryProp, onSearchQueryChange }) {
   const { t, language } = useLanguage();
   const isHindi = language === 'hi';
-  const { products, categories: dynamicCategories, r2PublicUrl } = useData();
+  const { products, categories: dynamicCategories, r2PublicUrl, contactSettings } = useData();
   const [searchQuery, setSearchQuery] = useState(searchQueryProp || '');
 
   React.useEffect(() => {
@@ -291,6 +291,11 @@ export default function Shop({ categoryFilterState, onCategoryFilterChange, sear
   const filteredProducts = useMemo(() => {
     let result = [...products];
 
+    // Filter by admin flag: show only products with photos on customer website
+    if (contactSettings?.showOnlyWithPhoto) {
+      result = result.filter(prod => hasCustomProductImage(prod));
+    }
+
     // Category filter
     if (categoryFilterState !== 'all') {
       result = result.filter(prod => prod.category === categoryFilterState);
@@ -361,7 +366,7 @@ export default function Shop({ categoryFilterState, onCategoryFilterChange, sear
     }
 
     return result;
-  }, [categoryFilterState, searchQuery, sortBy, priceRange, selectedPricePreset, selectedBrand, selectedWeight, onlyDiscounted, language, products]);
+  }, [categoryFilterState, searchQuery, sortBy, priceRange, selectedPricePreset, selectedBrand, selectedWeight, onlyDiscounted, language, products, contactSettings?.showOnlyWithPhoto]);
 
   // Handle paginate sub-slice lists
   const displayedProducts = useMemo(() => {
@@ -1041,11 +1046,25 @@ export default function Shop({ categoryFilterState, onCategoryFilterChange, sear
 // Modular helper button component inside Shop.jsx for list mode
 function ListAddToCartButton({ product }) {
   const { cartItems, addToCart, updateQuantity, removeFromCart } = useCart();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+
+  const stockCount = product.stockCount !== undefined ? Number(product.stockCount) : (product.stock !== undefined ? Number(product.stock) : 100);
+  const isOutOfStock = stockCount <= 0;
 
   const cartItem = cartItems?.find(item => item.product.id === product.id);
   const cartQty = cartItem ? cartItem.quantity : 0;
   const unit = cartItem ? cartItem.selectedUnit : undefined;
+
+  if (isOutOfStock) {
+    return (
+      <button
+        disabled
+        className="flex w-full sm:w-36 items-center justify-center gap-2 rounded-xl py-2.5 px-4 text-xs font-extrabold border uppercase bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed shadow-none"
+      >
+        <span>{language === 'hi' ? 'स्टॉक बाहर' : 'OUT OF STOCK'}</span>
+      </button>
+    );
+  }
 
   if (cartQty > 0) {
     return (
@@ -1060,7 +1079,7 @@ function ListAddToCartButton({ product }) {
               updateQuantity(product.id, unit, -1);
             }
           }}
-          className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-all active:scale-90 font-bold"
+          className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-all active:scale-90 font-bold cursor-pointer"
         >
           <Minus className="h-3.5 w-3.5 stroke-[3]" />
         </button>
@@ -1069,11 +1088,17 @@ function ListAddToCartButton({ product }) {
         </span>
         <button
           type="button"
+          disabled={cartQty >= stockCount}
           onClick={(e) => {
             e.stopPropagation();
-            addToCart(product, unit);
+            updateQuantity(product.id, unit, 1);
           }}
-          className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-all active:scale-90 font-bold"
+          className={`flex h-7 w-7 items-center justify-center rounded-lg font-bold transition-all ${
+            cartQty >= stockCount
+              ? 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-50'
+              : 'bg-emerald-600 text-white hover:bg-emerald-700 active:scale-90 cursor-pointer'
+          }`}
+          title={cartQty >= stockCount ? (language === 'hi' ? 'अधिकतम स्टॉक सीमा तक पहुंच चुके हैं' : 'Maximum stock limit reached') : ''}
         >
           <Plus className="h-3.5 w-3.5 stroke-[3]" />
         </button>
@@ -1087,7 +1112,7 @@ function ListAddToCartButton({ product }) {
         e.stopPropagation();
         addToCart(product);
       }}
-      className="flex w-full sm:w-36 items-center justify-center gap-2 rounded-xl py-2.5 px-4 text-xs font-extrabold transition-all duration-200 active:scale-95 border uppercase bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700 shadow-sm"
+      className="flex w-full sm:w-36 items-center justify-center gap-2 rounded-xl py-2.5 px-4 text-xs font-extrabold transition-all duration-200 active:scale-95 border uppercase bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700 shadow-sm cursor-pointer"
     >
       <ShoppingCart className="h-4 w-4 shrink-0" />
       <span>{t('addToCart')}</span>

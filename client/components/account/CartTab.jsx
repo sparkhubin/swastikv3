@@ -1,9 +1,11 @@
 import React from 'react';
-import { ShoppingCart, ShoppingBag, Trash2, Plus, Minus, ArrowRight } from 'lucide-react';
+import { ShoppingCart, ShoppingBag, Trash2, Plus, Minus, ArrowRight, AlertTriangle } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
+import { useData } from '../../context/DataContext';
 
 export default function CartTab({ isHindi, onViewChange }) {
   const { cartItems, removeFromCart, updateQuantity, subtotal, deliveryFee, grandTotal } = useCart();
+  const { products } = useData();
 
   const totalItemCount = (cartItems || []).reduce((acc, item) => acc + item.quantity, 0);
 
@@ -73,37 +75,65 @@ export default function CartTab({ isHindi, onViewChange }) {
             {cartItems.map((item, idx) => {
               const p = item.product || {};
               const unit = item.selectedUnit || p.unit || '1 Unit';
+              const dbProduct = products?.find(prod => prod.id === p.id) || p;
+              const maxStock = dbProduct.stockCount !== undefined ? Number(dbProduct.stockCount) : (dbProduct.stock !== undefined ? Number(dbProduct.stock) : 100);
+              const isOutOfStock = maxStock <= 0;
+              const isOverStock = item.quantity > maxStock;
+
               return (
                 <div 
-                  key={idx}
-                  className="bg-slate-50 border border-slate-200 p-4 rounded-xl flex items-center gap-4 hover:border-slate-300 transition-all"
+                  key={`${p.id}-${unit || idx}`}
+                  className={`border p-4 rounded-xl flex items-center gap-4 transition-all ${
+                    isOutOfStock || isOverStock
+                      ? 'bg-red-50/80 border-red-200'
+                      : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                  }`}
                 >
                   <img 
                     src={p.imageUrl || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=150'} 
                     alt={p.nameEn || p.name}
-                    className="w-16 h-16 object-cover rounded-lg border border-slate-200 shrink-0 bg-white" 
+                    className={`w-16 h-16 object-cover rounded-lg border shrink-0 bg-white ${
+                      isOutOfStock || isOverStock ? 'border-red-300' : 'border-slate-200'
+                    }`} 
                   />
 
                   <div className="flex-1 min-w-0">
                     <h5 className="font-extrabold text-xs text-slate-900 truncate">{isHindi ? (p.nameHi || p.nameEn || p.name) : (p.nameEn || p.name)}</h5>
                     <p className="text-[10px] text-slate-500 font-mono mt-0.5 font-medium">Unit: {unit}</p>
                     <p className="text-xs font-bold text-emerald-800 font-mono mt-1">₹{p.price || 100}</p>
+                    {isOutOfStock && (
+                      <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-red-100 text-red-700 border border-red-200">
+                        {isHindi ? 'आउट ऑफ स्टॉक' : 'OUT OF STOCK'}
+                      </span>
+                    )}
+                    {!isOutOfStock && isOverStock && (
+                      <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
+                        {isHindi ? `केवल ${maxStock} उपलब्ध` : `Max ${maxStock} in stock`}
+                      </span>
+                    )}
                   </div>
 
                   {/* Quantity Modifier */}
                   <div className="flex items-center gap-2 bg-white border border-slate-300 px-2.5 py-1 rounded-lg font-mono">
                     <button
                       type="button"
-                      onClick={() => updateQuantity(p.id, item.selectedUnit, item.quantity - 1)}
+                      onClick={() => updateQuantity(p.id, item.selectedUnit, -1)}
                       className="text-slate-600 hover:text-slate-900 transition-all cursor-pointer"
+                      title={isHindi ? "मात्रा घटाएं" : "Decrease quantity"}
                     >
                       <Minus className="w-3.5 h-3.5" />
                     </button>
                     <span className="text-xs font-extrabold text-slate-900 px-1">{item.quantity}</span>
                     <button
                       type="button"
-                      onClick={() => updateQuantity(p.id, item.selectedUnit, item.quantity + 1)}
-                      className="text-slate-600 hover:text-slate-900 transition-all cursor-pointer"
+                      disabled={item.quantity >= maxStock}
+                      onClick={() => updateQuantity(p.id, item.selectedUnit, 1)}
+                      className={`transition-all ${
+                        item.quantity >= maxStock
+                          ? 'text-slate-300 cursor-not-allowed opacity-40'
+                          : 'text-slate-600 hover:text-slate-900 cursor-pointer'
+                      }`}
+                      title={item.quantity >= maxStock ? (isHindi ? "अधिकतम उपलब्ध स्टॉक" : "Maximum available stock") : (isHindi ? "मात्रा बढ़ाएं" : "Increase quantity")}
                     >
                       <Plus className="w-3.5 h-3.5" />
                     </button>

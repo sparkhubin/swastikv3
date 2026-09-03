@@ -53,6 +53,7 @@ import MembershipTab from '../components/account/MembershipTab';
 import RewardsTab from '../components/account/RewardsTab';
 import CartTab from '../components/account/CartTab';
 import PreferencesTab from '../components/account/PreferencesTab';
+import PrivacyDataTab from '../components/account/PrivacyDataTab';
 
 export default function Account({ onViewChange }) {
   const { language, setLanguage, t } = useLanguage();
@@ -991,11 +992,25 @@ export default function Account({ onViewChange }) {
     }
     
     const award = referralSettings?.referralPointsEarned ?? 50;
-    setProfile(prev => ({
-      ...prev,
-      points: (prev.points || 0) + award,
+    const newPoints = (profile.points || 0) + award;
+    const updatedProfile = {
+      ...profile,
+      points: newPoints,
       referredBy: cleanCode
-    }));
+    };
+
+    setProfile(updatedProfile);
+    localStorage.setItem('swastik_profile', JSON.stringify(updatedProfile));
+
+    // Also sync to customer database record
+    const userPhoneDigits = (profile?.phone || '').replace(/\D/g, '').slice(-10);
+    const existingCust = (customers || []).find(c => (c.phone || '').replace(/\D/g, '').endsWith(userPhoneDigits));
+    if (existingCust) {
+      updateCustomer(existingCust.id, {
+        points: newPoints,
+        referredBy: cleanCode
+      });
+    }
     
     alert(isHindi 
       ? `सफलता! कोड लागू हुआ। आपके खाते में ₹${award * (referralSettings?.pointsValueInINR ?? 1)} मूल्य के ${award} पॉइंट्स क्रेडिट कर दिए गए हैं!` 
@@ -1952,7 +1967,8 @@ export default function Account({ onViewChange }) {
               { id: 'membership', icon: Crown, labelEn: 'Prime Membership', labelHi: 'प्राइम सदस्यता', badgeText: profile.isPrimeActive ? 'VIP' : null, color: 'text-amber-500' },
               { id: 'rewards', icon: Gift, labelEn: 'Rewards & Referrals', labelHi: 'रिवॉर्ड्स और रेफ़रल', badgeText: `${profile.points || 0} PTS`, color: 'text-amber-500' },
               { id: 'cart', icon: ShoppingCart, labelEn: 'My Cart', labelHi: 'मेरी कार्ट', badge: (cartItems || []).reduce((acc, item) => acc + item.quantity, 0), color: 'text-emerald-600' },
-              { id: 'preferences', icon: Languages, labelEn: 'Preferences', labelHi: 'प्राथमिकताएं' }
+              { id: 'preferences', icon: Languages, labelEn: 'Preferences', labelHi: 'प्राथमिकताएं' },
+              { id: 'privacy', icon: ShieldCheck, labelEn: 'Data & Privacy', labelHi: 'डेटा एवं गोपनीयता', color: 'text-rose-500' }
             ].map((tab) => {
               const IconComp = tab.icon;
               const isActive = activeTab === tab.id;
@@ -2071,6 +2087,14 @@ export default function Account({ onViewChange }) {
                 setPromoOffersNotify={setPromoOffersNotify}
                 isHindi={isHindi}
                 t={t}
+              />
+            )}
+
+            {activeTab === 'privacy' && (
+              <PrivacyDataTab 
+                profile={profile}
+                myOrders={myOrders}
+                isHindi={isHindi}
               />
             )}
           </div>

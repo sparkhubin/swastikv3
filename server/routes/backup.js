@@ -95,15 +95,17 @@ router.post("/database/restore", async (req, res) => {
 
       for (const o of tables.order) {
         await db.execute(
-          `INSERT INTO "order" (id, user_id, order_date, is_active, step_level, status_label, delivery_partner_name, delivery_partner_phone, hub_name, total_amount, subtotal_amount, delivery_fee, gst_amount, customer_name, customer_phone, delivery_address, referral_discount, applied_points, coupon_discount, coupon_code, celebration_discount, celebration_offer_name, customer_email, payment_method, payment_status)
+          `INSERT INTO "order" (id, user_id, order_date, is_active, step_level, status_label, delivery_partner_name, delivery_partner_phone, dispatch_hub, grand_total, subtotal, delivery_fee, gst_amount, customer_name, customer_phone, shipping_address, referral_discount, applied_points, coupon_discount, coupon_code, celebration_discount, celebration_offer_name, customer_email, payment_method, payment_status)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
-            o.id, o.user_id, o.order_date, o.is_active ? 1 : 0, o.step_level, o.status_label,
-            o.delivery_partner_name, o.delivery_partner_phone, o.hub_name, o.total_amount,
-            o.subtotal_amount, o.delivery_fee, o.gst_amount, o.customer_name, o.customer_phone,
-            o.delivery_address, o.referral_discount, o.applied_points, o.coupon_discount,
-            o.coupon_code, o.celebration_discount, o.celebration_offer_name, o.customer_email,
-            o.payment_method, o.payment_status
+            o.id, o.user_id || null, o.order_date, o.is_active ? 1 : 0, o.step_level || 0, o.status_label || 'Placed',
+            o.delivery_partner_name || '', o.delivery_partner_phone || '', o.dispatch_hub || o.hub_name || '',
+            o.grand_total !== undefined ? o.grand_total : (o.total_amount || 0),
+            o.subtotal !== undefined ? o.subtotal : (o.subtotal_amount || 0),
+            o.delivery_fee || 0, o.gst_amount || 0, o.customer_name || '', o.customer_phone || '',
+            o.shipping_address || o.delivery_address || '', o.referral_discount || 0, o.applied_points || 0, o.coupon_discount || 0,
+            o.coupon_code || '', o.celebration_discount || 0, o.celebration_offer_name || '', o.customer_email || '',
+            o.payment_method || 'COD', o.payment_status || 'UNPAID'
           ]
         );
       }

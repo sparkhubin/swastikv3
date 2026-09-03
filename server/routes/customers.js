@@ -283,4 +283,238 @@ router.delete("/customers/:id", async (req, res) => {
   }
 });
 
+// ==========================================
+// DATA DELETION REQUESTS (GDPR / PRIVACY)
+// ==========================================
+
+async function getStoredDeletionRequests() {
+  try {
+    const rows = await db.query("SELECT value_text FROM app_settings WHERE key_name = 'swastik_data_deletion_requests'");
+    if (rows.length > 0 && rows[0].value_text) {
+      const parsed = JSON.parse(rows[0].value_text);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {
+    console.error("Error reading data deletion requests:", e);
+  }
+  return [];
+}
+
+async function saveStoredDeletionRequests(requests) {
+  try {
+    const valueString = JSON.stringify(requests);
+    const existing = await db.query("SELECT key_name FROM app_settings WHERE key_name = 'swastik_data_deletion_requests'");
+    if (existing.length > 0) {
+      await db.execute(
+        "UPDATE app_settings SET value_text = ?, updated_at = CURRENT_TIMESTAMP WHERE key_name = 'swastik_data_deletion_requests'",
+        [valueString]
+      );
+    } else {
+      await db.execute(
+        "INSERT INTO app_settings (key_name, value_text) VALUES ('swastik_data_deletion_requests', ?)",
+        [valueString]
+      );
+    }
+    return true;
+  } catch (e) {
+    console.error("Error saving data deletion requests:", e);
+    return false;
+  }
+}
+
+// GET /api/data-deletion-requests - Retrieve all requests
+router.get("/data-deletion-requests", async (req, res) => {
+  try {
+    const requests = await getStoredDeletionRequests();
+    res.json(requests);
+  } catch (err) {
+    console.error("Error in GET /api/data-deletion-requests:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/data-deletion-requests - User submits deletion request
+router.post("/data-deletion-requests", async (req, res) => {
+  try {
+    const { customerId, name, phone, email, reason, notes } = req.body || {};
+    if (!phone && !email) {
+      return res.status(400).json({ error: "Phone number or email is required to submit a data deletion request." });
+    }
+
+    const requests = await getStoredDeletionRequests();
+    const cleanPhoneDigits = cleanPhone(phone);
+
+    // Check if there is already an active pending request for this phone/email
+    const existingPending = requests.find(r => 
+      r.status === 'Pending' && (
+        (cleanPhoneDigits && cleanPhone(r.phone).endsWith(cleanPhoneDigits.slice(-10))) ||
+        (email && r.email && r.email.toLowerCase() === email.toLowerCase())
+      )
+    );
+
+    if (existingPending) {
+      return res.json({ 
+        success: true, 
+        alreadySubmitted: true,
+        message: "You already have a pending data deletion request under review.",
+        request: existingPending 
+      });
+    }
+
+    const newRequestId = `DEL-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
+    const newRequest = {
+      id: newRequestId,
+      customerId: customerId ? Number(customerId) : null,
+      name: (name || 'Customer').trim(),
+      phone: phone || '',
+      email: (email || '').trim(),
+      reason: reason || 'Account & Personal Data Erasure',
+      notes: notes || '',
+      status: 'Pending', // 'Pending' | 'Approved & Deleted' | 'Rejected'
+      requestedAt: new Date().toISOString(),
+      processedAt: null,
+      adminNotes: ''
+    };
+
+    requests.unshift(newRequest);
+    await saveStoredDeletionRequests(requests);
+
+    // Create an in-app notification for admin
+    try {
+      await db.execute(
+        `INSERT INTO notification (recipient_role, title_en, title_hi, message_en, message_hi, type)
+         VALUES ('admin', ?, ?, ?, ?, 'data_deletion_request')`,
+        [
+          `New Data Deletion Request (${newRequestId})`,
+          `नया डेटा डिलीट अनुरोध (${newRequestId})`,
+          `Customer ${newRequest.name} (${newRequest.phone}) has requested permanent data deletion. Reason: ${newRequest.reason}`,
+          `ग्राहक ${newRequest.name} (${newRequest.phone}) ने डेटा हटाने का अनुरोध किया है। कारण: ${newRequest.reason}`
+        ]
+      );
+    } catch (notifErr) {
+      console.warn("Could not create admin notification for deletion request:", notifErr.message);
+    }
+
+    res.json({ success: true, request: newRequest });
+  } catch (err) {
+    console.error("Error in POST /api/data-deletion-requests:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/data-deletion-requests/:id/approve - Admin approves & permanently deletes customer data
+router.post("/data-deletion-requests/:id/approve", async (req, res) => {
+  try {
+    const requestId = req.params.id;
+    const { adminNotes } = req.body || {};
+    const requests = await getStoredDeletionRequests();
+
+    const reqIndex = requests.findIndex(r => String(r.id) === String(requestId));
+    if (reqIndex === -1) {
+      return res.status(404).json({ error: "Deletion request not found." });
+    }
+
+    const targetReq = requests[reqIndex];
+    const targetPhoneDigits = cleanPhone(targetReq.phone);
+
+    // 1. Remove from stored customers list
+    let customerList = await getStoredCustomers();
+    const initialCustCount = customerList.length;
+    customerList = customerList.filter(c => {
+      if (targetReq.customerId && Number(c.id) === Number(targetReq.customerId)) return false;
+      if (targetPhoneDigits && cleanPhone(c.phone).endsWith(targetPhoneDigits.slice(-10))) return false;
+      if (targetReq.email && c.email && c.email.toLowerCase() === targetReq.email.toLowerCase()) return false;
+      return true;
+    });
+
+    if (customerList.length !== initialCustCount) {
+      await saveStoredCustomers(customerList);
+    }
+
+    // 2. Remove / Anonymize from SQL 'user' table
+    if (targetPhoneDigits && targetPhoneDigits.length >= 10) {
+      try {
+        await db.execute('DELETE FROM "user" WHERE phone_number = ?', [targetPhoneDigits.slice(-10)]);
+      } catch (userErr) {
+        console.warn("Could not delete from user table:", userErr.message);
+      }
+
+      // 3. Anonymize historical orders for privacy/GDPR while keeping billing totals intact
+      try {
+        await db.execute(
+          `UPDATE "order" 
+           SET customer_name = '[Data Deleted under Privacy Request]',
+               customer_phone = '0000000000',
+               customer_email = 'deleted@swastik.local',
+               shipping_address = '[Address Removed as per Data Deletion Request]'
+           WHERE customer_phone LIKE ?`,
+          [`%${targetPhoneDigits.slice(-10)}%`]
+        );
+      } catch (orderErr) {
+        console.warn("Could not anonymize orders:", orderErr.message);
+      }
+    }
+
+    // 4. Update request status
+    targetReq.status = 'Approved & Deleted';
+    targetReq.processedAt = new Date().toISOString();
+    targetReq.adminNotes = adminNotes || 'Approved by Admin: Customer data permanently deleted and orders anonymized.';
+    requests[reqIndex] = targetReq;
+    await saveStoredDeletionRequests(requests);
+
+    res.json({ 
+      success: true, 
+      message: `Data deletion request ${requestId} approved and customer data permanently purged.`,
+      request: targetReq 
+    });
+  } catch (err) {
+    console.error("Error in POST /api/data-deletion-requests/:id/approve:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/data-deletion-requests/:id/reject - Admin rejects request
+router.post("/data-deletion-requests/:id/reject", async (req, res) => {
+  try {
+    const requestId = req.params.id;
+    const { adminNotes } = req.body || {};
+    const requests = await getStoredDeletionRequests();
+
+    const reqIndex = requests.findIndex(r => String(r.id) === String(requestId));
+    if (reqIndex === -1) {
+      return res.status(404).json({ error: "Deletion request not found." });
+    }
+
+    const targetReq = requests[reqIndex];
+    targetReq.status = 'Rejected';
+    targetReq.processedAt = new Date().toISOString();
+    targetReq.adminNotes = adminNotes || 'Request rejected by Admin.';
+    requests[reqIndex] = targetReq;
+    await saveStoredDeletionRequests(requests);
+
+    res.json({ 
+      success: true, 
+      message: `Data deletion request ${requestId} rejected.`,
+      request: targetReq 
+    });
+  } catch (err) {
+    console.error("Error in POST /api/data-deletion-requests/:id/reject:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/data-deletion-requests/:id - Delete record of the request
+router.delete("/data-deletion-requests/:id", async (req, res) => {
+  try {
+    const requestId = req.params.id;
+    let requests = await getStoredDeletionRequests();
+    requests = requests.filter(r => String(r.id) !== String(requestId));
+    await saveStoredDeletionRequests(requests);
+    res.json({ success: true, message: "Request record deleted successfully." });
+  } catch (err) {
+    console.error("Error in DELETE /api/data-deletion-requests/:id:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

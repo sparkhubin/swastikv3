@@ -14,11 +14,12 @@ const router = express.Router();
 router.get("/config", async (req, res) => {
   try {
     const publicUrlBase = process.env.CLOUDFLARE_R2_PUBLIC_URL || `https://${process.env.CLOUDFLARE_R2_BUCKET_NAME || 'swastik'}.r2.dev`;
-    const rows = await db.query("SELECT enabled, environment FROM payment_settings WHERE id = 1");
+    const rows = await db.query("SELECT enabled, razorpay_enabled, environment FROM payment_settings WHERE id = 1");
     if (rows.length > 0) {
+      const isOnlineEnabled = Boolean(rows[0].enabled) || Boolean(rows[0].razorpay_enabled);
       res.json({ 
         r2PublicUrl: publicUrlBase,
-        paymentEnabled: Boolean(rows[0].enabled),
+        paymentEnabled: isOnlineEnabled,
         paymentEnvironment: rows[0].environment
       });
     } else {

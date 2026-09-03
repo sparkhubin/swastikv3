@@ -75,7 +75,8 @@ const initialContactSettings = {
   deliveryChargeMedium: 25,
   deliveryChargeFar: 45,
   deliveryChargeOutlier: 75,
-  freeDeliveryMinAmount: 500
+  freeDeliveryMinAmount: 500,
+  showOnlyWithPhoto: false
 };
 
 const initialReviews = [
@@ -394,6 +395,25 @@ export function DataProvider({ children }) {
     return safeJsonParse('swastik_customers', initialCustomers);
   });
 
+  // Data Deletion Requests State (User Requests for Account / Data Erasure)
+  const [dataDeletionRequests, setDataDeletionRequests] = useState(() => {
+    return safeJsonParse('swastik_data_deletion_requests', [
+      {
+        id: 'DEL-849102-101',
+        customerId: 104,
+        name: 'Sanjay Dutt',
+        phone: '+91 98101 23456',
+        email: 'sanjay.dutt@gmail.com',
+        reason: 'No longer residing in operational delivery area',
+        notes: 'Please delete my profile, saved cards, and address history.',
+        status: 'Pending',
+        requestedAt: '2026-08-28T10:15:00.000Z',
+        processedAt: null,
+        adminNotes: ''
+      }
+    ]);
+  });
+
   const [aboutSettings, setAboutSettings] = useState(() => {
     return safeJsonParse('swastik_about_settings', initialAboutSettings);
   });
@@ -545,6 +565,11 @@ export function DataProvider({ children }) {
   }, [customers]);
 
   useEffect(() => {
+    localStorage.setItem('swastik_data_deletion_requests', JSON.stringify(dataDeletionRequests));
+    saveSettingToDb('swastik_data_deletion_requests', dataDeletionRequests);
+  }, [dataDeletionRequests]);
+
+  useEffect(() => {
     localStorage.setItem('swastik_about_settings', JSON.stringify(aboutSettings));
     saveSettingToDb('swastik_about_settings', aboutSettings);
   }, [aboutSettings]);
@@ -586,6 +611,7 @@ export function DataProvider({ children }) {
           if (settingsData.swastik_refund_sections && Array.isArray(settingsData.swastik_refund_sections)) setRefundSections(settingsData.swastik_refund_sections);
           if (settingsData.swastik_privacy_sections && Array.isArray(settingsData.swastik_privacy_sections)) setPrivacySections(settingsData.swastik_privacy_sections);
           if (settingsData.swastik_terms_sections && Array.isArray(settingsData.swastik_terms_sections)) setTermsSections(settingsData.swastik_terms_sections);
+          if (settingsData.swastik_data_deletion_requests && Array.isArray(settingsData.swastik_data_deletion_requests)) setDataDeletionRequests(settingsData.swastik_data_deletion_requests);
         }
       }
     } catch (e) {
@@ -595,6 +621,19 @@ export function DataProvider({ children }) {
       setTimeout(() => {
         settingsLoaded.current = true;
       }, 800);
+    }
+
+    try {
+      const delReqRes = await fetch('/api/data-deletion-requests');
+      if (delReqRes.ok) {
+        const delReqData = await delReqRes.json();
+        if (Array.isArray(delReqData) && delReqData.length > 0) {
+          setDataDeletionRequests(delReqData);
+          localStorage.setItem('swastik_data_deletion_requests', JSON.stringify(delReqData));
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to fetch data deletion requests:", e);
     }
 
     try {
@@ -1178,6 +1217,110 @@ export function DataProvider({ children }) {
   };
 
   // ------------------------------------
+  // DATA DELETION REQUESTS METHODS
+  // ------------------------------------
+  const addDataDeletionRequest = async (reqData) => {
+    const newId = reqData.id || `DEL-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
+    const newReq = {
+      id: newId,
+      customerId: reqData.customerId ? Number(reqData.customerId) : null,
+      name: (reqData.name || 'Customer').trim(),
+      phone: reqData.phone || '',
+      email: (reqData.email || '').trim(),
+      reason: reqData.reason || 'Account & Personal Data Erasure',
+      notes: reqData.notes || '',
+      status: 'Pending',
+      requestedAt: new Date().toISOString(),
+      processedAt: null,
+      adminNotes: ''
+    };
+
+    setDataDeletionRequests(prev => [newReq, ...prev.filter(r => r.id !== newId)]);
+
+    try {
+      const res = await fetch('/api/data-deletion-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newReq)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.request) {
+          setDataDeletionRequests(prev => [data.request, ...prev.filter(r => r.id !== newId && r.id !== data.request.id)]);
+          return data.request;
+        }
+      }
+    } catch (e) {
+      console.warn("Could not post deletion request to backend:", e);
+    }
+    return newReq;
+  };
+
+  const approveDataDeletionRequest = async (requestId, adminNotes = '') => {
+    const reqObj = dataDeletionRequests.find(r => String(r.id) === String(requestId));
+    const processedAt = new Date().toISOString();
+
+    setDataDeletionRequests(prev => prev.map(r => 
+      String(r.id) === String(requestId)
+        ? { ...r, status: 'Approved & Deleted', processedAt, adminNotes: adminNotes || 'Approved by Admin: Data deleted.' }
+        : r
+    ));
+
+    // Delete customer if exists
+    if (reqObj) {
+      if (reqObj.customerId) {
+        deleteCustomer(reqObj.customerId);
+      } else if (reqObj.phone) {
+        const phoneDigits = reqObj.phone.replace(/\D/g, '').slice(-10);
+        const matchedCust = customers.find(c => (c.phone || '').replace(/\D/g, '').endsWith(phoneDigits));
+        if (matchedCust) {
+          deleteCustomer(matchedCust.id);
+        }
+      }
+    }
+
+    try {
+      await fetch(`/api/data-deletion-requests/${requestId}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminNotes })
+      });
+    } catch (e) {
+      console.warn("Could not approve deletion request on backend:", e);
+    }
+    return true;
+  };
+
+  const rejectDataDeletionRequest = async (requestId, adminNotes = '') => {
+    const processedAt = new Date().toISOString();
+    setDataDeletionRequests(prev => prev.map(r => 
+      String(r.id) === String(requestId)
+        ? { ...r, status: 'Rejected', processedAt, adminNotes: adminNotes || 'Rejected by Admin.' }
+        : r
+    ));
+
+    try {
+      await fetch(`/api/data-deletion-requests/${requestId}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminNotes })
+      });
+    } catch (e) {
+      console.warn("Could not reject deletion request on backend:", e);
+    }
+    return true;
+  };
+
+  const deleteDataDeletionRequest = async (requestId) => {
+    setDataDeletionRequests(prev => prev.filter(r => String(r.id) !== String(requestId)));
+    try {
+      await fetch(`/api/data-deletion-requests/${requestId}`, { method: 'DELETE' });
+    } catch (e) {
+      console.warn("Could not delete request record on backend:", e);
+    }
+  };
+
+  // ------------------------------------
   // STAFF & PERMISSIONS SYSTEM
   // ------------------------------------
   const initialStaff = [
@@ -1404,6 +1547,12 @@ export function DataProvider({ children }) {
       upsertCustomer,
       updateCustomer,
       deleteCustomer,
+      dataDeletionRequests,
+      setDataDeletionRequests,
+      addDataDeletionRequest,
+      approveDataDeletionRequest,
+      rejectDataDeletionRequest,
+      deleteDataDeletionRequest,
       aboutSettings,
       setAboutSettings,
       contactSettings,

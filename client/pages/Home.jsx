@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useData } from '../context/DataContext';
 import ProductCard from '../components/ProductCard';
+import { hasCustomProductImage } from '../utils/imageHelper';
 import { getGoogleMapsEmbedUrl } from '../utils/mapUtils';
 import { 
   Flame, 
@@ -117,8 +118,11 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
         { id: 'personal', label: language === 'hi' ? 'व्यक्तिगत देखभाल' : 'Personal Care', icon: "🧴" }
       ];
 
-  // Featured first 4 items list
-  const featuredList = products.slice(0, 4);
+  // Featured first 4 items list (respecting store photo display setting)
+  const candidateProducts = contactSettings?.showOnlyWithPhoto
+    ? products.filter(hasCustomProductImage)
+    : products;
+  const featuredList = candidateProducts.slice(0, 4);
 
   const storeLat = contactSettings?.latitude !== undefined ? Number(contactSettings.latitude) : 28.5708;
   const storeLng = contactSettings?.longitude !== undefined ? Number(contactSettings.longitude) : 77.3259;

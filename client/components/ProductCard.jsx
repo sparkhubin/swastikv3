@@ -149,18 +149,25 @@ export default function ProductCard({ product }) {
                   if (cartQty <= 1) {
                     removeFromCart(product.id, selectedUnit);
                   } else {
-                    updateQuantity(product.id, cartQty - 1, selectedUnit);
+                    updateQuantity(product.id, selectedUnit, -1);
                   }
                 }}
                 className="rounded-lg p-1 text-emerald-700 hover:bg-emerald-200 active:scale-90 transition-all cursor-pointer"
+                title={language === 'hi' ? 'मात्रा कम करें' : 'Decrease quantity'}
               >
                 <Minus className="h-3.5 w-3.5" />
               </button>
-              <span className="font-extrabold text-xs px-2 text-emerald-900">{cartQty}</span>
+              <span className="font-extrabold text-xs px-2 text-emerald-900 font-mono">{cartQty}</span>
               <button
                 type="button"
-                onClick={() => updateQuantity(product.id, cartQty + 1, selectedUnit)}
-                className="rounded-lg p-1 text-emerald-700 hover:bg-emerald-200 active:scale-90 transition-all cursor-pointer"
+                disabled={cartQty >= stockCount}
+                onClick={() => updateQuantity(product.id, selectedUnit, 1)}
+                className={`rounded-lg p-1 transition-all ${
+                  cartQty >= stockCount
+                    ? 'text-slate-300 cursor-not-allowed opacity-40'
+                    : 'text-emerald-700 hover:bg-emerald-200 active:scale-90 cursor-pointer'
+                }`}
+                title={cartQty >= stockCount ? (language === 'hi' ? 'अधिकतम स्टॉक सीमा तक पहुंच चुके हैं' : 'Maximum stock limit reached') : (language === 'hi' ? 'मात्रा बढ़ाएं' : 'Increase quantity')}
               >
                 <Plus className="h-3.5 w-3.5" />
               </button>

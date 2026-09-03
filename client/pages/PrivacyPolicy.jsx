@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useData } from '../context/DataContext';
-import { ShieldCheck, Info, FileText, Lock } from 'lucide-react';
+import { ShieldCheck, Info, FileText, Lock, Trash2, AlertTriangle } from 'lucide-react';
+import DataDeletionModal from '../components/account/DataDeletionModal';
 
 export default function PrivacyPolicy() {
   const { language } = useLanguage();
   const { privacySections, contactSettings } = useData();
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const isHindi = language === 'hi';
 
@@ -57,6 +59,33 @@ export default function PrivacyPolicy() {
         ))}
       </div>
 
+      {/* Data Deletion Request Callout */}
+      <div className="bg-rose-50 border border-rose-200 rounded-3xl p-6 mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+        <div className="space-y-1 max-w-xl">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[10px] font-black uppercase tracking-wider border border-rose-300">
+            <Trash2 className="h-3 w-3" />
+            <span>{isHindi ? "डेटा विलोपन का अधिकार" : "Right to Erasure / GDPR & IT Act"}</span>
+          </div>
+          <h3 className="text-base font-extrabold text-rose-950">
+            {isHindi ? "क्या आप अपना डेटा डिलीट करना चाहते हैं?" : "Want to delete your account & personal data?"}
+          </h3>
+          <p className="text-xs text-rose-800/80 leading-relaxed">
+            {isHindi 
+              ? "आप किसी भी समय अपने व्यक्तिगत रिकॉर्ड, डिलीवरी पते और खाते को हटाने का औपचारिक अनुरोध प्रस्तुत कर सकते हैं।"
+              : "You can exercise your right to request permanent deletion of your profile, address records, and order contact details."}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setIsDeleteModalOpen(true)}
+          className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs font-extrabold uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center gap-2 shrink-0 cursor-pointer"
+        >
+          <Trash2 className="h-4 w-4" />
+          <span>{isHindi ? "डेटा हटाने का अनुरोध भेजें" : "Request Data Deletion"}</span>
+        </button>
+      </div>
+
       <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
         <Info className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
         <p className="text-emerald-900 text-xs leading-relaxed font-medium">
@@ -66,6 +95,12 @@ export default function PrivacyPolicy() {
           }
         </p>
       </div>
+
+      <DataDeletionModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+      />
     </div>
   );
 }
+

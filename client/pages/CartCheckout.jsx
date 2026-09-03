@@ -126,7 +126,7 @@ const CartItemImage = ({ product, r2PublicUrl, className }) => {
 
 export default function CartCheckout({ onViewChange }) {
   const { t, language, isHindi } = useLanguage();
-  const { orders, addOrder, offers, contactSettings, products, referralSettings, locationGroups, celebrationSettings, customers, addCustomer, upsertCustomer, updateCustomer, r2PublicUrl, paymentEnabled, paymentEnvironment } = useData();
+  const { orders, addOrder, offers, contactSettings, products, setProducts, referralSettings, locationGroups, celebrationSettings, customers, addCustomer, upsertCustomer, updateCustomer, r2PublicUrl, paymentEnabled, paymentEnvironment } = useData();
 
   const {
     cartItems,
@@ -565,12 +565,13 @@ export default function CartCheckout({ onViewChange }) {
     setAuthGateSuccess(language === 'hi' ? "खाता सफलतापूर्वक तैयार हुआ! आपका स्वागत है।" : "Account created successfully! You can now complete your order.");
   };
 
-  // Force default to COD if payment gateway is dynamically disabled
+  // Force default to COD only if all payment gateways are dynamically disabled
   useEffect(() => {
-    if (paymentEnabled === false && paymentMethod !== 'cod') {
+    const hasOnline = gatewaySettings?.razorpayEnabled || gatewaySettings?.cashfreeEnabled || paymentEnabled;
+    if (!hasOnline && paymentMethod !== 'cod') {
       setPaymentMethod('cod');
     }
-  }, [paymentEnabled, paymentMethod, setPaymentMethod]);
+  }, [paymentEnabled, gatewaySettings?.razorpayEnabled, gatewaySettings?.cashfreeEnabled, paymentMethod, setPaymentMethod]);
 
   const [redeemPointsChecked, setRedeemPointsChecked] = useState(false);
   const [appliedPoints, setAppliedPoints] = useState(0);
@@ -905,6 +906,21 @@ export default function CartCheckout({ onViewChange }) {
         });
       }
     }
+
+    // Deduct purchased quantities from frontend products state immediately
+    if (Array.isArray(cartItems) && cartItems.length > 0 && typeof setProducts === 'function') {
+      setProducts(prevProducts => {
+        return prevProducts.map(p => {
+          const matchedItem = cartItems.find(ci => ci.product?.id === p.id);
+          if (matchedItem) {
+            const currentStock = p.stockCount !== undefined ? Number(p.stockCount) : (p.stock !== undefined ? Number(p.stock) : 100);
+            const newStock = Math.max(0, currentStock - matchedItem.quantity);
+            return { ...p, stockCount: newStock, stock: newStock };
+          }
+          return p;
+        });
+      });
+    }
   };
 
   const handlePlaceOrder = async () => {
@@ -991,12 +1007,48 @@ export default function CartCheckout({ onViewChange }) {
     // Verify each cart item against dynamic products inventory stock counts
     for (const item of cartItems) {
       const dbProduct = products?.find(p => p.id === item.product.id) || item.product;
-      const maxStock = dbProduct.stockCount !== undefined ? dbProduct.stockCount : 100;
+      const maxStock = dbProduct.stockCount !== undefined ? Number(dbProduct.stockCount) : (dbProduct.stock !== undefined ? Number(dbProduct.stock) : 100);
+      const prodName = language === 'hi' ? (dbProduct.nameHi || dbProduct.nameEn || dbProduct.name) : (dbProduct.nameEn || dbProduct.name);
+
+      if (maxStock <= 0) {
+        const msg = language === 'hi'
+          ? `"${prodName}" वर्तमान में आउट ऑफ स्टॉक है! कृपया ऑर्डर देने से पहले इसे अपनी कार्ट से हटाएं।`
+          : `"${prodName}" is currently out of stock! Please remove it from your cart before placing your order.`;
+        alert(msg);
+        setCheckoutError(msg);
+        return;
+      }
+
       if (item.quantity > maxStock) {
-        const prodName = language === 'hi' ? dbProduct.nameHi : dbProduct.nameEn;
         const msg = language === 'hi'
           ? `पर्याप्त स्टॉक नहीं है! "${prodName}" के केवल ${maxStock} पैकेट स्टॉक में उपलब्ध हैं, लेकिन आपने ${item.quantity} का अनुरोध किया है।`
           : `Insufficient stock! Only ${maxStock} units of "${prodName}" are available, but you requested ${item.quantity}.`;
+        alert(msg);
+        setCheckoutError(msg);
+        return;
+      }
+    }
+
+    // Re-verify applied coupon before placing order
+    if (appliedCoupon) {
+      if (appliedCoupon.minOrder && subtotal < Number(appliedCoupon.minOrder)) {
+        const msg = language === 'hi'
+          ? `कूपन '${appliedCoupon.code}' के लिए न्यूनतम ₹${appliedCoupon.minOrder} का ऑर्डर आवश्यक है!`
+          : `Coupon '${appliedCoupon.code}' requires a minimum order of ₹${appliedCoupon.minOrder}!`;
+        alert(msg);
+        setCheckoutError(msg);
+        return;
+      }
+      const dateStatus = getCouponDateStatus(appliedCoupon);
+      if (!dateStatus.isValid) {
+        const msg = language === 'hi' ? dateStatus.reasonHi : dateStatus.reasonEn;
+        alert(msg);
+        setCheckoutError(msg);
+        return;
+      }
+      const limitStatus = checkCouponCustomerLimit(appliedCoupon);
+      if (limitStatus.isLimitReached) {
+        const msg = language === 'hi' ? limitStatus.reasonHi : limitStatus.reasonEn;
         alert(msg);
         setCheckoutError(msg);
         return;
@@ -1492,9 +1544,10 @@ export default function CartCheckout({ onViewChange }) {
               <div className="space-y-3">
                 {cartItems.map((item, idx) => {
                   const dbProduct = products?.find(p => p.id === item.product.id) || item.product;
-                  const maxStock = dbProduct.stockCount !== undefined ? dbProduct.stockCount : 100;
-                  const hasStockIssue = item.quantity > maxStock;
-                  const name = language === 'hi' ? item.product.nameHi : item.product.nameEn;
+                  const maxStock = dbProduct.stockCount !== undefined ? Number(dbProduct.stockCount) : (dbProduct.stock !== undefined ? Number(dbProduct.stock) : 100);
+                  const isOutOfStock = maxStock <= 0;
+                  const hasStockIssue = isOutOfStock || item.quantity > maxStock;
+                  const name = language === 'hi' ? (item.product.nameHi || item.product.nameEn || item.product.name) : (item.product.nameEn || item.product.name);
                   const pack = item.selectedUnit || (language === 'hi' ? (item.product.packHi || t('packOf5')) : (item.product.packEn || t('packOf5')));
                   
                   return (
@@ -1502,7 +1555,7 @@ export default function CartCheckout({ onViewChange }) {
                       key={`${item.product.id}-${item.selectedUnit || idx}`}
                       className={`border p-4 flex gap-4 rounded-xl shadow-xs transition-all ${
                         hasStockIssue
-                          ? 'border-red-300 bg-red-50'
+                          ? 'border-red-300 bg-red-50/90'
                           : 'bg-white border-slate-200 hover:border-slate-300'
                       }`}
                     >
@@ -1527,12 +1580,14 @@ export default function CartCheckout({ onViewChange }) {
                             {hasStockIssue && (
                               <div className="mt-1 flex flex-col gap-1 items-start">
                                 <span className="px-1.5 py-0.5 rounded text-[8.5px] bg-red-100 text-red-700 font-extrabold uppercase tracking-wide border border-red-200">
-                                  {language === 'hi' ? 'अपर्याप्त स्टॉक!' : 'INSUFFICIENT STOCK!'}
+                                  {isOutOfStock ? (language === 'hi' ? 'आउट ऑफ स्टॉक!' : 'OUT OF STOCK!') : (language === 'hi' ? 'अपर्याप्त स्टॉक!' : 'INSUFFICIENT STOCK!')}
                                 </span>
                                 <p className="text-[10px] text-red-700 font-bold leading-normal bg-red-50 p-1.5 rounded border border-red-200">
-                                  {language === 'hi' 
-                                    ? `केवल ${maxStock} इकाइयाँ उपलब्ध हैं। कृपया कार्ट की मात्रा समायोजित करें।` 
-                                    : `Only ${maxStock} units available. Please adjust your cart quantity.`}
+                                  {isOutOfStock 
+                                    ? (language === 'hi' ? 'यह आइटम स्टॉक में नहीं है। कृपया इसे हटाएं।' : 'This item is out of stock. Please remove it to proceed.')
+                                    : (language === 'hi' 
+                                      ? `केवल ${maxStock} इकाइयाँ उपलब्ध हैं। कृपया कार्ट की मात्रा समायोजित करें।` 
+                                      : `Only ${maxStock} units available. Please adjust your cart quantity.`)}
                                 </p>
                               </div>
                             )}
@@ -1544,7 +1599,8 @@ export default function CartCheckout({ onViewChange }) {
                           <div className="flex items-center border border-slate-300 rounded-lg overflow-hidden bg-slate-50">
                             <button 
                               onClick={() => updateQuantity(item.product.id, item.selectedUnit, -1)}
-                              className="px-3 py-1 font-bold text-slate-700 hover:bg-slate-200 active:scale-90 transition-all font-mono text-sm"
+                              className="px-3 py-1 font-bold text-slate-700 hover:bg-slate-200 active:scale-90 transition-all font-mono text-sm cursor-pointer"
+                              title={language === 'hi' ? 'मात्रा घटाएं' : 'Decrease quantity'}
                             >
                               -
                             </button>
@@ -1552,8 +1608,14 @@ export default function CartCheckout({ onViewChange }) {
                               {item.quantity}
                             </span>
                             <button 
+                              disabled={item.quantity >= maxStock}
                               onClick={() => updateQuantity(item.product.id, item.selectedUnit, 1)}
-                              className="px-3 py-1 font-bold text-slate-700 hover:bg-slate-200 active:scale-90 transition-all font-mono text-sm"
+                              className={`px-3 py-1 font-bold font-mono text-sm transition-all ${
+                                item.quantity >= maxStock
+                                  ? 'text-slate-300 bg-slate-100 cursor-not-allowed opacity-40'
+                                  : 'text-slate-700 hover:bg-slate-200 active:scale-90 cursor-pointer'
+                              }`}
+                              title={item.quantity >= maxStock ? (language === 'hi' ? 'अधिकतम स्टॉक सीमा तक पहुंच चुके हैं' : 'Maximum stock limit reached') : (language === 'hi' ? 'मात्रा बढ़ाएं' : 'Increase quantity')}
                             >
                               +
                             </button>
@@ -1568,7 +1630,8 @@ export default function CartCheckout({ onViewChange }) {
 
                       <button 
                         onClick={() => removeFromCart(item.product.id, item.selectedUnit)}
-                        className="text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 p-2 rounded-lg transition-all h-fit shrink-0 self-start active:scale-90"
+                        className="text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 p-2 rounded-lg transition-all h-fit shrink-0 self-start active:scale-90 cursor-pointer"
+                        title={language === 'hi' ? 'कार्ट से निकालें' : 'Remove from cart'}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -2369,6 +2432,22 @@ export default function CartCheckout({ onViewChange }) {
                   </p>
                 </div>
               </div>
+
+              {/* Stock Issue Banner */}
+              {cartItems.some(item => {
+                const dbProduct = products?.find(p => p.id === item.product.id) || item.product;
+                const maxStock = dbProduct.stockCount !== undefined ? Number(dbProduct.stockCount) : (dbProduct.stock !== undefined ? Number(dbProduct.stock) : 100);
+                return maxStock <= 0 || item.quantity > maxStock;
+              }) && (
+                <div className="p-3 bg-red-50 border border-red-300 rounded-xl text-red-800 text-xs font-bold flex items-center gap-2 shadow-xs">
+                  <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
+                  <span>
+                    {language === 'hi' 
+                      ? 'आपकी कार्ट में कुछ उत्पादों में स्टॉक समस्या है। कृपया ऑर्डर देने से पहले मात्रा ठीक करें या हटाएं।'
+                      : 'Some items in your cart exceed available stock. Please adjust quantities or remove out-of-stock items before placing your order.'}
+                  </span>
+                </div>
+              )}
 
               {/* Checkout Error Banner */}
               {checkoutError && (

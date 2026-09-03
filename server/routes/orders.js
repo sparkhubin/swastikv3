@@ -34,27 +34,82 @@ router.get("/orders/:id", async (req, res) => {
 router.post("/orders", async (req, res) => {
   try {
     const o = req.body;
-    let targetOrderId = o.id ? Number(o.id) : Math.floor(1000 + Math.random() * 9000);
-
-    // Check if ID exists, generate new if needed
-    if (!o.id) {
-      const checkExists = await db.query('SELECT id FROM "order" WHERE id = ?', [targetOrderId]);
-      if (checkExists.length > 0) {
-        targetOrderId = Math.floor(10000 + Math.random() * 90000);
-      }
+    let targetOrderId = o.id ? String(o.id).trim() : `SW-${Math.floor(1000 + Math.random() * 9000)}`;
+    if (!targetOrderId || targetOrderId === "null" || targetOrderId === "undefined" || targetOrderId === "NaN") {
+      targetOrderId = `SW-${Math.floor(1000 + Math.random() * 9000)}`;
     }
 
-    await db.execute(
-      `INSERT INTO "order" (
-        id, user_id, order_date, is_active, step_level, status_label, 
-        subtotal, delivery_fee, gst_amount, grand_total, 
-        delivery_partner_name, delivery_partner_phone, dispatch_hub, 
-        eta_status, shipping_address, customer_name, customer_phone, customer_email,
-        is_marg_bill, points_earned, pdf_url,
-        referral_discount, applied_points, coupon_discount, coupon_code,
-        celebration_discount, celebration_offer_name, payment_method, payment_status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
+    const checkExists = await db.query('SELECT id FROM "order" WHERE id = ?', [targetOrderId]);
+    if (checkExists.length > 0) {
+      // Order already exists -> Update record (idempotent for payment verifications & retries)
+      const updateOrderSql = `UPDATE "order" SET 
+          user_id = ?, order_date = ?, is_active = ?, step_level = ?, status_label = ?, 
+          subtotal = ?, delivery_fee = ?, gst_amount = ?, total = ?, grand_total = ?, 
+          delivery_partner_name = ?, delivery_partner_phone = ?, dispatch_hub = ?, 
+          eta_status = ?, shipping_address = ?, customer_name = ?, customer_phone = ?, customer_email = ?,
+          is_marg_bill = ?, points_earned = ?, pdf_url = ?,
+          referral_discount = ?, applied_points = ?, coupon_discount = ?, coupon_code = ?,
+          celebration_discount = ?, celebration_offer_name = ?, payment_method = ?, payment_status = ?,
+          updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?`;
+
+      const updateParams = [
+        o.userId || null,
+        o.orderDate || new Date().toISOString(),
+        o.isActive !== undefined ? (o.isActive ? 1 : 0) : 1,
+        o.step !== undefined ? o.step : 0,
+        o.status || o.status_label || "Placed",
+        o.subtotal || 0,
+        o.deliveryFee || 0,
+        o.gst || o.gst_amount || 0,
+        o.total || o.grandTotal || o.grand_total || 0,
+        o.total || o.grandTotal || o.grand_total || 0,
+        o.deliveryPartnerName || "",
+        o.deliveryPartnerPhone || "",
+        o.hubName || o.dispatch_hub || "",
+        o.eta || o.eta_status || "",
+        o.shippingAddress || "",
+        o.customerName || "Simulated Customer",
+        o.customerPhone || "+91 99999 99999",
+        o.customerEmail || "",
+        o.isMargBill !== undefined ? (o.isMargBill ? 1 : 0) : 0,
+        o.pointsEarned || 0,
+        o.pdfUrl || "",
+        o.referralDiscount || 0,
+        o.appliedPoints || 0,
+        o.couponDiscount || 0,
+        o.couponCode || "",
+        o.celebrationDiscount || 0,
+        o.celebrationOfferName || "",
+        o.paymentMethod || "COD",
+        o.paymentStatus || "UNPAID",
+        targetOrderId
+      ];
+
+      try {
+        await db.execute(updateOrderSql, updateParams);
+      } catch (uErr) {
+        if (uErr && uErr.message && (uErr.message.includes("no column named") || uErr.message.includes("Unknown column"))) {
+          await db.migrateSchema();
+          await db.execute(updateOrderSql, updateParams);
+        } else {
+          throw uErr;
+        }
+      }
+
+      await db.execute('DELETE FROM order_item WHERE order_id = ?', [targetOrderId]);
+    } else {
+      const insertOrderSql = `INSERT INTO "order" (
+          id, user_id, order_date, is_active, step_level, status_label, 
+          subtotal, delivery_fee, gst_amount, total, grand_total, 
+          delivery_partner_name, delivery_partner_phone, dispatch_hub, 
+          eta_status, shipping_address, customer_name, customer_phone, customer_email,
+          is_marg_bill, points_earned, pdf_url,
+          referral_discount, applied_points, coupon_discount, coupon_code,
+          celebration_discount, celebration_offer_name, payment_method, payment_status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+      const insertParams = [
         targetOrderId,
         o.userId || null,
         o.orderDate || new Date().toISOString(),
@@ -64,6 +119,7 @@ router.post("/orders", async (req, res) => {
         o.subtotal || 0,
         o.deliveryFee || 0,
         o.gst || o.gst_amount || 0,
+        o.total || o.grandTotal || o.grand_total || 0,
         o.total || o.grandTotal || o.grand_total || 0,
         o.deliveryPartnerName || "",
         o.deliveryPartnerPhone || "",
@@ -84,25 +140,54 @@ router.post("/orders", async (req, res) => {
         o.celebrationOfferName || "",
         o.paymentMethod || "COD",
         o.paymentStatus || "UNPAID"
-      ]
-    );
+      ];
+
+      try {
+        await db.execute(insertOrderSql, insertParams);
+      } catch (insertErr) {
+        if (insertErr && insertErr.message && (insertErr.message.includes("no column named") || insertErr.message.includes("Unknown column"))) {
+          console.warn("Missing column detected during order insert, auto-migrating schema...", insertErr.message);
+          await db.migrateSchema();
+          await db.execute(insertOrderSql, insertParams);
+        } else {
+          throw insertErr;
+        }
+      }
+    }
 
     if (Array.isArray(o.items)) {
       for (const item of o.items) {
+        const prodId = Number(item.productId || item.id || 0);
+        const qtyOrdered = Number(item.quantity || item.qty || 1);
+
         await db.execute(
           `INSERT INTO order_item (
             order_id, product_id, name_en, name_hi, price, qty, weight_label
           ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [
             targetOrderId,
-            item.productId || item.id || 0,
+            prodId,
             item.nameEn || item.name || "",
             item.nameHi || item.name || "",
             item.price || 0,
-            item.quantity || item.qty || 1,
+            qtyOrdered,
             item.weight || item.weight_label || item.unit || "N/A"
           ]
         );
+
+        // Deduct inventory stock for the ordered product
+        if (prodId > 0) {
+          try {
+            await db.execute(
+              `UPDATE product 
+               SET stock_count = CASE WHEN stock_count - ? < 0 THEN 0 ELSE stock_count - ? END 
+               WHERE id = ?`,
+              [qtyOrdered, qtyOrdered, prodId]
+            );
+          } catch (stkErr) {
+            console.warn(`Could not update stock count for product ${prodId}:`, stkErr.message);
+          }
+        }
       }
     }
 
@@ -119,9 +204,9 @@ router.post("/orders", async (req, res) => {
         `INSERT INTO notification (recipient_role, recipient_phone, order_id, title_en, title_hi, message_en, message_hi, type, is_read)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
         [
-          "admin", "", o.id,
-          `🛒 New Order Received! (#${o.id})`,
-          `🛒 नया ऑर्डर प्राप्त हुआ! (#${o.id})`,
+          "admin", "", targetOrderId,
+          `🛒 New Order Received! (#${targetOrderId})`,
+          `🛒 नया ऑर्डर प्राप्त हुआ! (#${targetOrderId})`,
           `New order of ₹${orderTotal} received from ${custName}. Payment: ${o.paymentMethod || 'COD'}.`,
           `${custName} से ₹${orderTotal} का नया ऑर्डर प्राप्त हुआ। भुगतान: ${o.paymentMethod || 'COD'}।`,
           "new_order"
@@ -134,9 +219,9 @@ router.post("/orders", async (req, res) => {
           `INSERT INTO notification (recipient_role, recipient_phone, order_id, title_en, title_hi, message_en, message_hi, type, is_read)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
           [
-            "customer", o.customerPhone, o.id,
-            `🎉 Order Confirmed! (#${o.id})`,
-            `🎉 ऑर्डर कन्फर्म! (#${o.id})`,
+            "customer", o.customerPhone, targetOrderId,
+            `🎉 Order Confirmed! (#${targetOrderId})`,
+            `🎉 ऑर्डर कन्फर्म! (#${targetOrderId})`,
             `Thank you for your order of ₹${orderTotal}! Your grocery items are being packed.`,
             `₹${orderTotal} का ऑर्डर देने के लिए धन्यवाद! आपका सामान तैयार किया जा रहा है।`,
             "new_order"
@@ -149,9 +234,9 @@ router.post("/orders", async (req, res) => {
         `INSERT INTO notification (recipient_role, recipient_phone, order_id, title_en, title_hi, message_en, message_hi, type, is_read)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
         [
-          "delivery", "", o.id,
-          `🛵 New Delivery Available (#${o.id})`,
-          `🛵 नया डिलीवरी कार्य उपलब्ध (#${o.id})`,
+          "delivery", "", targetOrderId,
+          `🛵 New Delivery Available (#${targetOrderId})`,
+          `🛵 नया डिलीवरी कार्य उपलब्ध (#${targetOrderId})`,
           `New order available for pickup/delivery at ${address} for ${custName} (₹${orderTotal}).`,
           `${custName} के लिए ${address} पर नया डिलीवरी कार्य उपलब्ध (₹${orderTotal})।`,
           "new_order"
@@ -190,11 +275,11 @@ router.post("/orders", async (req, res) => {
         waPromises.push(
           sendWhatsappMessageUnified(
             custPhone,
-            `🎉 *Order Placed Successfully!* (#${o.id})\n\nDear ${custName},\nThank you for shopping at Swastik Supermarket! Your order of *₹${orderTotal}* has been confirmed and is being packed.\n\n📍 *Address:* ${o.shippingAddress || 'N/A'}\n💳 *Payment:* ${o.paymentMethod || 'COD'}\n\nWe will update you as soon as your rider is dispatched! 🚚`,
+            `🎉 *Order Placed Successfully!* (#${targetOrderId})\n\nDear ${custName},\nThank you for shopping at Swastik Supermarket! Your order of *₹${orderTotal}* has been confirmed and is being packed.\n\n📍 *Address:* ${o.shippingAddress || 'N/A'}\n💳 *Payment:* ${o.paymentMethod || 'COD'}\n\nWe will update you as soon as your rider is dispatched! 🚚`,
             false,
             undefined,
             "thank_you_template",
-            [custName, String(o.id), String(orderTotal)]
+            [custName, String(targetOrderId), String(orderTotal)]
           )
         );
       }
@@ -204,7 +289,7 @@ router.post("/orders", async (req, res) => {
         waPromises.push(
           sendWhatsappMessageUnified(
             adminPhone,
-            `🚨 *NEW ORDER ALERT!* (#${o.id})\n\nCustomer: ${custName} (${custPhone || 'N/A'})\nTotal Bill: *₹${orderTotal}*\nPayment Method: ${o.paymentMethod || 'COD'}\nAddress: ${o.shippingAddress || 'Store Pickup'}\n\nPlease review and prepare items in Admin Dashboard.`,
+            `🚨 *NEW ORDER ALERT!* (#${targetOrderId})\n\nCustomer: ${custName} (${custPhone || 'N/A'})\nTotal Bill: *₹${orderTotal}*\nPayment Method: ${o.paymentMethod || 'COD'}\nAddress: ${o.shippingAddress || 'Store Pickup'}\n\nPlease review and prepare items in Admin Dashboard.`,
             false
           )
         );
@@ -215,7 +300,7 @@ router.post("/orders", async (req, res) => {
         waPromises.push(
           sendWhatsappMessageUnified(
             deliveryPartnerPhone,
-            `🛵 *NEW DELIVERY ASSIGNMENT* (#${o.id})\n\nCustomer: ${custName} (${custPhone || 'N/A'})\nDelivery Address: ${o.shippingAddress || 'Store Pickup'}\nAmount to Collect: *₹${orderTotal}* (${o.paymentMethod || 'COD'})\n\nPlease be ready for pickup from dispatch hub.`,
+            `🛵 *NEW DELIVERY ASSIGNMENT* (#${targetOrderId})\n\nCustomer: ${custName} (${custPhone || 'N/A'})\nDelivery Address: ${o.shippingAddress || 'Store Pickup'}\nAmount to Collect: *₹${orderTotal}* (${o.paymentMethod || 'COD'})\n\nPlease be ready for pickup from dispatch hub.`,
             false
           )
         );
@@ -227,7 +312,7 @@ router.post("/orders", async (req, res) => {
       console.error("[WhatsApp Dispatch Error]:", waErr.message);
     }
 
-    res.status(201).json(await mapOrder(rows[0]));
+    res.status(201).json(rows.length > 0 ? await mapOrder(rows[0]) : { ...o, id: targetOrderId });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

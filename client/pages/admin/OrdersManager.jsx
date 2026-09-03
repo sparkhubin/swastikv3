@@ -522,9 +522,13 @@ export default function OrdersManager({ userRole }) {
     const matchesDate = isWithinDateRange(o.orderDate || o.date || new Date().toISOString());
 
     // 4. Payment Mode Match
+    const pm = (o.paymentMethod || 'COD').toUpperCase();
+    const isOnlineOrder = pm.includes('ONLINE') || pm.includes('RAZORPAY') || pm.includes('CASHFREE') || pm === 'CARD' || pm === 'UPI' || pm === 'NETBANKING';
     const matchesPaymentMode = filterPaymentMode === 'All' ||
-      (filterPaymentMode === 'COD' && o.paymentMethod === 'COD') ||
-      (filterPaymentMode === 'CASHFREE_ONLINE' && (o.paymentMethod === 'CASHFREE_ONLINE' || o.paymentMethod === 'ONLINE'));
+      (filterPaymentMode === 'COD' && (pm === 'COD' || !o.paymentMethod)) ||
+      (filterPaymentMode === 'ONLINE' && isOnlineOrder) ||
+      (filterPaymentMode === 'RAZORPAY_ONLINE' && (pm === 'RAZORPAY_ONLINE' || pm.includes('RAZORPAY'))) ||
+      (filterPaymentMode === 'CASHFREE_ONLINE' && (pm === 'CASHFREE_ONLINE' || pm.includes('CASHFREE')));
 
     // 5. Delivery Person Match
     const matchesDeliveryPerson = filterDeliveryPerson === 'All' ||
@@ -1114,7 +1118,9 @@ export default function OrdersManager({ userRole }) {
                 {[
                   { key: 'All', label: 'All Modes' },
                   { key: 'COD', label: 'COD' },
-                  { key: 'CASHFREE_ONLINE', label: 'Cashfree Sandbox PG' }
+                  { key: 'ONLINE', label: 'All Online PG' },
+                  { key: 'RAZORPAY_ONLINE', label: 'Razorpay PG' },
+                  { key: 'CASHFREE_ONLINE', label: 'Cashfree PG' }
                 ].map((pm) => (
                   <button
                     key={pm.key}
@@ -1202,7 +1208,7 @@ export default function OrdersManager({ userRole }) {
                       <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1.5 mt-1 flex-wrap select-none">
                         <span>{clientPhone}</span>
                         <span className={`px-1 rounded text-[8px] font-mono uppercase tracking-wider font-extrabold border ${
-                          (o.paymentMethod || 'COD').toUpperCase() === 'CASHFREE_ONLINE' || (o.paymentMethod || 'COD').toUpperCase() === 'CARD' || (o.paymentMethod || 'COD').toUpperCase() === 'UPI' || (o.paymentMethod || 'COD').toUpperCase() === 'NETBANKING'
+                          (o.paymentMethod || 'COD').toUpperCase().includes('ONLINE') || (o.paymentMethod || 'COD').toUpperCase().includes('RAZORPAY') || (o.paymentMethod || 'COD').toUpperCase().includes('CASHFREE') || (o.paymentMethod || 'COD').toUpperCase() === 'CARD' || (o.paymentMethod || 'COD').toUpperCase() === 'UPI' || (o.paymentMethod || 'COD').toUpperCase() === 'NETBANKING'
                             ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' 
                             : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                         }`}>

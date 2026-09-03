@@ -78,7 +78,8 @@ export default function PagesManager({ userRole }) {
     deliveryChargeMedium: contactSettings?.deliveryChargeMedium !== undefined ? contactSettings.deliveryChargeMedium : 25,
     deliveryChargeFar: contactSettings?.deliveryChargeFar !== undefined ? contactSettings.deliveryChargeFar : 45,
     deliveryChargeOutlier: contactSettings?.deliveryChargeOutlier !== undefined ? contactSettings.deliveryChargeOutlier : 75,
-    freeDeliveryMinAmount: contactSettings?.freeDeliveryMinAmount !== undefined ? contactSettings.freeDeliveryMinAmount : 500
+    freeDeliveryMinAmount: contactSettings?.freeDeliveryMinAmount !== undefined ? contactSettings.freeDeliveryMinAmount : 500,
+    showOnlyWithPhoto: Boolean(contactSettings?.showOnlyWithPhoto)
   });
 
   // Synchronize Biography and Coordinates settings from Context to state forms on load or context updates
@@ -113,7 +114,8 @@ export default function PagesManager({ userRole }) {
         deliveryChargeMedium: contactSettings.deliveryChargeMedium !== undefined ? contactSettings.deliveryChargeMedium : 25,
         deliveryChargeFar: contactSettings.deliveryChargeFar !== undefined ? contactSettings.deliveryChargeFar : 45,
         deliveryChargeOutlier: contactSettings.deliveryChargeOutlier !== undefined ? contactSettings.deliveryChargeOutlier : 75,
-        freeDeliveryMinAmount: contactSettings.freeDeliveryMinAmount !== undefined ? contactSettings.freeDeliveryMinAmount : 500
+        freeDeliveryMinAmount: contactSettings.freeDeliveryMinAmount !== undefined ? contactSettings.freeDeliveryMinAmount : 500,
+        showOnlyWithPhoto: Boolean(contactSettings.showOnlyWithPhoto)
       });
     }
   }, [contactSettings]);
@@ -738,6 +740,76 @@ export default function PagesManager({ userRole }) {
                   <span className="text-[8.5px] text-slate-500 mt-1 block">
                     {isHindi ? "फ्री डिलीवरी सेटिंग बंद करने के लिए 0 सेट करें।" : "Set to 0 to disable automatic free shipping triggers."}
                   </span>
+                </div>
+
+                {/* Flag to show on website with photo or all products */}
+                <div className="sm:col-span-2 bg-slate-950/80 p-4 rounded-2xl border border-cyan-500/20 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[10px] font-black uppercase text-cyan-300 tracking-wider flex items-center gap-1.5">
+                      <span>📸 {isHindi ? "वेबसाइट कैटलॉग उत्पाद प्रदर्शन (फ़िल्टर फ़्लैग)" : "Customer Website Catalog Display Flag"}</span>
+                    </label>
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+                      coordsForm.showOnlyWithPhoto
+                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
+                        : 'bg-slate-800 text-slate-300 border-white/10'
+                    }`}>
+                      {coordsForm.showOnlyWithPhoto ? (isHindi ? "केवल फोटो वाले उत्पाद" : "With Photo Only") : (isHindi ? "सभी उत्पाद" : "All Products")}
+                    </span>
+                  </div>
+
+                  <p className="text-[10px] text-slate-400 leading-relaxed">
+                    {isHindi
+                      ? "चुनें कि क्या ग्राहक वेबसाइट और स्टोरफ्रंट पर केवल वही उत्पाद दिखाई दें जिनकी वास्तविक फोटो उपलब्ध है, या बिना फोटो वाले सभी उत्पाद भी दिखाई दें।"
+                      : "Choose whether customers only see products with actual photos/images uploaded on the public storefront, or display all inventory items."}
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setCoordsForm({ ...coordsForm, showOnlyWithPhoto: false })}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                        !coordsForm.showOnlyWithPhoto
+                          ? 'bg-cyan-500/10 border-cyan-400 text-white shadow-md shadow-cyan-500/10'
+                          : 'bg-slate-900 border-white/5 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <span>📦</span>
+                          <span>{isHindi ? "सभी उत्पाद (All Items)" : "All Products"}</span>
+                        </span>
+                        {!coordsForm.showOnlyWithPhoto && (
+                          <span className="text-[9px] bg-cyan-400 text-slate-950 font-black px-1.5 py-0.5 rounded">ACTIVE</span>
+                        )}
+                      </div>
+                      <p className="text-[9.5px] text-slate-400 leading-normal">
+                        {isHindi ? "कैटलॉग के सभी उत्पाद दिखाएं (बिना फोटो वाले भी)।" : "Show all products on website including ones with placeholder graphics."}
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCoordsForm({ ...coordsForm, showOnlyWithPhoto: true })}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                        coordsForm.showOnlyWithPhoto
+                          ? 'bg-cyan-500/10 border-cyan-400 text-white shadow-md shadow-cyan-500/10'
+                          : 'bg-slate-900 border-white/5 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <span>📸</span>
+                          <span>{isHindi ? "केवल फोटो वाले (Photo Only)" : "With Photo Only"}</span>
+                        </span>
+                        {coordsForm.showOnlyWithPhoto && (
+                          <span className="text-[9px] bg-cyan-400 text-slate-950 font-black px-1.5 py-0.5 rounded">ACTIVE</span>
+                        )}
+                      </div>
+                      <p className="text-[9.5px] text-slate-400 leading-normal">
+                        {isHindi ? "केवल वास्तविक फोटो वाले उत्पाद ही ग्राहकों को दिखेंगे।" : "Only show products that have a custom photo/image assigned."}
+                      </p>
+                    </button>
+                  </div>
                 </div>
               </div>
 
