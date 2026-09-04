@@ -1071,9 +1071,9 @@ export default function Account({ onViewChange }) {
       console.warn("Falling back to local client simulation wrapper:", e);
     }
     setSimulatedOtp(realWaCode);
-    alert(isHindi 
-      ? `🔑 [स्वास्तिक सुरक्षा ओटीपी]: व्हाट्सएप पर भेजा गया कोड: ${realWaCode}` 
-      : `🔑 [Swastik Security OTP]: WhatsApp Code Sent: ${realWaCode}`
+    setAuthSuccess(isHindi 
+      ? "सुरक्षा ओटीपी कोड आपके व्हाट्सएप नंबर पर भेज दिया गया है।" 
+      : "Security OTP code has been dispatched to your WhatsApp number."
     );
   };
 

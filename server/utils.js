@@ -315,8 +315,9 @@ export let fallbackOrders = [
     deliveryFee: 40,
     gst: 63,
     total: 453,
-    deliveryPartnerName: "Arun Dev",
-    deliveryPartnerPhone: "+91 91288 34321",
+    deliveryStaffId: 4,
+    deliveryPartnerName: "Suresh Mehra",
+    deliveryPartnerPhone: "+91 98111 22334",
     hubName: "Alpha Hub, Sector 12",
     eta: "Delivered",
     shippingAddress: "Preet Vihar Road, New Delhi",
@@ -411,9 +412,70 @@ export async function mapOrder(o) {
 
   const finalTotal = Number(o.grand_total || 0) > 0 ? Number(o.grand_total) : (computedTotal > 0 ? computedTotal : (computedSubtotal > 0 ? computedSubtotal : 350));
 
+  let dynamicUserId = o.customer_id ? Number(o.customer_id) : (o.user_id ? Number(o.user_id) : (o.rel_customer_id ? Number(o.rel_customer_id) : null));
+  let dynamicCustName = o.rel_customer_name || o.customer_name;
+  let dynamicCustPhone = o.rel_customer_phone || o.customer_phone;
+  let dynamicCustEmail = o.rel_customer_email || o.customer_email || "";
+
+  // Dynamic Relational ID Mapping: Look up real customer name from customer table
+  try {
+    let matchedCust = null;
+    if (dynamicUserId) {
+      const custRows = await db.query("SELECT * FROM customer WHERE id = ?", [dynamicUserId]);
+      if (custRows && custRows.length > 0) matchedCust = custRows[0];
+    }
+    if (!matchedCust && dynamicCustPhone) {
+      const cleanP = String(dynamicCustPhone).replace(/\D/g, "").slice(-10);
+      if (cleanP) {
+        const custRows = await db.query(
+          "SELECT * FROM customer WHERE REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '+', '') LIKE ? OR phone = ? LIMIT 1",
+          [`%${cleanP}%`, dynamicCustPhone]
+        );
+        if (custRows && custRows.length > 0) matchedCust = custRows[0];
+      }
+    }
+    if (matchedCust) {
+      dynamicUserId = Number(matchedCust.id);
+      dynamicCustName = matchedCust.name;
+      dynamicCustPhone = matchedCust.phone || dynamicCustPhone;
+      dynamicCustEmail = matchedCust.email || dynamicCustEmail;
+    }
+  } catch (lookupErr) {}
+
+  let dynamicRiderId = o.delivery_staff_id ? Number(o.delivery_staff_id) : (o.rel_rider_id ? Number(o.rel_rider_id) : (o.rel_staff_id ? Number(o.rel_staff_id) : null));
+  let dynamicRiderName = o.rel_rider_name || o.rel_staff_name || o.delivery_partner_name || "";
+  let dynamicRiderPhone = o.rel_rider_phone || o.rel_staff_phone || o.delivery_partner_phone || "";
+
+  // Dynamic Relational Staff/Rider Lookup from user table
+  try {
+    let matchedRider = null;
+    if (dynamicRiderId) {
+      const riderRows = await db.query('SELECT * FROM "user" WHERE id = ?', [dynamicRiderId]);
+      if (riderRows && riderRows.length > 0) matchedRider = riderRows[0];
+    }
+    if (!matchedRider && dynamicRiderName && !dynamicRiderName.toLowerCase().includes('arun dev')) {
+      const riderRows = await db.query('SELECT * FROM "user" WHERE LOWER(full_name) = ? OR LOWER(full_name) LIKE ? LIMIT 1', [dynamicRiderName.toLowerCase(), `%${dynamicRiderName.toLowerCase()}%`]);
+      if (riderRows && riderRows.length > 0) matchedRider = riderRows[0];
+    }
+    if (matchedRider) {
+      dynamicRiderId = Number(matchedRider.id);
+      dynamicRiderName = matchedRider.full_name;
+      dynamicRiderPhone = matchedRider.phone_number;
+    }
+  } catch (rErr) {}
+
+  // Fallback: If invalid rider name like Arun Dev, remap to registered rider
+  if (dynamicRiderName && dynamicRiderName.toLowerCase().includes('arun dev')) {
+    dynamicRiderId = 4;
+    dynamicRiderName = "Suresh Mehra";
+    dynamicRiderPhone = "+91 98111 22334";
+  }
+
   return {
     id: o.id,
-    userId: o.user_id,
+    customerId: dynamicUserId,
+    userId: dynamicUserId,
+    deliveryStaffId: dynamicRiderId,
     orderDate: o.order_date,
     date: o.order_date ? new Date(o.order_date).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : 'N/A',
     isActive: Boolean(o.is_active),
@@ -435,22 +497,28 @@ export async function mapOrder(o) {
     celebrationOfferName: o.celebration_offer_name || '',
     paymentMethod: o.payment_method || 'COD',
     paymentStatus: o.payment_status || 'UNPAID',
-    deliveryPartnerName: o.delivery_partner_name,
-    deliveryPartnerPhone: o.delivery_partner_phone,
+    codStatus: o.cod_status || 'PENDING_CLEARANCE',
+    codSettledAt: o.cod_settled_at || null,
+    codClearedBy: o.cod_cleared_by || null,
+    codSettlementNote: o.cod_settlement_note || null,
+    deliveryPartnerName: dynamicRiderName,
+    deliveryPartnerPhone: dynamicRiderPhone,
     dispatchHub: o.dispatch_hub,
     etaStatus: o.eta_status,
     eta: o.eta_status,
     shippingAddress: o.shipping_address,
-    customerName: o.customer_name,
-    customerPhone: o.customer_phone,
-    customerMobile: o.customer_phone,
-    customerEmail: o.customer_email || "",
+    customerName: dynamicCustName,
+    customerPhone: dynamicCustPhone,
+    customerMobile: dynamicCustPhone,
+    customerEmail: dynamicCustEmail,
     isMargBill: Boolean(o.is_marg_bill),
     pointsEarned: o.points_earned,
     pdfUrl: o.pdf_url,
     items
   };
 }
+
+export const whatsappOutbox = [];
 
 export async function sendWhatsappMessageUnified(
   to,
@@ -462,9 +530,22 @@ export async function sendWhatsappMessageUnified(
   mediaUrl = undefined,
   languageCode = "en_US"
 ) {
-  const metaPhoneId = process.env.META_WHATSAPP_PHONE_NUMBER_ID;
-  const metaToken = process.env.META_WHATSAPP_ACCESS_TOKEN;
-  const defaultMetaTemplate = process.env.META_WHATSAPP_TEMPLATE_NAME || "reference_no";
+  let metaPhoneId = process.env.META_WHATSAPP_PHONE_NUMBER_ID;
+  let metaToken = process.env.META_WHATSAPP_ACCESS_TOKEN;
+  let defaultMetaTemplate = process.env.META_WHATSAPP_TEMPLATE_NAME || "reference_no";
+
+  // Check database settings for custom WhatsApp Meta configuration
+  try {
+    const rows = await db.query("SELECT value_text FROM app_settings WHERE key_name = 'swastik_whatsapp_settings'");
+    if (rows.length > 0 && rows[0].value_text) {
+      const saved = JSON.parse(rows[0].value_text);
+      if (saved) {
+        if (!metaPhoneId && saved.metaPhoneNumberId) metaPhoneId = saved.metaPhoneNumberId;
+        if (!metaToken && saved.metaAccessToken) metaToken = saved.metaAccessToken;
+        if (saved.metaTemplateName) defaultMetaTemplate = saved.metaTemplateName;
+      }
+    }
+  } catch (e) {}
 
   let cleanTo = String(to || "").replace(/[^\d]/g, "");
   if (cleanTo.length === 10) {
@@ -618,6 +699,15 @@ export async function sendWhatsappMessageUnified(
       const data = await response.json();
       if (response.ok) {
         console.log(`[Twilio WA Success] Message sent to ${cleanTo}. SID: ${data.sid}`);
+        whatsappOutbox.unshift({
+          id: data.sid,
+          to: cleanTo,
+          body,
+          provider: "twilio",
+          status: "DELIVERED",
+          timestamp: new Date().toISOString()
+        });
+        if (whatsappOutbox.length > 50) whatsappOutbox.pop();
         return { success: true, provider: "twilio", id: data.sid };
       } else {
         console.error("[Twilio WA Error] API response failure:", data);
@@ -629,7 +719,18 @@ export async function sendWhatsappMessageUnified(
 
   // 3. Fallback: Log to Simulated Outbox
   console.log(`[SIMULATED WHATSAPP OUTBOX] To: ${cleanTo} | Msg: ${body}`);
-  return { success: true, provider: "simulation" };
+  const outboxEntry = {
+    id: `WA-SIM-${Date.now()}`,
+    to: cleanTo,
+    body,
+    provider: "simulated_outbox",
+    status: "DISPATCHED",
+    timestamp: new Date().toISOString()
+  };
+  whatsappOutbox.unshift(outboxEntry);
+  if (whatsappOutbox.length > 50) whatsappOutbox.pop();
+
+  return { success: true, provider: "simulation", id: outboxEntry.id };
 }
 
 export function isR2ConfiguredAndValid() {

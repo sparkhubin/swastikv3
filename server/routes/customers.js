@@ -203,23 +203,44 @@ router.post("/customers", async (req, res) => {
 
     await saveStoredCustomers(customerList);
 
-    // Also upsert into "user" table in SQL
+    // Also upsert into relational SQL 'customer' table
     try {
-      const userExists = await db.query('SELECT id FROM "user" WHERE phone_number = ?', [phoneDigits.slice(-10)]);
-      if (userExists.length > 0) {
+      const exCust = await db.query("SELECT id FROM customer WHERE id = ?", [savedCust.id]);
+      if (exCust && exCust.length > 0) {
         await db.execute(
-          'UPDATE "user" SET full_name = ?, delivery_address = ?, updated_at = CURRENT_TIMESTAMP WHERE phone_number = ?',
-          [savedCust.name, savedCust.address || "", phoneDigits.slice(-10)]
+          `UPDATE customer SET name = ?, phone = ?, email = ?, address = ?, status = ?, order_count = ?, total_spent = ?, points = ?, is_prime_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+          [savedCust.name, savedCust.phone, savedCust.email || "", savedCust.address || "", savedCust.status || "Active", savedCust.orderCount || 0, savedCust.totalSpent || 0, savedCust.points || 100, savedCust.isPrimeActive ? 1 : 0, savedCust.id]
         );
       } else {
         await db.execute(
-          'INSERT INTO "user" (full_name, phone_number, password_hash, role_id, delivery_address) VALUES (?, ?, ?, 1, ?)',
-          [savedCust.name, phoneDigits.slice(-10), savedCust.password || "user123", savedCust.address || ""]
+          `INSERT INTO customer (id, name, phone, email, address, status, registered_at, order_count, total_spent, points, is_prime_active)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [savedCust.id, savedCust.name, savedCust.phone, savedCust.email || "", savedCust.address || "", savedCust.status || "Active", savedCust.registeredAt || new Date().toISOString(), savedCust.orderCount || 0, savedCust.totalSpent || 0, savedCust.points || 100, savedCust.isPrimeActive ? 1 : 0]
+        );
+      }
+    } catch (cErr) {
+      console.warn("Notice syncing SQL customer table:", cErr.message);
+    }
+
+    // Also upsert into "user" table in SQL
+    try {
+      const userExists = await db.query('SELECT id FROM "user" WHERE phone_number = ? OR phone_number LIKE ?', [phoneDigits.slice(-10), `%${phoneDigits.slice(-10)}`]);
+      if (userExists.length > 0) {
+        await db.execute(
+          'UPDATE "user" SET full_name = ?, delivery_address = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? OR phone_number LIKE ?',
+          [savedCust.name, savedCust.address || "", userExists[0].id, `%${phoneDigits.slice(-10)}`]
+        );
+      } else {
+        await db.execute(
+          'INSERT INTO "user" (id, full_name, phone_number, password_hash, role_id, delivery_address) VALUES (?, ?, ?, ?, 1, ?)',
+          [savedCust.id, savedCust.name, phoneDigits.slice(-10), savedCust.password || "user123", savedCust.address || ""]
         );
       }
     } catch (e) {
       console.warn("Could not sync to 'user' SQL table:", e.message);
     }
+
+    if (db.savePersistentSnapshot) await db.savePersistentSnapshot();
 
     res.json({ success: true, customer: savedCust, totalCustomers: customerList.length });
   } catch (err) {
@@ -228,7 +249,7 @@ router.post("/customers", async (req, res) => {
   }
 });
 
-// PUT /api/customers/:id - Update customer by ID
+// PUT /api/customers/:id - Update customer by ID and synchronize all linked orders & profile
 router.put("/customers/:id", async (req, res) => {
   try {
     const custId = Number(req.params.id);
@@ -249,18 +270,135 @@ router.put("/customers/:id", async (req, res) => {
     };
     customerList[index] = updated;
 
+    // 1. Save to app_settings
     await saveStoredCustomers(customerList);
 
-    // Sync to "user" table
-    if (updated.phone) {
-      const phoneDigits = cleanPhone(updated.phone).slice(-10);
+    // 2. Save/Update in relational SQL 'customer' table
+    try {
+      const exCust = await db.query("SELECT id FROM customer WHERE id = ?", [custId]);
+      if (exCust.length > 0) {
+        await db.execute(
+          `UPDATE customer SET
+            name = ?,
+            phone = ?,
+            email = ?,
+            address = ?,
+            status = ?,
+            order_count = ?,
+            total_spent = ?,
+            points = ?,
+            is_prime_active = ?,
+            prime_membership_no = ?,
+            dob = ?,
+            anniversary = ?,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?`,
+          [
+            updated.name,
+            updated.phone,
+            updated.email || "",
+            updated.address || "",
+            updated.status || "Active",
+            updated.orderCount || 0,
+            updated.totalSpent || 0,
+            updated.points || 100,
+            updated.isPrimeActive ? 1 : 0,
+            updated.primeMembershipNo || "",
+            updated.dob || "",
+            updated.anniversary || "",
+            custId
+          ]
+        );
+      } else {
+        await db.execute(
+          `INSERT INTO customer (id, name, phone, email, address, status, registered_at, order_count, total_spent, points, is_prime_active, prime_membership_no, dob, anniversary)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            custId,
+            updated.name,
+            updated.phone,
+            updated.email || "",
+            updated.address || "",
+            updated.status || "Active",
+            updated.registeredAt || new Date().toISOString(),
+            updated.orderCount || 0,
+            updated.totalSpent || 0,
+            updated.points || 100,
+            updated.isPrimeActive ? 1 : 0,
+            updated.primeMembershipNo || "",
+            updated.dob || "",
+            updated.anniversary || ""
+          ]
+        );
+      }
+    } catch (custSqlErr) {
+      console.warn("Notice updating SQL customer table:", custSqlErr.message);
+    }
+
+    const cleanP = cleanPhone(updated.phone || current.phone).slice(-10);
+
+    // 3. Sync to "user" table
+    if (cleanP) {
       try {
         await db.execute(
-          'UPDATE "user" SET full_name = ?, delivery_address = ?, updated_at = CURRENT_TIMESTAMP WHERE phone_number = ?',
-          [updated.name, updated.address || "", phoneDigits]
+          'UPDATE "user" SET full_name = ?, delivery_address = ?, updated_at = CURRENT_TIMESTAMP WHERE phone_number LIKE ?',
+          [updated.name, updated.address || "", `%${cleanP}`]
         );
-      } catch (e) {}
+      } catch (e) {
+        console.warn("Notice updating SQL user table:", e.message);
+      }
     }
+
+    // 4. CRITICAL: Relational Update for ALL historical orders in "order" table!
+    // Updates customer_id, user_id, and customer_name so orders always link by ID!
+    try {
+      if (cleanP) {
+        await db.execute(
+          `UPDATE "order" SET 
+            customer_name = ?, 
+            customer_phone = ?, 
+            customer_email = ?, 
+            customer_id = ?,
+            user_id = ?, 
+            updated_at = CURRENT_TIMESTAMP 
+          WHERE customer_id = ? 
+             OR user_id = ? 
+             OR (customer_phone IS NOT NULL AND (
+                 REPLACE(REPLACE(REPLACE(customer_phone, ' ', ''), '-', ''), '+', '') LIKE ?
+                 OR customer_phone = ?
+             ))`,
+          [
+            updated.name,
+            updated.phone || current.phone,
+            updated.email || current.email || "",
+            custId,
+            custId,
+            custId,
+            custId,
+            `%${cleanP}%`,
+            updated.phone || current.phone
+          ]
+        );
+        console.log(`✓ Synchronized Customer ID ${custId} name ("${updated.name}") across all orders.`);
+      } else {
+        await db.execute(
+          `UPDATE "order" SET 
+            customer_name = ?, 
+            customer_id = ?,
+            user_id = ?, 
+            updated_at = CURRENT_TIMESTAMP 
+          WHERE customer_id = ? OR user_id = ?`,
+          [updated.name, custId, custId, custId, custId]
+        );
+      }
+    } catch (orderSyncErr) {
+      console.warn("Notice updating order customer names:", orderSyncErr.message);
+    }
+
+    // 5. Update disk snapshot for zero-data-loss deployments
+    try {
+      await db.savePersistentSnapshot();
+    } catch (snapErr) {}
 
     res.json({ success: true, customer: updated });
   } catch (err) {
@@ -276,6 +414,16 @@ router.delete("/customers/:id", async (req, res) => {
     let customerList = await getStoredCustomers();
     customerList = customerList.filter(c => Number(c.id) !== custId);
     await saveStoredCustomers(customerList);
+
+    try {
+      await db.execute("DELETE FROM customer WHERE id = ?", [custId]);
+      await db.execute('DELETE FROM "user" WHERE id = ? AND role_id = 1', [custId]);
+    } catch (sqlErr) {
+      console.warn("Notice deleting from SQL customer/user tables:", sqlErr.message);
+    }
+
+    if (db.savePersistentSnapshot) await db.savePersistentSnapshot();
+
     res.json({ success: true, message: "Customer deleted successfully." });
   } catch (err) {
     console.error("Error in DELETE /api/customers/:id:", err);

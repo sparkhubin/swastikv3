@@ -6,7 +6,28 @@ const router = express.Router();
 
 router.get("/orders", async (req, res) => {
   try {
-    const rows = await db.query('SELECT * FROM "order" ORDER BY order_date DESC');
+    const rows = await db.query(`
+      SELECT o.*, 
+             COALESCE(u_cust.id, c.id) as rel_customer_id, 
+             COALESCE(u_cust.full_name, c.name, o.customer_name) as rel_customer_name, 
+             COALESCE(u_cust.phone_number, c.phone, o.customer_phone) as rel_customer_phone, 
+             COALESCE(u_cust.email, c.email, o.customer_email) as rel_customer_email,
+             COALESCE(u_cust.delivery_address, c.address, o.shipping_address) as rel_customer_address,
+             u_rider.id as rel_rider_id,
+             u_rider.full_name as rel_rider_name,
+             u_rider.phone_number as rel_rider_phone
+      FROM "order" o
+      LEFT JOIN "user" u_cust ON (
+        (o.customer_id IS NOT NULL AND o.customer_id = u_cust.id) OR 
+        (o.user_id IS NOT NULL AND o.user_id = u_cust.id)
+      )
+      LEFT JOIN customer c ON (
+        (o.customer_id IS NOT NULL AND o.customer_id = c.id) OR 
+        (o.user_id IS NOT NULL AND o.user_id = c.id)
+      )
+      LEFT JOIN "user" u_rider ON o.delivery_staff_id = u_rider.id
+      ORDER BY o.order_date DESC
+    `);
     const mapped = [];
     for (const r of rows) {
       mapped.push(await mapOrder(r));
@@ -20,7 +41,28 @@ router.get("/orders", async (req, res) => {
 router.get("/orders/:id", async (req, res) => {
   try {
     const id = req.params.id;
-    const rows = await db.query('SELECT * FROM "order" WHERE id = ?', [id]);
+    const rows = await db.query(`
+      SELECT o.*, 
+             COALESCE(u_cust.id, c.id) as rel_customer_id, 
+             COALESCE(u_cust.full_name, c.name, o.customer_name) as rel_customer_name, 
+             COALESCE(u_cust.phone_number, c.phone, o.customer_phone) as rel_customer_phone, 
+             COALESCE(u_cust.email, c.email, o.customer_email) as rel_customer_email,
+             COALESCE(u_cust.delivery_address, c.address, o.shipping_address) as rel_customer_address,
+             u_rider.id as rel_rider_id,
+             u_rider.full_name as rel_rider_name,
+             u_rider.phone_number as rel_rider_phone
+      FROM "order" o
+      LEFT JOIN "user" u_cust ON (
+        (o.customer_id IS NOT NULL AND o.customer_id = u_cust.id) OR 
+        (o.user_id IS NOT NULL AND o.user_id = u_cust.id)
+      )
+      LEFT JOIN customer c ON (
+        (o.customer_id IS NOT NULL AND o.customer_id = c.id) OR 
+        (o.user_id IS NOT NULL AND o.user_id = c.id)
+      )
+      LEFT JOIN "user" u_rider ON o.delivery_staff_id = u_rider.id
+      WHERE o.id = ?
+    `, [id]);
     if (rows.length > 0) {
       res.json(await mapOrder(rows[0]));
     } else {
@@ -39,22 +81,75 @@ router.post("/orders", async (req, res) => {
       targetOrderId = `SW-${Math.floor(1000 + Math.random() * 9000)}`;
     }
 
+    // Resolve effective customer/user details by ID and phone
+    let effectiveCustId = o.customerId ? Number(o.customerId) : (o.userId ? Number(o.userId) : null);
+    let effectiveCustName = o.customerName || "";
+    let effectiveCustPhone = o.customerPhone || "";
+    let effectiveCustEmail = o.customerEmail || "";
+
+    let matchedCust = null;
+    if (effectiveCustId) {
+      try {
+        const rows = await db.query('SELECT * FROM customer WHERE id = ? LIMIT 1', [effectiveCustId]);
+        if (rows && rows.length > 0) matchedCust = rows[0];
+      } catch (e) {}
+    }
+
+    if (!matchedCust && effectiveCustPhone) {
+      const cleanP = String(effectiveCustPhone).replace(/\D/g, "").slice(-10);
+      if (cleanP) {
+        try {
+          const rows = await db.query(
+            "SELECT * FROM customer WHERE REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '+', '') LIKE ? OR phone = ? LIMIT 1",
+            [`%${cleanP}%`, effectiveCustPhone]
+          );
+          if (rows && rows.length > 0) matchedCust = rows[0];
+        } catch (e) {}
+      }
+    }
+
+    if (matchedCust) {
+      effectiveCustId = Number(matchedCust.id);
+      effectiveCustName = matchedCust.name;
+      effectiveCustPhone = matchedCust.phone || effectiveCustPhone;
+      effectiveCustEmail = matchedCust.email || effectiveCustEmail;
+    }
+
+    if (!effectiveCustName) effectiveCustName = "Valued Customer";
+    if (!effectiveCustPhone) effectiveCustPhone = "+91 99999 99999";
+
+    let targetRiderId = o.deliveryStaffId ? Number(o.deliveryStaffId) : null;
+    let targetRiderName = o.deliveryPartnerName || "";
+    let targetRiderPhone = o.deliveryPartnerPhone || "";
+    if (!targetRiderId && targetRiderName) {
+      try {
+        const matchedRider = await db.query('SELECT * FROM "user" WHERE (LOWER(full_name) = ? OR LOWER(full_name) LIKE ?) AND role_id = 4 LIMIT 1', [targetRiderName.toLowerCase(), `%${targetRiderName.toLowerCase()}%`]);
+        if (matchedRider && matchedRider.length > 0) {
+          targetRiderId = matchedRider[0].id;
+          targetRiderName = matchedRider[0].full_name;
+          targetRiderPhone = matchedRider[0].phone_number;
+        }
+      } catch (e) {}
+    }
+
     const checkExists = await db.query('SELECT id FROM "order" WHERE id = ?', [targetOrderId]);
     if (checkExists.length > 0) {
       // Order already exists -> Update record (idempotent for payment verifications & retries)
       const updateOrderSql = `UPDATE "order" SET 
-          user_id = ?, order_date = ?, is_active = ?, step_level = ?, status_label = ?, 
+          customer_id = ?, user_id = ?, order_date = ?, is_active = ?, step_level = ?, status_label = ?, 
           subtotal = ?, delivery_fee = ?, gst_amount = ?, total = ?, grand_total = ?, 
-          delivery_partner_name = ?, delivery_partner_phone = ?, dispatch_hub = ?, 
+          delivery_partner_name = ?, delivery_partner_phone = ?, delivery_staff_id = ?, dispatch_hub = ?, 
           eta_status = ?, shipping_address = ?, customer_name = ?, customer_phone = ?, customer_email = ?,
           is_marg_bill = ?, points_earned = ?, pdf_url = ?,
           referral_discount = ?, applied_points = ?, coupon_discount = ?, coupon_code = ?,
           celebration_discount = ?, celebration_offer_name = ?, payment_method = ?, payment_status = ?,
+          cod_status = ?,
           updated_at = CURRENT_TIMESTAMP
           WHERE id = ?`;
 
       const updateParams = [
-        o.userId || null,
+        effectiveCustId,
+        effectiveCustId,
         o.orderDate || new Date().toISOString(),
         o.isActive !== undefined ? (o.isActive ? 1 : 0) : 1,
         o.step !== undefined ? o.step : 0,
@@ -64,14 +159,15 @@ router.post("/orders", async (req, res) => {
         o.gst || o.gst_amount || 0,
         o.total || o.grandTotal || o.grand_total || 0,
         o.total || o.grandTotal || o.grand_total || 0,
-        o.deliveryPartnerName || "",
-        o.deliveryPartnerPhone || "",
+        targetRiderName,
+        targetRiderPhone,
+        targetRiderId,
         o.hubName || o.dispatch_hub || "",
         o.eta || o.eta_status || "",
         o.shippingAddress || "",
-        o.customerName || "Simulated Customer",
-        o.customerPhone || "+91 99999 99999",
-        o.customerEmail || "",
+        effectiveCustName,
+        effectiveCustPhone,
+        effectiveCustEmail,
         o.isMargBill !== undefined ? (o.isMargBill ? 1 : 0) : 0,
         o.pointsEarned || 0,
         o.pdfUrl || "",
@@ -83,6 +179,7 @@ router.post("/orders", async (req, res) => {
         o.celebrationOfferName || "",
         o.paymentMethod || "COD",
         o.paymentStatus || "UNPAID",
+        o.codStatus || "PENDING_CLEARANCE",
         targetOrderId
       ];
 
@@ -100,18 +197,19 @@ router.post("/orders", async (req, res) => {
       await db.execute('DELETE FROM order_item WHERE order_id = ?', [targetOrderId]);
     } else {
       const insertOrderSql = `INSERT INTO "order" (
-          id, user_id, order_date, is_active, step_level, status_label, 
+          id, customer_id, user_id, order_date, is_active, step_level, status_label, 
           subtotal, delivery_fee, gst_amount, total, grand_total, 
-          delivery_partner_name, delivery_partner_phone, dispatch_hub, 
+          delivery_partner_name, delivery_partner_phone, delivery_staff_id, dispatch_hub, 
           eta_status, shipping_address, customer_name, customer_phone, customer_email,
           is_marg_bill, points_earned, pdf_url,
           referral_discount, applied_points, coupon_discount, coupon_code,
-          celebration_discount, celebration_offer_name, payment_method, payment_status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+          celebration_discount, celebration_offer_name, payment_method, payment_status, cod_status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
       const insertParams = [
         targetOrderId,
-        o.userId || null,
+        effectiveCustId,
+        effectiveCustId,
         o.orderDate || new Date().toISOString(),
         o.isActive !== undefined ? (o.isActive ? 1 : 0) : 1,
         o.step !== undefined ? o.step : 0,
@@ -121,14 +219,15 @@ router.post("/orders", async (req, res) => {
         o.gst || o.gst_amount || 0,
         o.total || o.grandTotal || o.grand_total || 0,
         o.total || o.grandTotal || o.grand_total || 0,
-        o.deliveryPartnerName || "",
-        o.deliveryPartnerPhone || "",
+        targetRiderName,
+        targetRiderPhone,
+        targetRiderId,
         o.hubName || o.dispatch_hub || "",
         o.eta || o.eta_status || "",
         o.shippingAddress || "",
-        o.customerName || "Simulated Customer",
-        o.customerPhone || "+91 99999 99999",
-        o.customerEmail || "",
+        effectiveCustName,
+        effectiveCustPhone,
+        effectiveCustEmail,
         o.isMargBill !== undefined ? (o.isMargBill ? 1 : 0) : 0,
         o.pointsEarned || 0,
         o.pdfUrl || "",
@@ -139,7 +238,8 @@ router.post("/orders", async (req, res) => {
         o.celebrationDiscount || 0,
         o.celebrationOfferName || "",
         o.paymentMethod || "COD",
-        o.paymentStatus || "UNPAID"
+        o.paymentStatus || "UNPAID",
+        o.codStatus || "PENDING_CLEARANCE"
       ];
 
       try {
@@ -152,6 +252,34 @@ router.post("/orders", async (req, res) => {
         } else {
           throw insertErr;
         }
+      }
+
+      // Update customer stats in customer and user tables
+      try {
+        const orderVal = Number(o.total || o.grandTotal || o.grand_total || 0);
+        if (effectiveCustId) {
+          await db.execute(
+            'UPDATE customer SET order_count = COALESCE(order_count, 0) + 1, total_spent = COALESCE(total_spent, 0) + ? WHERE id = ?',
+            [orderVal, effectiveCustId]
+          );
+          await db.execute(
+            'UPDATE "user" SET order_count = COALESCE(order_count, 0) + 1, total_spent = COALESCE(total_spent, 0) + ? WHERE id = ?',
+            [orderVal, effectiveCustId]
+          );
+        } else if (effectiveCustPhone) {
+          const cleanP = String(effectiveCustPhone).replace(/\D/g, "").slice(-10);
+          if (cleanP) {
+            const insRes = await db.execute(
+              'INSERT INTO customer (name, phone, email, order_count, total_spent) VALUES (?, ?, ?, 1, ?)',
+              [effectiveCustName, effectiveCustPhone, effectiveCustEmail, orderVal]
+            );
+            if (insRes && insRes.insertId) {
+              await db.execute('UPDATE "order" SET customer_id = ?, user_id = ? WHERE id = ?', [insRes.insertId, insRes.insertId, targetOrderId]);
+            }
+          }
+        }
+      } catch (custStatErr) {
+        console.warn("Notice updating customer order stats:", custStatErr.message);
       }
     }
 
@@ -312,6 +440,10 @@ router.post("/orders", async (req, res) => {
       console.error("[WhatsApp Dispatch Error]:", waErr.message);
     }
 
+    if (db.savePersistentSnapshot) {
+      try { await db.savePersistentSnapshot(); } catch (e) {}
+    }
+
     res.status(201).json(rows.length > 0 ? await mapOrder(rows[0]) : { ...o, id: targetOrderId });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -338,11 +470,37 @@ router.put(["/orders/:id", "/orders/:id/transit"], async (req, res) => {
       fieldsToUpdate.push("status_label = ?");
       params.push(updateData.status);
     }
-    if (updateData.deliveryPartnerName !== undefined) {
-      fieldsToUpdate.push("delivery_partner_name = ?");
-      params.push(updateData.deliveryPartnerName);
+    if (updateData.deliveryStaffId !== undefined) {
+      fieldsToUpdate.push("delivery_staff_id = ?");
+      params.push(updateData.deliveryStaffId ? Number(updateData.deliveryStaffId) : null);
     }
-    if (updateData.deliveryPartnerPhone !== undefined) {
+    if (updateData.deliveryPartnerName !== undefined) {
+      let rName = updateData.deliveryPartnerName;
+      let rPhone = updateData.deliveryPartnerPhone;
+      let rStaffId = updateData.deliveryStaffId ? Number(updateData.deliveryStaffId) : null;
+
+      try {
+        if (!rStaffId && rName && !rName.toLowerCase().includes('arun dev')) {
+          const matched = await db.query('SELECT * FROM "user" WHERE LOWER(full_name) = ? OR LOWER(full_name) LIKE ? LIMIT 1', [rName.toLowerCase(), `%${rName.toLowerCase()}%`]);
+          if (matched && matched.length > 0) {
+            rStaffId = matched[0].id;
+            rName = matched[0].full_name;
+            rPhone = matched[0].phone_number;
+          }
+        }
+      } catch (e) {}
+
+      fieldsToUpdate.push("delivery_partner_name = ?");
+      params.push(rName);
+      if (rStaffId) {
+        fieldsToUpdate.push("delivery_staff_id = ?");
+        params.push(rStaffId);
+      }
+      if (rPhone) {
+        fieldsToUpdate.push("delivery_partner_phone = ?");
+        params.push(rPhone);
+      }
+    } else if (updateData.deliveryPartnerPhone !== undefined) {
       fieldsToUpdate.push("delivery_partner_phone = ?");
       params.push(updateData.deliveryPartnerPhone);
     }
@@ -389,6 +547,29 @@ router.put(["/orders/:id", "/orders/:id/transit"], async (req, res) => {
     if (updateData.paymentMethod !== undefined) {
       fieldsToUpdate.push("payment_method = ?");
       params.push(updateData.paymentMethod);
+    }
+    if (updateData.customerId !== undefined || updateData.userId !== undefined) {
+      const cId = Number(updateData.customerId || updateData.userId);
+      fieldsToUpdate.push("customer_id = ?");
+      params.push(cId);
+      fieldsToUpdate.push("user_id = ?");
+      params.push(cId);
+    }
+    if (updateData.codStatus !== undefined) {
+      fieldsToUpdate.push("cod_status = ?");
+      params.push(updateData.codStatus);
+    }
+    if (updateData.codSettledAt !== undefined || updateData.codClearedAt !== undefined) {
+      fieldsToUpdate.push("cod_settled_at = ?");
+      params.push(updateData.codSettledAt || updateData.codClearedAt);
+    }
+    if (updateData.codClearedBy !== undefined) {
+      fieldsToUpdate.push("cod_cleared_by = ?");
+      params.push(updateData.codClearedBy);
+    }
+    if (updateData.codSettlementNote !== undefined || updateData.codClearanceNote !== undefined) {
+      fieldsToUpdate.push("cod_settlement_note = ?");
+      params.push(updateData.codSettlementNote || updateData.codClearanceNote);
     }
     
     if (fieldsToUpdate.length > 0) {
@@ -508,6 +689,10 @@ router.put(["/orders/:id", "/orders/:id/transit"], async (req, res) => {
       console.error("[In-App Notification Update Error]:", notifErr.message);
     }
 
+    if (db.savePersistentSnapshot) {
+      try { await db.savePersistentSnapshot(); } catch (e) {}
+    }
+
     if (rows.length > 0) {
       res.json(await mapOrder(rows[0]));
     } else {
@@ -523,6 +708,9 @@ router.delete("/orders/:id", async (req, res) => {
   try {
     await db.execute("DELETE FROM order_item WHERE order_id = ?", [id]);
     await db.execute('DELETE FROM "order" WHERE id = ?', [id]);
+    if (db.savePersistentSnapshot) {
+      try { await db.savePersistentSnapshot(); } catch (e) {}
+    }
     res.json({ status: "ok", message: "Deleted" });
   } catch (err) {
     res.status(500).json({ error: err.message });

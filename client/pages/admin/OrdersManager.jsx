@@ -32,7 +32,33 @@ import { isOrder1HourLocked, getLockTimeRemainingFormatted } from '../../utils/o
 
 export default function OrdersManager({ userRole }) {
   const { isHindi } = useLanguage();
-  const { orders, updateOrder, deleteOrder, addOrder, products, offers, staff, contactSettings } = useData();
+  const { orders, updateOrder, deleteOrder, addOrder, products, offers, staff, contactSettings, customers } = useData();
+
+  // Relational resolution helpers: Resolve customer details dynamically from customer ID / phone
+  const getCustName = React.useCallback((ord) => {
+    if (!ord) return "Valued Customer";
+    const ordCustId = Number(ord.customerId || ord.userId);
+    if (ordCustId) {
+      const matched = customers?.find(c => Number(c.id) === ordCustId);
+      if (matched && matched.name) return matched.name;
+    }
+    const cleanP = String(ord.customerPhone || ord.customerMobile || ord.phone || "").replace(/\D/g, "").slice(-10);
+    if (cleanP) {
+      const matched = customers?.find(c => String(c.phone || "").replace(/\D/g, "").slice(-10) === cleanP);
+      if (matched && matched.name) return matched.name;
+    }
+    return ord.customerName || ord.name || "Valued Customer";
+  }, [customers]);
+
+  const getCustPhone = React.useCallback((ord) => {
+    if (!ord) return "N/A";
+    const ordCustId = Number(ord.customerId || ord.userId);
+    if (ordCustId) {
+      const matched = customers?.find(c => Number(c.id) === ordCustId);
+      if (matched && matched.phone) return matched.phone;
+    }
+    return ord.customerPhone || ord.customerMobile || ord.phone || "N/A";
+  }, [customers]);
 
   const activeStaff = React.useMemo(() => {
     try {
@@ -54,8 +80,8 @@ export default function OrdersManager({ userRole }) {
     const storeFssai = contactSettings?.fssai || "12721001000123";
     const storeLogo = contactSettings?.logo || "";
 
-    const custName = order.customerName || order.name || "Valued Customer";
-    const custPhone = order.customerPhone || order.customerMobile || order.phone || "N/A";
+    const custName = getCustName(order);
+    const custPhone = getCustPhone(order);
     const custAddress = order.shippingAddress || order.address || "Store Pickup";
     const custEmail = order.customerEmail || order.email || "N/A";
 
@@ -467,8 +493,8 @@ export default function OrdersManager({ userRole }) {
         return {
           "Order ID": o.id,
           "Order Date": o.orderDate || o.date || 'N/A',
-          "Customer Name": o.customerName || 'Swastik Customer',
-          "Customer Phone": o.customerPhone || 'N/A',
+          "Customer Name": getCustName(o),
+          "Customer Phone": getCustPhone(o),
           "Shipping Address": o.shippingAddress || 'N/A',
           "Payment Mode": paymentModeLabel,
           "Payment Status": o.paymentStatus || 'UNPAID',
@@ -610,8 +636,8 @@ export default function OrdersManager({ userRole }) {
     }
     setIsEditingOrder(true);
     setEditOrderItems(order.items ? [...order.items] : []);
-    setEditOrderName(order.customerName || order.name || '');
-    setEditOrderPhone(order.customerPhone || order.customerMobile || order.phone || '');
+    setEditOrderName(getCustName(order));
+    setEditOrderPhone(getCustPhone(order));
     setEditOrderAddress(order.shippingAddress || '');
     setEditOrderPaymentMethod(order.paymentMethod || 'card');
     setEditOrderPaymentStatus(order.paymentStatus || 'PAID');
@@ -823,7 +849,7 @@ export default function OrdersManager({ userRole }) {
     } else if (step === 1 || statusKey === "Dispatched" || statusKey === "Out for Delivery") {
       setTimeout(() => {
         handleSendWhatsappDispatchAlert(updatedOrder);
-        alert(`Status updated to DISPATCHED!\nAutomated 'order_dispatch_alert' WhatsApp notification sent to ${updatedOrder.customerName || 'customer'}!`);
+        alert(`Status updated to DISPATCHED!\nAutomated 'order_dispatch_alert' WhatsApp notification sent to ${getCustName(updatedOrder)}!`);
       }, 300);
     }
   };
@@ -832,8 +858,8 @@ export default function OrdersManager({ userRole }) {
     const targetOrder = specificOrder || selectedOrder;
     if (!targetOrder) return;
     const orderId = targetOrder.id;
-    const phoneNum = targetOrder.customerPhone || targetOrder.customerMobile || targetOrder.phone || "+91 95400 12099";
-    const clientName = targetOrder.customerName || targetOrder.name || "Valued Customer";
+    const phoneNum = getCustPhone(targetOrder) !== 'N/A' ? getCustPhone(targetOrder) : "+91 95400 12099";
+    const clientName = getCustName(targetOrder);
 
     const subtotal = targetOrder.items && targetOrder.items.length > 0 
       ? targetOrder.items.reduce((sum, it) => sum + (Number(it.price || it.salePrice || 0) * Number(it.qty || 1)), 0)
@@ -892,8 +918,8 @@ export default function OrdersManager({ userRole }) {
 
     const orderId = targetOrder.id;
     // Default fallback phone values if not provided
-    const phoneNum = targetOrder.customerPhone || targetOrder.customerMobile || targetOrder.phone || "+91 98450 12099";
-    const clientName = targetOrder.customerName || targetOrder.name || "Valued Customer";
+    const phoneNum = getCustPhone(targetOrder) !== 'N/A' ? getCustPhone(targetOrder) : "+91 98450 12099";
+    const clientName = getCustName(targetOrder);
 
     const subtotal = targetOrder.items && targetOrder.items.length > 0 
       ? targetOrder.items.reduce((sum, it) => sum + (Number(it.price || it.salePrice || 0) * Number(it.qty || 1)), 0)
@@ -1189,8 +1215,8 @@ export default function OrdersManager({ userRole }) {
               paginatedOrders.map((o) => {
                 const totalAmount = o.total || o.subtotal || 350;
                 const itemsCount = o.items ? o.items.reduce((acc, it) => acc + it.qty, 0) : 0;
-                const clientName = o.customerName || o.name || "Valued Customer";
-                const clientPhone = o.customerPhone || o.customerMobile || o.phone || "N/A";
+                const clientName = getCustName(o);
+                const clientPhone = getCustPhone(o);
                 
                 return (
                   <tr key={o.id} className="hover:bg-white/5 transition-colors group">
@@ -1567,11 +1593,11 @@ export default function OrdersManager({ userRole }) {
                   <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-1 mt-2 text-[9.5px] font-sans">
                     <div className="font-extrabold text-sky-800 border-b border-slate-200 pb-1 flex justify-between uppercase">
                       <span>CUSTOMER DETAILS (खरीदार)</span>
-                      <span className="font-mono text-slate-900">{selectedOrder.customerName || selectedOrder.name || "Valued Customer"}</span>
+                      <span className="font-mono text-slate-900">{getCustName(selectedOrder)}</span>
                     </div>
                     <div className="flex justify-between text-slate-700 font-semibold">
                       <span>MOBILE / PHONE:</span>
-                      <span className="font-mono font-bold text-slate-900">{selectedOrder.customerPhone || selectedOrder.customerMobile || selectedOrder.phone || "N/A"}</span>
+                      <span className="font-mono font-bold text-slate-900">{getCustPhone(selectedOrder)}</span>
                     </div>
                     <div className="text-slate-700">
                       <span className="font-bold text-slate-900">DELIVERY ADDRESS:</span> {selectedOrder.shippingAddress || selectedOrder.address || "Store Pickup"}
@@ -1800,7 +1826,7 @@ export default function OrdersManager({ userRole }) {
                         className="w-full bg-slate-950 border border-cyan-500/30 text-cyan-200 rounded-xl px-3 py-2 text-xs outline-none cursor-pointer font-bold"
                       >
                         <option value="">-- Choose Registered Delivery Executive --</option>
-                        {staff?.filter(s => s.permissions?.includes('delivery') || s.name.toLowerCase().includes('delivery') || s.name.toLowerCase().includes('pilot') || s.name.toLowerCase().includes('rider')).map(s => (
+                        {staff?.filter(s => s.role_id === 4 || s.role_code === 'rider' || s.permissions?.includes('delivery') || (s.role && String(s.role).toLowerCase().includes('rider')) || (s.role && String(s.role).toLowerCase().includes('delivery'))).map(s => (
                           <option key={s.id} value={s.id}>
                             🛵 {s.name} ({s.mobile})
                           </option>

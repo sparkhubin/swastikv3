@@ -297,6 +297,7 @@ export const db = {
       // 6. Order Table
       `CREATE TABLE IF NOT EXISTS ${orderTableName} (
         id VARCHAR(50) PRIMARY KEY,
+        customer_id INT,
         user_id INT,
         order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         is_active ${booleanType} DEFAULT ${isPg ? 'TRUE' : 1},
@@ -396,6 +397,40 @@ export const db = {
         type VARCHAR(50) DEFAULT 'order_update',
         is_read ${booleanType} DEFAULT ${isPg ? 'FALSE' : 0},
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );`,
+
+      // 13. Customer Table (Relational ID Mapping)
+      `CREATE TABLE IF NOT EXISTS customer (
+        id INT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        phone VARCHAR(50) NOT NULL,
+        email VARCHAR(255) DEFAULT '',
+        address ${textType},
+        status VARCHAR(50) DEFAULT 'Active',
+        registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        order_count INT DEFAULT 0,
+        total_spent ${numericType} DEFAULT 0,
+        points INT DEFAULT 100,
+        is_prime_active ${booleanType} DEFAULT ${isPg ? 'FALSE' : 0},
+        prime_membership_no VARCHAR(100) DEFAULT '',
+        dob VARCHAR(50) DEFAULT '',
+        anniversary VARCHAR(50) DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );`,
+
+      // 14. WhatsApp Settings Table
+      `CREATE TABLE IF NOT EXISTS whatsapp_settings (
+        id INT PRIMARY KEY DEFAULT 1,
+        meta_phone_number_id VARCHAR(255) DEFAULT '',
+        meta_access_token ${textType},
+        meta_business_account_id VARCHAR(255) DEFAULT '',
+        meta_template_name VARCHAR(100) DEFAULT 'reference_no',
+        twilio_account_sid VARCHAR(255) DEFAULT '',
+        twilio_auth_token VARCHAR(255) DEFAULT '',
+        twilio_whatsapp_from VARCHAR(50) DEFAULT '+14155238886',
+        enabled ${booleanType} DEFAULT ${isPg ? 'TRUE' : 1},
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );`
     ];
 
@@ -443,11 +478,18 @@ export const db = {
         );
       }
     } catch (e) {}
+
+    // Synchronize customer ID mapping and orders
+    await this.syncCustomerTableAndOrders();
+
+    // Rehydrate database from persistent store if freshly deployed
+    await this.rehydrateFromPersistentSnapshot();
   },
 
   // Auto-migration to ensure all tables have required columns across SQLite, MySQL, and PostgreSQL
   async migrateSchema() {
     const orderColumns = [
+      { name: "customer_id", sqlite: "INT", pg: "INT", my: "INT" },
       { name: "total", sqlite: "REAL DEFAULT 0.0", pg: "NUMERIC(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
       { name: "grand_total", sqlite: "REAL DEFAULT 0.0", pg: "NUMERIC(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
       { name: "referral_discount", sqlite: "REAL DEFAULT 0.0", pg: "NUMERIC(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
@@ -461,7 +503,12 @@ export const db = {
       { name: "customer_email", sqlite: "TEXT DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
       { name: "is_marg_bill", sqlite: "INT DEFAULT 0", pg: "BOOLEAN DEFAULT FALSE", my: "INT DEFAULT 0" },
       { name: "points_earned", sqlite: "INT DEFAULT 0", pg: "INT DEFAULT 0", my: "INT DEFAULT 0" },
-      { name: "pdf_url", sqlite: "TEXT", pg: "TEXT", my: "TEXT" }
+      { name: "pdf_url", sqlite: "TEXT", pg: "TEXT", my: "TEXT" },
+      { name: "delivery_staff_id", sqlite: "INT", pg: "INT", my: "INT" },
+      { name: "cod_status", sqlite: "TEXT DEFAULT 'PENDING_CLEARANCE'", pg: "VARCHAR(50) DEFAULT 'PENDING_CLEARANCE'", my: "VARCHAR(50) DEFAULT 'PENDING_CLEARANCE'" },
+      { name: "cod_settled_at", sqlite: "TEXT", pg: "VARCHAR(50)", my: "VARCHAR(50)" },
+      { name: "cod_cleared_by", sqlite: "TEXT", pg: "VARCHAR(150)", my: "VARCHAR(150)" },
+      { name: "cod_settlement_note", sqlite: "TEXT", pg: "TEXT", my: "TEXT" }
     ];
 
     // 1. SQLite Schema Migration
@@ -770,6 +817,277 @@ export const db = {
       }
     } catch (err) {
       console.error("Error seeding orders:", err.message);
+    }
+  },
+
+  // Synchronize Customer Table and enforce Relational Order Mapping
+  async syncCustomerTableAndOrders() {
+    try {
+      const defaultCustomers = [
+        {
+          id: 101,
+          name: "Balram Patidar",
+          phone: "+91 99999 88888",
+          email: "balram@swastik.local",
+          address: "Sector 15, Flat 402, Noida, UP",
+          status: "Active",
+          registeredAt: "2026-01-15",
+          orderCount: 4,
+          totalSpent: 1850,
+          points: 350,
+          isPrimeActive: true,
+          primeMembershipNo: "SW-PRIME-101"
+        },
+        {
+          id: 102,
+          name: "Rahul Sharma",
+          phone: "+91 98765 43210",
+          email: "rahul.sharma@gmail.com",
+          address: "B-12, Sector 62, Noida, UP",
+          status: "Active",
+          registeredAt: "2026-02-01",
+          orderCount: 2,
+          totalSpent: 750,
+          points: 150,
+          isPrimeActive: false
+        },
+        {
+          id: 103,
+          name: "Priya Patel",
+          phone: "+91 91234 56789",
+          email: "priya.p@yahoo.com",
+          address: "House 55, Indirapuram, Ghaziabad",
+          status: "Active",
+          registeredAt: "2026-02-10",
+          orderCount: 1,
+          totalSpent: 420,
+          points: 100,
+          isPrimeActive: false
+        },
+        {
+          id: 104,
+          name: "Amit Verma",
+          phone: "+91 98111 22334",
+          email: "amit.verma@outlook.com",
+          address: "Flat 204, Gaur City, Greater Noida West",
+          status: "Active",
+          registeredAt: "2026-02-18",
+          orderCount: 3,
+          totalSpent: 1200,
+          points: 200,
+          isPrimeActive: false
+        }
+      ];
+
+      // Check current rows in customer table
+      let existingCustRows = [];
+      try {
+        existingCustRows = await this.query("SELECT * FROM customer");
+      } catch (e) {}
+
+      let customersToLoad = [];
+      if (existingCustRows && existingCustRows.length > 0) {
+        customersToLoad = existingCustRows.map(c => ({
+          id: Number(c.id),
+          name: c.name,
+          phone: c.phone,
+          email: c.email || "",
+          address: c.address || "",
+          status: c.status || "Active",
+          registeredAt: c.registered_at,
+          orderCount: Number(c.order_count || 0),
+          totalSpent: Number(c.total_spent || 0),
+          points: Number(c.points || 100),
+          isPrimeActive: Boolean(c.is_prime_active),
+          primeMembershipNo: c.prime_membership_no || "",
+          dob: c.dob || "",
+          anniversary: c.anniversary || ""
+        }));
+      } else {
+        // Check app_settings for swastik_customers
+        const rows = await this.query("SELECT value_text FROM app_settings WHERE key_name = 'swastik_customers'");
+        if (rows.length > 0 && rows[0].value_text) {
+          try {
+            const parsed = JSON.parse(rows[0].value_text);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              customersToLoad = parsed;
+            }
+          } catch (e) {}
+        }
+        if (customersToLoad.length === 0) {
+          customersToLoad = defaultCustomers;
+        }
+
+        // Insert into customer table
+        for (const c of customersToLoad) {
+          try {
+            await this.execute(
+              `INSERT INTO customer (id, name, phone, email, address, status, registered_at, order_count, total_spent, points, is_prime_active, prime_membership_no, dob, anniversary)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                c.id, c.name, c.phone, c.email || "", c.address || "", c.status || "Active",
+                c.registeredAt || new Date().toISOString(), c.orderCount || 0, c.totalSpent || 0,
+                c.points || 100, c.isPrimeActive ? 1 : 0, c.primeMembershipNo || "", c.dob || "", c.anniversary || ""
+              ]
+            );
+          } catch (err) {}
+        }
+      }
+
+      // Always synchronize app_settings copy
+      try {
+        const jsonVal = JSON.stringify(customersToLoad);
+        const exSettings = await this.query("SELECT key_name FROM app_settings WHERE key_name = 'swastik_customers'");
+        if (exSettings.length > 0) {
+          await this.execute("UPDATE app_settings SET value_text = ?, updated_at = CURRENT_TIMESTAMP WHERE key_name = 'swastik_customers'", [jsonVal]);
+        } else {
+          await this.execute("INSERT INTO app_settings (key_name, value_text) VALUES ('swastik_customers', ?)", [jsonVal]);
+        }
+      } catch (e) {}
+
+      // ENFORCE PROPER ID MAPPING ON ALL ORDERS
+      for (const c of customersToLoad) {
+        const cleanP = String(c.phone || "").replace(/\D/g, "").slice(-10);
+        if (cleanP) {
+          // Link unassigned orders by matching phone digits or exact phone
+          await this.execute(
+            `UPDATE "order" SET customer_id = ?, user_id = ?, customer_name = ? 
+             WHERE (customer_id IS NULL OR user_id IS NULL OR user_id = 0) 
+               AND (
+                 REPLACE(REPLACE(REPLACE(customer_phone, ' ', ''), '-', ''), '+', '') LIKE ? 
+                 OR customer_phone = ?
+               )`,
+            [c.id, c.id, c.name, `%${cleanP}%`, c.phone]
+          );
+          // Sync current profile name across all historical orders for this customer_id / user_id
+          await this.execute(
+            `UPDATE "order" SET customer_name = ?, customer_phone = ? WHERE customer_id = ? OR user_id = ?`,
+            [c.name, c.phone, c.id, c.id]
+          );
+        }
+      }
+      console.log(`✓ Synchronized ${customersToLoad.length} customers and mapped order IDs.`);
+    } catch (err) {
+      console.warn("Notice in syncCustomerTableAndOrders:", err.message);
+    }
+  },
+
+  // Save full persistent snapshot to disk for zero-data-loss deployments
+  async savePersistentSnapshot() {
+    try {
+      const fs = await import("fs");
+      const path = await import("path");
+      const snapshotPath = path.join(process.cwd(), "database", "persistent_store.json");
+
+      const products = await this.query("SELECT * FROM product");
+      const orders = await this.query('SELECT * FROM "order"');
+      const orderItems = await this.query("SELECT * FROM order_item");
+      const customers = await this.query("SELECT * FROM customer");
+      const users = await this.query('SELECT * FROM "user"');
+      const partners = await this.query("SELECT * FROM partner");
+      const reviews = await this.query("SELECT * FROM review");
+      const appSettings = await this.query("SELECT * FROM app_settings");
+      const paymentSettings = await this.query("SELECT * FROM payment_settings");
+      const margSettings = await this.query("SELECT * FROM marg_settings");
+
+      const snapshot = {
+        updatedAt: new Date().toISOString(),
+        tables: {
+          product: products,
+          order: orders,
+          order_item: orderItems,
+          customer: customers,
+          user: users,
+          partner: partners,
+          review: reviews,
+          app_settings: appSettings,
+          payment_settings: paymentSettings,
+          marg_settings: margSettings
+        }
+      };
+
+      fs.writeFileSync(snapshotPath, JSON.stringify(snapshot, null, 2), "utf-8");
+      console.log(`✓ Persistent snapshot updated at ${snapshotPath} (${orders.length} orders, ${products.length} products, ${customers.length} customers)`);
+    } catch (err) {
+      console.warn("Notice in savePersistentSnapshot:", err.message);
+    }
+  },
+
+  // Rehydrate state on fresh deployment
+  async rehydrateFromPersistentSnapshot() {
+    try {
+      const fs = await import("fs");
+      const path = await import("path");
+      const snapshotPath = path.join(process.cwd(), "database", "persistent_store.json");
+
+      if (!fs.existsSync(snapshotPath)) return;
+
+      const raw = fs.readFileSync(snapshotPath, "utf-8");
+      const data = JSON.parse(raw);
+      if (!data || !data.tables) return;
+
+      const { tables } = data;
+
+      const currentOrders = await this.query('SELECT COUNT(*) as cnt FROM "order"');
+      const orderCount = Number(currentOrders[0]?.cnt || currentOrders[0]?.['count(*)'] || 0);
+
+      if (orderCount === 0 && Array.isArray(tables.order) && tables.order.length > 0) {
+        console.log(`📥 Rehydrating ${tables.order.length} orders from persistent snapshot...`);
+        for (const o of tables.order) {
+          try {
+            await this.execute(
+              `INSERT INTO "order" (id, user_id, order_date, is_active, step_level, status_label, delivery_partner_name, delivery_partner_phone, dispatch_hub, grand_total, subtotal, delivery_fee, gst_amount, customer_name, customer_phone, shipping_address, referral_discount, applied_points, coupon_discount, coupon_code, celebration_discount, celebration_offer_name, customer_email, payment_method, payment_status, total)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                o.id, o.user_id || null, o.order_date, o.is_active ? 1 : 0, o.step_level || 0, o.status_label || 'Placed',
+                o.delivery_partner_name || '', o.delivery_partner_phone || '', o.dispatch_hub || '',
+                o.grand_total || o.total || 0, o.subtotal || 0, o.delivery_fee || 0, o.gst_amount || 0,
+                o.customer_name || '', o.customer_phone || '', o.shipping_address || '', o.referral_discount || 0,
+                o.applied_points || 0, o.coupon_discount || 0, o.coupon_code || '', o.celebration_discount || 0,
+                o.celebration_offer_name || '', o.customer_email || '', o.payment_method || 'COD',
+                o.payment_status || 'UNPAID', o.total || o.grand_total || 0
+              ]
+            );
+          } catch (oe) {}
+        }
+      }
+
+      if (Array.isArray(tables.order_item) && tables.order_item.length > 0) {
+        const currentItems = await this.query('SELECT COUNT(*) as cnt FROM order_item');
+        const itemCount = Number(currentItems[0]?.cnt || currentItems[0]?.['count(*)'] || 0);
+        if (itemCount === 0) {
+          for (const item of tables.order_item) {
+            try {
+              await this.execute(
+                `INSERT INTO order_item (order_id, product_id, name_en, name_hi, price, qty, weight_label)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [item.order_id, item.product_id, item.name_en, item.name_hi, item.price, item.qty, item.weight_label]
+              );
+            } catch (ie) {}
+          }
+        }
+      }
+
+      if (Array.isArray(tables.customer) && tables.customer.length > 0) {
+        for (const c of tables.customer) {
+          try {
+            const ex = await this.query("SELECT id FROM customer WHERE id = ?", [c.id]);
+            if (ex.length === 0) {
+              await this.execute(
+                `INSERT INTO customer (id, name, phone, email, address, status, registered_at, order_count, total_spent, points, is_prime_active, prime_membership_no, dob, anniversary)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                  c.id, c.name, c.phone, c.email || '', c.address || '', c.status || 'Active',
+                  c.registered_at || new Date().toISOString(), c.order_count || 0, c.total_spent || 0,
+                  c.points || 100, c.is_prime_active ? 1 : 0, c.prime_membership_no || '', c.dob || '', c.anniversary || ''
+                ]
+              );
+            }
+          } catch (ce) {}
+        }
+      }
+    } catch (err) {
+      console.warn("Notice in rehydrateFromPersistentSnapshot:", err.message);
     }
   }
 };

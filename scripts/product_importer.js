@@ -21,48 +21,28 @@ function normalizeName(name) {
 export async function importItems(rawItems) {
   await db.init();
 
-  // 1. First step: Delete any existing duplicate entries in database (matching by name and price)
+  // 1. Fetch current database products to ensure we do NOT remove or alter any existing data
   const currentDbProducts = await db.query("SELECT * FROM product ORDER BY id ASC");
-  console.log(`Database currently has ${currentDbProducts.length} products.`);
+  console.log(`Database currently has ${currentDbProducts.length} existing products.`);
 
-  const seenDbKeys = new Map();
-  const duplicateIdsToDelete = [];
-
-  for (const p of currentDbProducts) {
-    const key = `${normalizeName(p.name_en)}__${Number(p.price).toFixed(2)}`;
-    if (seenDbKeys.has(key)) {
-      duplicateIdsToDelete.push(p.id);
-    } else {
-      seenDbKeys.set(key, p.id);
-    }
-  }
-
-  if (duplicateIdsToDelete.length > 0) {
-    console.log(`🗑️ Deleting ${duplicateIdsToDelete.length} existing duplicate entries from database...`);
-    for (const id of duplicateIdsToDelete) {
-      await db.execute("DELETE FROM product WHERE id = ?", [id]);
-    }
-    console.log(`✓ Cleaned up duplicate database entries.`);
-  }
-
-  // 2. Refresh active database products after duplicate cleanup
-  const freshDbProducts = await db.query("SELECT * FROM product ORDER BY id ASC");
-  const existingSet = new Set(
-    freshDbProducts.map(p => `${normalizeName(p.name_en)}__${Number(p.price).toFixed(2)}`)
+  // Maintain existing products set by normalized name to prevent duplicates
+  const existingNameSet = new Set(
+    currentDbProducts.map(p => normalizeName(p.name_en))
   );
 
-  console.log(`Active unique database records: ${existingSet.size}`);
+  console.log(`Existing unique product names in database: ${existingNameSet.size}`);
 
-  // Find max ID for auto-incrementing
+  // Find max ID for safe auto-incrementing
   let nextId = 1;
   const maxIdResult = await db.query("SELECT MAX(id) as max_id FROM product");
   if (maxIdResult && maxIdResult[0] && maxIdResult[0].max_id) {
     nextId = Number(maxIdResult[0].max_id) + 1;
   }
 
-  // 3. Process new uploaded items with validation:
+  // 2. Process uploaded items:
   // - Skip if product name is empty
-  // - Skip if already exists with same name and amount in the DB or already added in this batch
+  // - Skip if already exists in the DB (preserve existing product and its image code)
+  // - Skip if duplicate within this batch
   let skippedCount = 0;
   let insertedCount = 0;
   let invalidCount = 0;
@@ -77,20 +57,20 @@ export async function importItems(rawItems) {
     }
 
     const trimmedName = rawName.trim();
-    const mrp = parsePrice(item["M.R.P."] || item.originalPrice || item.mrp);
-    const salesPrice = parsePrice(item["Sales Price"] || item.price);
-    const finalPrice = salesPrice > 0 ? salesPrice : (mrp > 0 ? mrp : 0);
-    const finalMrp = mrp > finalPrice ? mrp : null;
+    const normalized = normalizeName(trimmedName);
 
-    const validationKey = `${normalizeName(trimmedName)}__${Number(finalPrice).toFixed(2)}`;
-
-    if (existingSet.has(validationKey)) {
+    if (existingNameSet.has(normalized)) {
       skippedCount++;
       continue;
     }
 
-    // Add to existingSet so within the incoming JSON file itself duplicates are skipped too
-    existingSet.add(validationKey);
+    // Mark as seen so duplicates within the uploaded JSON files are also skipped
+    existingNameSet.add(normalized);
+
+    const mrp = parsePrice(item["M.R.P."] || item.originalPrice || item.mrp);
+    const salesPrice = parsePrice(item["Sales Price"] || item.price);
+    const finalPrice = salesPrice > 0 ? salesPrice : (mrp > 0 ? mrp : 0);
+    const finalMrp = mrp > finalPrice ? mrp : null;
 
     // Determine category and brand
     const lowerName = trimmedName.toLowerCase();
@@ -161,13 +141,16 @@ export async function importItems(rawItems) {
 
   console.log(`✓ Successfully inserted ${insertedCount} new unique products into the database.`);
 
+  // Save persistent snapshot to disk so data is never lost across restarts
+  await db.savePersistentSnapshot();
+
   // Final verification & recount
   const finalAll = await db.query("SELECT * FROM product ORDER BY id ASC");
   console.log(`🎉 Final Total Products in Database: ${finalAll.length}`);
 
   return {
     totalInput: rawItems.length,
-    deletedDuplicates: duplicateIdsToDelete.length,
+    deletedDuplicates: 0,
     skipped: skippedCount,
     inserted: insertedCount,
     totalInDb: finalAll.length

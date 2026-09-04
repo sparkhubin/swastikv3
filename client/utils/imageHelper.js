@@ -49,7 +49,10 @@ export function resolveProductImage(product, r2PublicUrl, size = 300) {
   let raw = (product.imageUrl || product.image || '').trim();
 
   // If a valid custom image URL is present and not failed
-  if (raw && !failedUrlCache.has(raw)) {
+  // If raw is the generic Unsplash placeholder, we first attempt to resolve from R2 using product code
+  const isGenericPlaceholder = !raw || raw.includes(GENERIC_PLACEHOLDER_KEY);
+
+  if (raw && !isGenericPlaceholder && !failedUrlCache.has(raw)) {
     // Automatically resolve relative /uploads/ path if frontend is on a separate server
     if (raw.startsWith('/uploads/')) {
       raw = resolveImageUrl(raw);
@@ -63,10 +66,33 @@ export function resolveProductImage(product, r2PublicUrl, size = 300) {
   // If code and R2 public URL exist, check if R2 URL hasn't failed yet
   const code = (product.code || product.Code || '').trim();
   if (code && r2PublicUrl) {
-    const r2Url = `${r2PublicUrl.replace(/\/$/, '')}/${code}.png`;
-    if (!failedUrlCache.has(r2Url)) {
-      return r2Url;
+    const cleanR2Base = r2PublicUrl.replace(/\/$/, '');
+    
+    // Check candidate keys: direct code, code without SW- prefix, etc.
+    const candidateCodes = [code];
+    if (code.startsWith('SW-')) {
+      candidateCodes.push(code.replace(/^SW-/, '')); // e.g. SW-SW0038 -> SW0038
     }
+
+    for (const c of candidateCodes) {
+      const r2Png = `${cleanR2Base}/${c}.png`;
+      if (!failedUrlCache.has(r2Png)) {
+        return r2Png;
+      }
+      const r2Jpg = `${cleanR2Base}/${c}.jpg`;
+      if (!failedUrlCache.has(r2Jpg)) {
+        return r2Jpg;
+      }
+      const r2Webp = `${cleanR2Base}/${c}.webp`;
+      if (!failedUrlCache.has(r2Webp)) {
+        return r2Webp;
+      }
+    }
+  }
+
+  // If raw was a valid non-failed URL (even fallback unsplash), return it before DEFAULT
+  if (raw && !failedUrlCache.has(raw)) {
+    return raw;
   }
 
   return DEFAULT_PRODUCT_FALLBACK;

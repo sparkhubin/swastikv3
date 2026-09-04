@@ -366,9 +366,9 @@ export default function CartCheckout({ onViewChange }) {
       console.warn("Falling back to client OTP simulation:", e);
     }
     setSimulatedOtpPin(realWaCode);
-    alert(language === 'hi' 
-      ? `🔑 [स्वास्तिक सुरक्षा ओटीपी]: व्हाट्सएप पर भेजा गया कोड: ${realWaCode}` 
-      : `🔑 [Swastik Security OTP]: WhatsApp Code Sent: ${realWaCode}`
+    setAuthGateSuccess(language === 'hi' 
+      ? "सुरक्षा ओटीपी कोड आपके व्हाट्सएप नंबर पर भेज दिया गया है।" 
+      : "Security OTP code has been dispatched to your WhatsApp number."
     );
   };
 
@@ -1064,8 +1064,13 @@ export default function CartCheckout({ onViewChange }) {
     setCheckoutError('');
 
     const orderId = "SW-" + Math.floor(1000 + Math.random() * 9000);
+    const effectiveUserId = (databaseCust && databaseCust.id) || (profile && profile.id) || null;
+    const finalCustName = shippingInfo.fullName || profile?.fullName || profile?.name || "Customer";
+    const finalCustPhone = shippingInfo.phoneNumber || profile?.phone || profile?.mobile || "";
+
     const newOrder = {
       id: orderId,
+      userId: effectiveUserId,
       orderDate: new Date().toISOString(),
       date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
       status: isOnline ? "Pending Payment" : "Confirmed",
@@ -1088,9 +1093,9 @@ export default function CartCheckout({ onViewChange }) {
       hubName: selectedLocationGroup ? `${selectedLocationGroup.name} Hub` : "Alpha Hub, Sector 12",
       eta: "15 Mins",
       shippingAddress: `[${selectedLocationGroup ? selectedLocationGroup.name : 'General Location'}${selectedSubLocation ? ` - ${selectedSubLocation}` : ''}] ${shippingInfo.address || "Sector 15, Noida, UP"}`,
-      customerName: shippingInfo.fullName || "Amit Sharma",
-      customerPhone: shippingInfo.phoneNumber || "+91 98765 12345",
-      customerEmail: customerEmail,
+      customerName: finalCustName,
+      customerPhone: finalCustPhone,
+      customerEmail: customerEmail || profile?.email || "",
       items: cartItems.map(item => ({
         productId: Number(item.product.id),
         nameEn: item.product.nameEn,

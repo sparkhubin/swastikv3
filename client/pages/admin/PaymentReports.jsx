@@ -27,7 +27,7 @@ import { useData } from '../../context/DataContext';
 
 export default function PaymentReports({ userRole, loggedInStaff }) {
   const { isHindi } = useLanguage();
-  const { orders: rawOrders = [], updateOrder } = useData();
+  const { orders: rawOrders = [], updateOrder, staff = [] } = useData();
 
   // Retrieve logged-in staff from storage if not passed directly
   const activeStaff = useMemo(() => {
@@ -104,19 +104,35 @@ export default function PaymentReports({ userRole, loggedInStaff }) {
     setCurrentPage(1);
   };
 
-  // Extract unique delivery rider names from orders
+  // Extract unique delivery rider names from registered staff directory (single user/staff table)
   const uniqueRiders = useMemo(() => {
     if (isDeliveryRider) {
       return [activeStaff?.name || 'Personal Account'];
     }
+    // Pull registered delivery riders directly from staff directory
+    const ridersFromStaff = (staff || [])
+      .filter(s => 
+        s.role_id === 4 || 
+        (s.role && String(s.role).toLowerCase().includes('rider')) || 
+        (s.role && String(s.role).toLowerCase().includes('delivery')) || 
+        (s.permissions && s.permissions.includes('delivery'))
+      )
+      .map(s => s.name.trim())
+      .filter(Boolean);
+
+    if (ridersFromStaff.length > 0) {
+      return Array.from(new Set(ridersFromStaff));
+    }
+
+    // Fallback if staff not yet loaded: only include valid staff names
     const set = new Set();
     orders.forEach(o => {
-      if (o.deliveryPartnerName) {
+      if (o.deliveryPartnerName && !o.deliveryPartnerName.toLowerCase().includes('arun dev')) {
         set.add(o.deliveryPartnerName.trim());
       }
     });
     return Array.from(set);
-  }, [orders, isDeliveryRider, activeStaff]);
+  }, [orders, staff, isDeliveryRider, activeStaff]);
 
   // Helper to parse dates securely
   const isWithinDateRange = (orderDateStr) => {

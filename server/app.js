@@ -26,6 +26,7 @@ import settingsRouter from "./routes/settings.js";
 import customersRouter from "./routes/customers.js";
 import backupRouter from "./routes/backup.js";
 import notificationsRouter from "./routes/notifications.js";
+import staffRouter from "./routes/staff.js";
 
 export async function createServer() {
   const app = express();
@@ -91,6 +92,7 @@ export async function createServer() {
   app.use("/api", customersRouter);
   app.use("/api", backupRouter);
   app.use("/api", notificationsRouter);
+  app.use("/api", staffRouter);
 
   // --- Vite Dev or Production Static Hosting ---
   if (process.env.NODE_ENV !== "production") {

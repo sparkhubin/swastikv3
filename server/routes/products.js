@@ -38,6 +38,9 @@ router.post("/products", async (req, res) => {
     );
     const newId = resId.lastID || 999;
     const rows = await db.query("SELECT * FROM product WHERE id = ?", [newId]);
+    if (db.savePersistentSnapshot) {
+      try { await db.savePersistentSnapshot(); } catch (e) {}
+    }
     res.status(201).json(mapProduct(rows[0]));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -100,6 +103,9 @@ router.put("/products/:id", async (req, res) => {
       ]
     );
     const rows = await db.query("SELECT * FROM product WHERE id = ?", [id]);
+    if (db.savePersistentSnapshot) {
+      try { await db.savePersistentSnapshot(); } catch (e) {}
+    }
     res.json(mapProduct(rows[0]));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -109,6 +115,9 @@ router.put("/products/:id", async (req, res) => {
 router.delete("/products", async (req, res) => {
   try {
     await db.execute("DELETE FROM product");
+    if (db.savePersistentSnapshot) {
+      try { await db.savePersistentSnapshot(); } catch (e) {}
+    }
     res.json({ status: "ok", message: "All products deleted" });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -119,6 +128,9 @@ router.delete("/products/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
     await db.execute("DELETE FROM product WHERE id = ?", [id]);
+    if (db.savePersistentSnapshot) {
+      try { await db.savePersistentSnapshot(); } catch (e) {}
+    }
     res.json({ status: "ok", message: "Deleted" });
   } catch (err) {
     res.status(500).json({ error: err.message });

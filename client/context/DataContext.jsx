@@ -147,8 +147,9 @@ const initialOrders = [
     deliveryFee: 0,
     gst: 81,
     total: 530,
-    deliveryPartnerName: "Pradeep Kumar (Swastik Rider)",
-    deliveryPartnerPhone: "+91 95400 12099",
+    deliveryStaffId: 3,
+    deliveryPartnerName: "Pradeep Kumar",
+    deliveryPartnerPhone: "+91 98101 20299",
     hubName: "Alpha Hub, Sector 12",
     eta: "15 Mins",
     customerName: "Amit Sharma",
@@ -167,8 +168,9 @@ const initialOrders = [
     deliveryFee: 40,
     gst: 63,
     total: 453,
-    deliveryPartnerName: "Arun Dev",
-    deliveryPartnerPhone: "+91 91288 34321",
+    deliveryStaffId: 4,
+    deliveryPartnerName: "Suresh Mehra",
+    deliveryPartnerPhone: "+91 98111 22334",
     hubName: "Alpha Hub, Sector 12",
     eta: "Delivered",
     customerName: "Pooja Patel",
@@ -1180,10 +1182,34 @@ export function DataProvider({ children }) {
 
   const updateCustomer = async (id, updated) => {
     const custId = Number(id);
+    const cleanP = updated.phone ? String(updated.phone).replace(/\D/g, "").slice(-10) : "";
+
     setCustomers(prev => {
       const updatedList = prev.map(c => c.id === custId ? { ...c, ...updated } : c);
       localStorage.setItem('swastik_customers', JSON.stringify(updatedList));
       return updatedList;
+    });
+
+    // Relational synchronization: immediately propagate updated customer info to all matching orders in state
+    setOrders(prevOrders => {
+      const updatedOrders = prevOrders.map(o => {
+        const ordCustId = Number(o.customerId || o.userId);
+        const ordPhone = String(o.customerPhone || o.phone || "").replace(/\D/g, "").slice(-10);
+        const isMatch = (ordCustId && ordCustId === custId) || (cleanP && ordPhone === cleanP);
+        if (isMatch) {
+          return {
+            ...o,
+            customerId: custId,
+            userId: custId,
+            ...(updated.name ? { customerName: updated.name } : {}),
+            ...(updated.phone ? { customerPhone: updated.phone } : {}),
+            ...(updated.email ? { customerEmail: updated.email } : {})
+          };
+        }
+        return o;
+      });
+      localStorage.setItem('swastik_orders', JSON.stringify(updatedOrders));
+      return updatedOrders;
     });
 
     window.dispatchEvent(new Event('storage'));
@@ -1194,6 +1220,12 @@ export function DataProvider({ children }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated)
       });
+      // Refresh orders from server to ensure complete relational data sync
+      const orderRes = await fetch('/api/orders');
+      if (orderRes.ok) {
+        const freshOrders = await orderRes.json();
+        if (Array.isArray(freshOrders)) setOrders(freshOrders);
+      }
     } catch (e) {
       console.warn(`Could not update customer ${custId} on backend:`, e);
     }
@@ -1326,38 +1358,57 @@ export function DataProvider({ children }) {
   const initialStaff = [
     {
       id: 1,
-      name: "Sanjay Kumar (Admin)",
+      name: "Balram Patidar",
+      role: "Store Super Admin",
+      role_id: 2,
       mobile: "9999999999",
-      password: "admin123",
-      permissions: ["dashboard", "products", "categories", "orders", "offers", "customers", "partners", "reviews", "pages", "staff", "delivery"]
+      password: "admin",
+      permissions: [
+        "dashboard", "products", "categories", "orders", "inventory", 
+        "delivery", "customers", "whatsapp", "settings", "pos", "staff", "reports"
+      ],
+      status: "Active",
+      isMasterAdmin: true
     },
     {
       id: 2,
-      name: "Rahul Sharma (Store Manager)",
-      mobile: "9876543210",
-      password: "manager123",
-      permissions: ["dashboard", "products", "orders", "customers"]
+      name: "Ramesh Sharma",
+      role: "Inventory & Stock Incharge",
+      role_id: 3,
+      mobile: "9812345670",
+      password: "staff",
+      permissions: ["products", "categories", "inventory"],
+      status: "Active"
     },
     {
       id: 3,
-      name: "Aman Patel (Logistics Lead)",
-      mobile: "9123456789",
-      password: "staff123",
-      permissions: ["orders"]
+      name: "Pradeep Kumar",
+      role: "Senior Delivery Rider",
+      role_id: 4,
+      mobile: "9810120299",
+      password: "staff",
+      permissions: ["delivery", "orders"],
+      status: "Active"
     },
     {
       id: 4,
-      name: "Pradeep Kumar (Delivery Executive)",
-      mobile: "9540012099",
-      password: "delivery123",
-      permissions: ["delivery"]
+      name: "Suresh Mehra",
+      role: "Delivery Rider",
+      role_id: 4,
+      mobile: "9811122334",
+      password: "staff",
+      permissions: ["delivery"],
+      status: "Active"
     },
     {
       id: 5,
-      name: "Rakesh Pilot (Delivery Rider)",
-      mobile: "9999988888",
-      password: "delivery123",
-      permissions: ["delivery"]
+      name: "Anita Gupta",
+      role: "Customer Support & Orders Desk",
+      role_id: 5,
+      mobile: "9823456789",
+      password: "staff",
+      permissions: ["orders", "customers", "whatsapp"],
+      status: "Active"
     }
   ];
 
@@ -1365,21 +1416,60 @@ export function DataProvider({ children }) {
     return safeJsonParse('swastik_staff', initialStaff);
   });
 
+  // Load staff from server on mount
+  useEffect(() => {
+    async function loadServerStaff() {
+      try {
+        const res = await fetch('/api/staff');
+        if (res.ok) {
+          const list = await res.json();
+          if (Array.isArray(list) && list.length > 0) {
+            setStaff(list);
+            localStorage.setItem('swastik_staff', JSON.stringify(list));
+          }
+        }
+      } catch (e) {
+        console.warn("Could not fetch staff from server:", e);
+      }
+    }
+    loadServerStaff();
+  }, []);
+
   useEffect(() => {
     localStorage.setItem('swastik_staff', JSON.stringify(staff));
   }, [staff]);
 
-  const addStaff = (s) => {
+  const addStaff = async (s) => {
     const newId = staff.length > 0 ? Math.max(...staff.map(x => x.id)) + 1 : 1;
-    setStaff(prev => [...prev, { ...s, id: newId }]);
+    const newRecord = { ...s, id: newId };
+    setStaff(prev => [...prev, newRecord]);
+    try {
+      await fetch('/api/staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newRecord)
+      });
+    } catch (e) {}
   };
 
-  const updateStaff = (id, updated) => {
+  const updateStaff = async (id, updated) => {
     setStaff(prev => prev.map(s => s.id === Number(id) ? { ...s, ...updated } : s));
+    try {
+      await fetch(`/api/staff/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated)
+      });
+    } catch (e) {}
   };
 
-  const deleteStaff = (id) => {
+  const deleteStaff = async (id) => {
     setStaff(prev => prev.filter(s => s.id !== Number(id)));
+    try {
+      await fetch(`/api/staff/${id}`, {
+        method: 'DELETE'
+      });
+    } catch (e) {}
   };
 
   const changeStaffPassword = async (mobile, oldPassword, newPassword) => {

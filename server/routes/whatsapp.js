@@ -1,5 +1,5 @@
 import express from "express";
-import { sendWhatsappMessageUnified } from "../utils.js";
+import { sendWhatsappMessageUnified, whatsappOutbox } from "../utils.js";
 import { db } from "../../database/db.js";
 
 const router = express.Router();
@@ -230,6 +230,147 @@ router.post("/whatsapp/bulk-send", async (req, res) => {
     });
   } catch (err) {
     console.error("Error in /api/whatsapp/bulk-send:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/whatsapp/settings - Retrieve configured WhatsApp Meta credentials & provider status
+router.get("/whatsapp/settings", async (req, res) => {
+  try {
+    let settings = {
+      metaPhoneNumberId: process.env.META_WHATSAPP_PHONE_NUMBER_ID || "",
+      metaAccessTokenConfigured: Boolean(process.env.META_WHATSAPP_ACCESS_TOKEN),
+      metaTokenPreview: process.env.META_WHATSAPP_ACCESS_TOKEN 
+        ? `${process.env.META_WHATSAPP_ACCESS_TOKEN.slice(0, 8)}...${process.env.META_WHATSAPP_ACCESS_TOKEN.slice(-6)}` 
+        : "",
+      metaTemplateName: process.env.META_WHATSAPP_TEMPLATE_NAME || "reference_no",
+      metaBusinessAccountId: process.env.META_WHATSAPP_BUSINESS_ACCOUNT_ID || "",
+      twilioConfigured: Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
+      twilioAccountSid: process.env.TWILIO_ACCOUNT_SID ? `${process.env.TWILIO_ACCOUNT_SID.slice(0, 6)}...` : "",
+      twilioFrom: process.env.TWILIO_WHATSAPP_FROM || "+14155238886",
+      activeProvider: (process.env.META_WHATSAPP_PHONE_NUMBER_ID && process.env.META_WHATSAPP_ACCESS_TOKEN) 
+        ? "meta" 
+        : ((process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) ? "twilio" : "simulated_outbox")
+    };
+
+    // Check app_settings for custom overrides
+    try {
+      const rows = await db.query("SELECT value_text FROM app_settings WHERE key_name = 'swastik_whatsapp_settings'");
+      if (rows.length > 0 && rows[0].value_text) {
+        const saved = JSON.parse(rows[0].value_text);
+        if (saved) {
+          settings = {
+            ...settings,
+            metaPhoneNumberId: saved.metaPhoneNumberId || settings.metaPhoneNumberId,
+            metaAccessTokenConfigured: Boolean(saved.metaAccessToken || settings.metaAccessTokenConfigured),
+            metaTokenPreview: saved.metaAccessToken 
+              ? `${saved.metaAccessToken.slice(0, 8)}...${saved.metaAccessToken.slice(-6)}` 
+              : settings.metaTokenPreview,
+            metaTemplateName: saved.metaTemplateName || settings.metaTemplateName,
+            metaBusinessAccountId: saved.metaBusinessAccountId || settings.metaBusinessAccountId,
+            twilioConfigured: Boolean((saved.twilioAccountSid && saved.twilioAuthToken) || settings.twilioConfigured),
+            twilioFrom: saved.twilioFrom || settings.twilioFrom,
+            activeProvider: (saved.metaPhoneNumberId && saved.metaAccessToken) 
+              ? "meta" 
+              : (settings.metaAccessTokenConfigured ? "meta" : (settings.twilioConfigured ? "twilio" : "simulated_outbox"))
+          };
+        }
+      }
+    } catch (dbErr) {}
+
+    res.json({ success: true, settings });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/whatsapp/settings - Save live WhatsApp API settings
+router.post("/whatsapp/settings", async (req, res) => {
+  try {
+    const { metaPhoneNumberId, metaAccessToken, metaTemplateName, metaBusinessAccountId, twilioAccountSid, twilioAuthToken, twilioFrom } = req.body;
+    
+    // Read existing saved settings first
+    let currentSaved = {};
+    try {
+      const rows = await db.query("SELECT value_text FROM app_settings WHERE key_name = 'swastik_whatsapp_settings'");
+      if (rows.length > 0 && rows[0].value_text) {
+        currentSaved = JSON.parse(rows[0].value_text);
+      }
+    } catch (e) {}
+
+    const updatedSettings = {
+      ...currentSaved,
+      metaPhoneNumberId: metaPhoneNumberId !== undefined ? metaPhoneNumberId.trim() : (currentSaved.metaPhoneNumberId || ""),
+      metaAccessToken: metaAccessToken !== undefined && metaAccessToken.trim() ? metaAccessToken.trim() : (currentSaved.metaAccessToken || ""),
+      metaTemplateName: metaTemplateName !== undefined ? metaTemplateName.trim() : (currentSaved.metaTemplateName || "reference_no"),
+      metaBusinessAccountId: metaBusinessAccountId !== undefined ? metaBusinessAccountId.trim() : (currentSaved.metaBusinessAccountId || ""),
+      twilioAccountSid: twilioAccountSid !== undefined ? twilioAccountSid.trim() : (currentSaved.twilioAccountSid || ""),
+      twilioAuthToken: twilioAuthToken !== undefined && twilioAuthToken.trim() ? twilioAuthToken.trim() : (currentSaved.twilioAuthToken || ""),
+      twilioFrom: twilioFrom !== undefined ? twilioFrom.trim() : (currentSaved.twilioFrom || "+14155238886"),
+      updatedAt: new Date().toISOString()
+    };
+
+    const valueString = JSON.stringify(updatedSettings);
+    const existing = await db.query("SELECT key_name FROM app_settings WHERE key_name = 'swastik_whatsapp_settings'");
+    if (existing.length > 0) {
+      await db.execute(
+        "UPDATE app_settings SET value_text = ?, updated_at = CURRENT_TIMESTAMP WHERE key_name = 'swastik_whatsapp_settings'",
+        [valueString]
+      );
+    } else {
+      await db.execute(
+        "INSERT INTO app_settings (key_name, value_text) VALUES ('swastik_whatsapp_settings', ?)",
+        [valueString]
+      );
+    }
+
+    if (db.savePersistentSnapshot) {
+      await db.savePersistentSnapshot();
+    }
+
+    res.json({
+      success: true,
+      message: "WhatsApp configuration saved successfully.",
+      activeProvider: (updatedSettings.metaPhoneNumberId && updatedSettings.metaAccessToken) ? "meta" : "simulated_outbox"
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/whatsapp/test - Dispatch test message to verify WhatsApp connectivity
+router.post("/whatsapp/test", async (req, res) => {
+  try {
+    const { to, message, templateName } = req.body;
+    if (!to) {
+      return res.status(400).json({ error: "Recipient mobile number 'to' is required." });
+    }
+
+    const testMsg = message || `Namaste! This is a test WhatsApp message from Swastik Supermarket. Verified on ${new Date().toLocaleTimeString()}.`;
+    const waRes = await sendWhatsappMessageUnified(
+      to,
+      testMsg,
+      false,
+      undefined,
+      templateName || undefined
+    );
+
+    res.json({
+      success: waRes.success,
+      to,
+      provider: waRes.provider || "simulated",
+      details: waRes
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/whatsapp/outbox - Retrieve recent WhatsApp messages sent
+router.get("/whatsapp/outbox", async (req, res) => {
+  try {
+    res.json({ success: true, count: whatsappOutbox.length, outbox: whatsappOutbox });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });

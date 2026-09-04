@@ -254,7 +254,19 @@ export default function AdminDashboard({ onViewChange }) {
 
     const randomOTP = Math.floor(1000 + Math.random() * 9000).toString();
     setIncomingOTP(randomOTP);
-    setRecoveryLogs(`[Meta API WA Debug Logs] 💬 Sent Outbound WhatsApp OTP to +91 ${recoveryPhone}: "Your Swastik staff security code is ${randomOTP}. Valid 5 mins."`);
+    setRecoveryLogs(`💬 Sending WhatsApp OTP to +91 ${recoveryPhone}...`);
+    try {
+      fetch('/api/auth/otp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: recoveryPhone })
+      }).then(res => res.json()).then(data => {
+        if (data.simulated_code) {
+          setIncomingOTP(data.simulated_code);
+        }
+        setRecoveryLogs(`✓ Security verification OTP code dispatched to +91 ${recoveryPhone} via WhatsApp.`);
+      }).catch(() => {});
+    } catch (e) {}
     setRecoveryStep(2);
   };
 
@@ -352,23 +364,27 @@ export default function AdminDashboard({ onViewChange }) {
   };
 
   // Determine if active user has Super Admin clearance (Root Admin)
+  // Strict Staff Role & Permission Mapping
   const isRootAdmin = Boolean(
-    !loggedInStaff ||
-    loggedInStaff.id === 1 ||
-    loggedInStaff.mobile === '9999999999' ||
-    loggedInStaff.role === 'admin' ||
-    (loggedInStaff.permissions && loggedInStaff.permissions.includes('staff'))
+    loggedInStaff && (
+      loggedInStaff.id === 1 ||
+      loggedInStaff.mobile === '9999999999' ||
+      loggedInStaff.isMasterAdmin ||
+      loggedInStaff.role === 'Store Super Admin' ||
+      loggedInStaff.role === 'admin'
+    )
   );
 
   const allAdminTabs = ["dashboard", "products", "categories", "orders", "offers", "membership", "customers", "partners", "reviews", "pages", "staff", "delivery", "payment-reports", "gst-reports", "sliders", "locations", "marg-billing", "payment-settings"];
 
+  // Strictly enforce granted permissions per staff member
   const authorizedTabs = userRole === 'delivery'
-    ? ['delivery', 'payment-reports', 'gst-reports']
+    ? ['delivery']
     : (isRootAdmin
         ? allAdminTabs
-        : (loggedInStaff?.permissions && loggedInStaff.permissions.length > 0
+        : (loggedInStaff?.permissions && Array.isArray(loggedInStaff.permissions) && loggedInStaff.permissions.length > 0
             ? loggedInStaff.permissions
-            : allAdminTabs));
+            : ['orders']));
 
   // Automatically clamp activeTab if current tab is unauthorized for logged in staff member
   useEffect(() => {
@@ -1731,9 +1747,72 @@ export default function AdminDashboard({ onViewChange }) {
                       </select>
                     </div>
 
+                    {/* Quick Role Permission Presets */}
+                    <div className="space-y-1 bg-slate-950/70 border border-white/10 p-3 rounded-2xl">
+                      <span className="text-[9px] font-black uppercase text-cyan-400 block pb-1">⚡ Quick Role Presets:</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setNewStaffPerms(['delivery'])}
+                          className={`text-[9px] px-2 py-1 rounded-lg font-bold border transition ${
+                            newStaffPerms.length === 1 && newStaffPerms.includes('delivery')
+                              ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40 font-black'
+                              : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                          }`}
+                        >
+                          🛵 Delivery Boy (Delivery Only)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNewStaffPerms(['products', 'categories'])}
+                          className={`text-[9px] px-2 py-1 rounded-lg font-bold border transition ${
+                            newStaffPerms.length === 2 && newStaffPerms.includes('products') && newStaffPerms.includes('categories')
+                              ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40 font-black'
+                              : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                          }`}
+                        >
+                          📦 Stock & Inventory
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNewStaffPerms(['orders', 'customers'])}
+                          className={`text-[9px] px-2 py-1 rounded-lg font-bold border transition ${
+                            newStaffPerms.length === 2 && newStaffPerms.includes('orders') && newStaffPerms.includes('customers')
+                              ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40 font-black'
+                              : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                          }`}
+                        >
+                          🛎️ Orders & Cashier Desk
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNewStaffPerms(['dashboard', 'orders', 'products', 'categories', 'customers'])}
+                          className="text-[9px] px-2 py-1 rounded-lg font-bold border bg-white/5 text-slate-300 border-white/10 hover:bg-white/10"
+                        >
+                          👔 Store Manager
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNewStaffPerms([
+                            'dashboard', 'orders', 'products', 'categories', 'sliders', 'offers',
+                            'delivery', 'locations', 'partners', 'membership', 'customers', 'reviews',
+                            'staff', 'payment-settings', 'payment-reports', 'marg-billing', 'pages'
+                          ])}
+                          className="text-[9px] px-2 py-1 rounded-lg font-bold border bg-emerald-500/15 text-emerald-300 border-emerald-400/30 hover:bg-emerald-500/25"
+                        >
+                          👑 Full Super Admin (All 17)
+                        </button>
+                      </div>
+                    </div>
+
                     {/* Checkbox Checklist of permissions (Requirement 8) */}
                     <div className="space-y-1.5 bg-slate-950 border border-white/10 p-4 rounded-2xl">
-                      <span className="text-[9px] font-black uppercase text-slate-400 block border-b border-white/5 pb-1">Define Clearances Checklist (Covering All 17 Modules):</span>
+                      <div className="flex items-center justify-between border-b border-white/5 pb-1">
+                        <span className="text-[9px] font-black uppercase text-slate-400 block">Assigned Clearances Checklist ({newStaffPerms.length} of 17 Selected):</span>
+                        <span className="text-[9px] font-mono text-cyan-400 font-bold">
+                          {newStaffPerms.length === 17 ? 'ALL MODULES' : `${newStaffPerms.length} MODULES`}
+                        </span>
+                      </div>
                       
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 text-[10px]">
                         {[
@@ -1796,49 +1875,66 @@ export default function AdminDashboard({ onViewChange }) {
                   <div className="space-y-4">
                     <h4 className="text-xs font-black uppercase text-white pb-2.5 border-b border-white/10">Active systems directory ({staff.length})</h4>
                     
-                    <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
-                      {staff.map((s) => (
-                        <div key={s.id} className="bg-slate-900 border border-white/10 p-4 rounded-2xl space-y-2 flex justify-between items-start">
-                          <div className="space-y-1 text-xs">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <h5 className="font-black text-white">{s.name}</h5>
-                              {s.status === 'disabled' ? (
-                                <span className="bg-red-500/10 border border-red-500/20 text-red-400 px-1.5 py-0.5 text-[8px] font-mono uppercase rounded font-black">Suspended</span>
-                              ) : (
-                                <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1.5 py-0.5 text-[8px] font-mono uppercase rounded font-black">Active</span>
+                    <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+                      {staff.map((s) => {
+                        const perms = Array.isArray(s.permissions) ? s.permissions : [];
+                        const isSuper = s.id === 1 || s.isMasterAdmin || perms.length >= 17;
+                        const isDeliveryOnly = perms.length === 1 && perms.includes('delivery');
+                        
+                        return (
+                          <div key={s.id} className="bg-slate-900 border border-white/10 p-4 rounded-2xl space-y-2 flex justify-between items-start">
+                            <div className="space-y-1 text-xs">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <h5 className="font-black text-white">{s.name}</h5>
+                                {isSuper ? (
+                                  <span className="bg-amber-500/10 border border-amber-500/20 text-amber-400 px-1.5 py-0.5 text-[8px] font-mono uppercase rounded font-black">Super Admin</span>
+                                ) : isDeliveryOnly ? (
+                                  <span className="bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 px-1.5 py-0.5 text-[8px] font-mono uppercase rounded font-black">🛵 Delivery Rider</span>
+                                ) : (
+                                  <span className="bg-purple-500/10 border border-purple-500/20 text-purple-400 px-1.5 py-0.5 text-[8px] font-mono uppercase rounded font-black">{s.role || 'Staff Member'}</span>
+                                )}
+                                {s.status === 'disabled' ? (
+                                  <span className="bg-red-500/10 border border-red-500/20 text-red-400 px-1.5 py-0.5 text-[8px] font-mono uppercase rounded font-black">Suspended</span>
+                                ) : (
+                                  <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1.5 py-0.5 text-[8px] font-mono uppercase rounded font-black">Active</span>
+                                )}
+                              </div>
+                              <p className="font-mono text-[10px] text-slate-400">Mobile: +91 {s.mobile} • Password: <span className="text-cyan-300 font-bold bg-white/5 border border-white/5 px-1 py-0.5 rounded">{s.password}</span> • Access: <span className="text-amber-300 font-bold">{perms.length} of 17 modules</span></p>
+                              
+                              <div className="flex flex-wrap gap-1 pt-1">
+                                {perms.map((pSub) => (
+                                  <span key={pSub} className={`border font-bold font-mono text-[8px] px-1.5 py-0.5 rounded tracking-tighter uppercase ${
+                                    pSub === 'delivery' 
+                                      ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-300' 
+                                      : (pSub === 'staff' ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' : 'bg-slate-950 border-white/5 text-slate-400')
+                                  }`}>
+                                    {pSub}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="flex gap-1.5">
+                              <button
+                                onClick={() => handleStartStaffEdit(s)}
+                                title="Update member details & status"
+                                className="p-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 rounded-lg text-cyan-300 transition shrink-0 cursor-pointer"
+                              >
+                                <Edit3 className="h-3.5 w-3.5" />
+                              </button>
+                              {s.id !== 1 && !s.isMasterAdmin && (
+                                <button 
+                                  onClick={() => handleDeleteStaff(s.id)}
+                                  title="Strike off partner identity"
+                                  className="p-1.5 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 hover:bg-red-500/20 transition-all shrink-0 cursor-pointer"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                                </button>
                               )}
                             </div>
-                            <p className="font-mono text-[10px] text-slate-400">Mobile: +91 {s.mobile} • Password: <span className="text-cyan-300 font-bold bg-white/5 border border-white/5 px-1 py-0.5 rounded">{s.password}</span></p>
-                            
-                            <div className="flex flex-wrap gap-1 pt-1">
-                              {s.permissions.map((pSub) => (
-                                <span key={pSub} className="bg-slate-950 border border-white/5 text-slate-400 font-bold font-mono text-[8px] px-1.5 py-0.5 rounded tracking-tighter uppercase">
-                                  {pSub}
-                                </span>
-                              ))}
-                            </div>
                           </div>
-
-                          <div className="flex gap-1.5">
-                            <button
-                              onClick={() => handleStartStaffEdit(s)}
-                              title="Update member details & status"
-                              className="p-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 rounded-lg text-cyan-300 transition shrink-0"
-                            >
-                              <Edit3 className="h-3.5 w-3.5" />
-                            </button>
-                            {s.id !== 1 && (
-                              <button 
-                                onClick={() => handleDeleteStaff(s.id)}
-                                title="Strike off partner identity"
-                                className="p-1.5 bg-red-500/10 border border-red-500/20 rounded-lg text-red-405 hover:bg-red-500/20 transition-all shrink-0"
-                              >
-                                <Trash2 className="h-3.5 w-3.5 text-red-400" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
 
