@@ -282,6 +282,9 @@ router.delete("/staff/:id", async (req, res) => {
     if (existing[0].is_master_admin) {
       return res.status(400).json({ error: "Cannot delete Root Super Admin." });
     }
+    try {
+      await db.execute('UPDATE "order" SET delivery_staff_id = NULL WHERE delivery_staff_id = ?', [id]);
+    } catch (e) {}
     await db.execute('DELETE FROM "user" WHERE id = ?', [id]);
     if (db.savePersistentSnapshot) await db.savePersistentSnapshot();
     res.json({ success: true, message: "Staff removed successfully." });

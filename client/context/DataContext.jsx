@@ -915,8 +915,13 @@ export function DataProvider({ children }) {
     }
   };
 
-  const deleteReview = (id) => {
-    setReviews(prev => prev.filter(r => r.id !== Number(id)));
+  const deleteReview = async (id) => {
+    setReviews(prev => prev.filter(r => r.id !== Number(id) && String(r.id) !== String(id)));
+    try {
+      await fetch(`/api/reviews/${id}`, { method: 'DELETE' });
+    } catch (e) {
+      console.error("Failed to delete review on server:", e);
+    }
   };
 
   // CRUD actions for Orders via GORM REST API
@@ -1069,7 +1074,12 @@ export function DataProvider({ children }) {
     setCategories(prev => prev.map(c => c.id === id ? { ...c, ...updated } : c));
   };
   const deleteCategory = (id) => {
-    setCategories(prev => prev.filter(c => c.id !== id));
+    setCategories(prev => {
+      const updated = prev.filter(c => c.id !== id && String(c.id) !== String(id));
+      localStorage.setItem('swastik_categories', JSON.stringify(updated));
+      saveSettingToDb('swastik_categories', updated);
+      return updated;
+    });
   };
 
   // Dynamic offers CRUD
@@ -1078,10 +1088,15 @@ export function DataProvider({ children }) {
     setOffers(prev => [...prev, { ...off, id: newId }]);
   };
   const updateOffer = (id, updated) => {
-    setOffers(prev => prev.map(o => o.id === Number(id) ? { ...o, ...updated } : o));
+    setOffers(prev => prev.map(o => (o.id === id || String(o.id) === String(id) || o.id === Number(id)) ? { ...o, ...updated } : o));
   };
   const deleteOffer = (id) => {
-    setOffers(prev => prev.filter(o => o.id !== Number(id)));
+    setOffers(prev => {
+      const updated = prev.filter(o => o.id !== id && String(o.id) !== String(id) && o.id !== Number(id));
+      localStorage.setItem('swastik_offers', JSON.stringify(updated));
+      saveSettingToDb('swastik_offers', updated);
+      return updated;
+    });
   };
 
   // Dynamic contact messages submission
@@ -1090,7 +1105,15 @@ export function DataProvider({ children }) {
     setContactMessages(prev => [{ ...msg, id: newId, date: "Just now", answer: "" }, ...prev]);
   };
   const updateContactMessage = (id, updated) => {
-    setContactMessages(prev => prev.map(m => m.id === Number(id) ? { ...m, ...updated } : m));
+    setContactMessages(prev => prev.map(m => (m.id === id || String(m.id) === String(id) || m.id === Number(id)) ? { ...m, ...updated } : m));
+  };
+  const deleteContactMessage = (id) => {
+    setContactMessages(prev => {
+      const updated = prev.filter(m => m.id !== id && String(m.id) !== String(id) && m.id !== Number(id));
+      localStorage.setItem('swastik_contact_messages', JSON.stringify(updated));
+      saveSettingToDb('swastik_contact_messages', updated);
+      return updated;
+    });
   };
 
   // Dynamic customers register & synchronization with backend
@@ -1234,17 +1257,18 @@ export function DataProvider({ children }) {
   const deleteCustomer = async (id) => {
     const custId = Number(id);
     setCustomers(prev => {
-      const updatedList = prev.filter(c => c.id !== custId);
+      const updatedList = prev.filter(c => c.id !== custId && String(c.id) !== String(id));
       localStorage.setItem('swastik_customers', JSON.stringify(updatedList));
+      saveSettingToDb('swastik_customers', updatedList);
       return updatedList;
     });
 
     window.dispatchEvent(new Event('storage'));
 
     try {
-      await fetch(`/api/customers/${custId}`, { method: 'DELETE' });
+      await fetch(`/api/customers/${id}`, { method: 'DELETE' });
     } catch (e) {
-      console.warn(`Could not delete customer ${custId} on backend:`, e);
+      console.warn(`Could not delete customer ${id} on backend:`, e);
     }
   };
 
@@ -1534,7 +1558,7 @@ export function DataProvider({ children }) {
     setPrivacySections(prev => prev.map(s => s.id === Number(id) ? { ...s, ...updated } : s));
   };
   const deletePrivacySection = (id) => {
-    setPrivacySections(prev => prev.filter(s => s.id !== Number(id)));
+    setPrivacySections(prev => prev.filter(s => s.id !== id && String(s.id) !== String(id) && s.id !== Number(id)));
   };
 
   const addTermsSection = (sect) => {
@@ -1542,10 +1566,10 @@ export function DataProvider({ children }) {
     setTermsSections(prev => [...prev, { ...sect, id: newId }]);
   };
   const updateTermsSection = (id, updated) => {
-    setTermsSections(prev => prev.map(s => s.id === Number(id) ? { ...s, ...updated } : s));
+    setTermsSections(prev => prev.map(s => (s.id === id || String(s.id) === String(id) || s.id === Number(id)) ? { ...s, ...updated } : s));
   };
   const deleteTermsSection = (id) => {
-    setTermsSections(prev => prev.filter(s => s.id !== Number(id)));
+    setTermsSections(prev => prev.filter(s => s.id !== id && String(s.id) !== String(id) && s.id !== Number(id)));
   };
 
   const addRefundSection = (sect) => {
@@ -1553,10 +1577,10 @@ export function DataProvider({ children }) {
     setRefundSections(prev => [...prev, { ...sect, id: newId }]);
   };
   const updateRefundSection = (id, updated) => {
-    setRefundSections(prev => prev.map(s => s.id === Number(id) ? { ...s, ...updated } : s));
+    setRefundSections(prev => prev.map(s => (s.id === id || String(s.id) === String(id) || s.id === Number(id)) ? { ...s, ...updated } : s));
   };
   const deleteRefundSection = (id) => {
-    setRefundSections(prev => prev.filter(s => s.id !== Number(id)));
+    setRefundSections(prev => prev.filter(s => s.id !== id && String(s.id) !== String(id) && s.id !== Number(id)));
   };
 
   // Dynamic Slider/Banner CRUD Actions
@@ -1565,10 +1589,10 @@ export function DataProvider({ children }) {
     setSlides(prev => [...prev, { ...slide, id: newId }]);
   };
   const updateSlide = (id, updated) => {
-    setSlides(prev => prev.map(s => s.id === Number(id) ? { ...s, ...updated } : s));
+    setSlides(prev => prev.map(s => (s.id === id || String(s.id) === String(id) || s.id === Number(id)) ? { ...s, ...updated } : s));
   };
   const deleteSlide = (id) => {
-    setSlides(prev => prev.filter(s => s.id !== Number(id)));
+    setSlides(prev => prev.filter(s => s.id !== id && String(s.id) !== String(id) && s.id !== Number(id)));
   };
 
   return (
@@ -1631,6 +1655,7 @@ export function DataProvider({ children }) {
       contactMessages,
       addContactMessage,
       updateContactMessage,
+      deleteContactMessage,
       customers,
       setCustomers,
       addCustomer,

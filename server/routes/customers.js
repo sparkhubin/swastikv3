@@ -412,12 +412,20 @@ router.delete("/customers/:id", async (req, res) => {
   try {
     const custId = Number(req.params.id);
     let customerList = await getStoredCustomers();
+    const targetCust = customerList.find(c => Number(c.id) === custId);
     customerList = customerList.filter(c => Number(c.id) !== custId);
     await saveStoredCustomers(customerList);
 
     try {
       await db.execute("DELETE FROM customer WHERE id = ?", [custId]);
       await db.execute('DELETE FROM "user" WHERE id = ? AND role_id = 1', [custId]);
+      if (targetCust && targetCust.phone) {
+        const cleanDigits = cleanPhone(targetCust.phone);
+        if (cleanDigits.length >= 10) {
+          const ten = cleanDigits.slice(-10);
+          await db.execute('DELETE FROM "user" WHERE phone_number LIKE ? AND role_id = 1', [`%${ten}`]);
+        }
+      }
     } catch (sqlErr) {
       console.warn("Notice deleting from SQL customer/user tables:", sqlErr.message);
     }

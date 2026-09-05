@@ -46,4 +46,17 @@ router.put("/reviews/:id/reply", async (req, res) => {
   }
 });
 
+router.delete("/reviews/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    await db.execute("DELETE FROM review WHERE id = ?", [id]);
+    if (db.savePersistentSnapshot) {
+      try { await db.savePersistentSnapshot(); } catch (e) {}
+    }
+    res.json({ success: true, message: "Review deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

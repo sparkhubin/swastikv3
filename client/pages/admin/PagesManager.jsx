@@ -30,6 +30,7 @@ export default function PagesManager({ userRole }) {
   const { 
     contactMessages, 
     updateContactMessage, 
+    deleteContactMessage,
     aboutSettings, 
     setAboutSettings, 
     contactSettings, 
@@ -328,7 +329,23 @@ export default function PagesManager({ userRole }) {
                       <h3 className="font-black text-sm text-white">{activeMessageDetail.name}</h3>
                       <p className="text-[10px] font-mono text-slate-400 font-black">PH: {activeMessageDetail.mobile}</p>
                     </div>
-                    <span className="text-[9px] text-slate-500 font-mono">ID: #{activeMessageDetail.id}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] text-slate-500 font-mono">ID: #{activeMessageDetail.id}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm("Are you sure you want to permanently delete this inquiry message?")) {
+                            deleteContactMessage(activeMessageDetail.id);
+                            setActiveMessageDetail(null);
+                          }
+                        }}
+                        className="px-2 py-1 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg border border-rose-500/20 text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                        title="Delete inquiry"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        <span>Delete</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 

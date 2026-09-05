@@ -11,7 +11,7 @@ router.get("/orders", async (req, res) => {
              COALESCE(u_cust.id, c.id) as rel_customer_id, 
              COALESCE(u_cust.full_name, c.name, o.customer_name) as rel_customer_name, 
              COALESCE(u_cust.phone_number, c.phone, o.customer_phone) as rel_customer_phone, 
-             COALESCE(u_cust.email, c.email, o.customer_email) as rel_customer_email,
+             COALESCE(c.email, o.customer_email) as rel_customer_email,
              COALESCE(u_cust.delivery_address, c.address, o.shipping_address) as rel_customer_address,
              u_rider.id as rel_rider_id,
              u_rider.full_name as rel_rider_name,
@@ -46,7 +46,7 @@ router.get("/orders/:id", async (req, res) => {
              COALESCE(u_cust.id, c.id) as rel_customer_id, 
              COALESCE(u_cust.full_name, c.name, o.customer_name) as rel_customer_name, 
              COALESCE(u_cust.phone_number, c.phone, o.customer_phone) as rel_customer_phone, 
-             COALESCE(u_cust.email, c.email, o.customer_email) as rel_customer_email,
+             COALESCE(c.email, o.customer_email) as rel_customer_email,
              COALESCE(u_cust.delivery_address, c.address, o.shipping_address) as rel_customer_address,
              u_rider.id as rel_rider_id,
              u_rider.full_name as rel_rider_name,
@@ -703,11 +703,37 @@ router.put(["/orders/:id", "/orders/:id/transit"], async (req, res) => {
   }
 });
 
+router.delete("/orders", async (req, res) => {
+  try {
+    await db.execute("DELETE FROM order_item");
+    await db.execute('DELETE FROM "order"');
+    try {
+      await db.execute("UPDATE app_settings SET value_text = '[]', updated_at = CURRENT_TIMESTAMP WHERE key_name = 'swastik_orders'");
+    } catch (e) {}
+    if (db.savePersistentSnapshot) {
+      try { await db.savePersistentSnapshot(); } catch (e) {}
+    }
+    res.json({ status: "ok", message: "All orders deleted" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.delete("/orders/:id", async (req, res) => {
   const id = req.params.id;
   try {
     await db.execute("DELETE FROM order_item WHERE order_id = ?", [id]);
     await db.execute('DELETE FROM "order" WHERE id = ?', [id]);
+    try {
+      const rows = await db.query("SELECT value_text FROM app_settings WHERE key_name = 'swastik_orders'");
+      if (rows && rows.length > 0 && rows[0].value_text) {
+        let list = JSON.parse(rows[0].value_text);
+        if (Array.isArray(list)) {
+          list = list.filter(o => String(o.id) !== String(id) && o.id !== id);
+          await db.execute("UPDATE app_settings SET value_text = ?, updated_at = CURRENT_TIMESTAMP WHERE key_name = 'swastik_orders'", [JSON.stringify(list)]);
+        }
+      }
+    } catch (e) {}
     if (db.savePersistentSnapshot) {
       try { await db.savePersistentSnapshot(); } catch (e) {}
     }

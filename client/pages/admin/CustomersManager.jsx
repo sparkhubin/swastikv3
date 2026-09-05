@@ -206,7 +206,7 @@ const metaApprovalTemplates = [
 
 export default function CustomersManager() {
   const { isHindi } = useLanguage();
-  const { customers, addCustomer, updateCustomer, orders = [], primeSettings, dataDeletionRequests = [] } = useData();
+  const { customers, addCustomer, updateCustomer, deleteCustomer, orders = [], primeSettings, dataDeletionRequests = [] } = useData();
 
   // Navigation sub-tabs
   const [activeSubTab, setActiveSubTab] = useState('directory'); // directory | groups | broadcast | meta_templates
@@ -1356,6 +1356,23 @@ export default function CustomersManager() {
                                 />
                               </div>
                             )}
+
+                            {/* Delete Customer Action */}
+                            <button 
+                              type="button"
+                              onClick={() => {
+                                if (window.confirm(isHindi 
+                                  ? `क्या आप वाकई ग्राहक "${cust.name}" (${cust.phone}) को स्थायी रूप से हटाना चाहते हैं?` 
+                                  : `Are you sure you want to permanently delete customer "${cust.name}" (${cust.phone})?`)) {
+                                  deleteCustomer(cust.id);
+                                }
+                              }}
+                              className="w-full max-w-[130px] px-2 py-1 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-rose-500/40 text-rose-400 hover:text-rose-300 text-[9px] font-black uppercase tracking-wider rounded-xl flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-95"
+                              title="Delete Customer Account"
+                            >
+                              <Trash2 className="h-3 w-3 text-rose-400" />
+                              <span>{isHindi ? "हटाएं" : "Delete"}</span>
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -2435,6 +2452,24 @@ export default function CustomersManager() {
                       className="w-full bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-black uppercase text-[10px] tracking-wider py-2.5 rounded-xl cursor-pointer active:scale-[0.98] transition-all"
                     >
                       Save Profile Updates
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(isHindi 
+                          ? `क्या आप वाकई ग्राहक "${editForm.name}" (${editForm.phone}) को स्थायी रूप से हटाना चाहते हैं?` 
+                          : `Are you sure you want to permanently delete customer "${editForm.name}" (${editForm.phone})? This action cannot be undone.`)) {
+                          deleteCustomer(editForm.id);
+                          setSelectedDetailCust(null);
+                          setToastMessage('Customer permanently deleted.');
+                          setTimeout(() => setToastMessage(''), 3000);
+                        }
+                      }}
+                      className="w-full bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 hover:text-rose-300 font-bold uppercase text-[10px] tracking-wider py-2 rounded-xl cursor-pointer active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>{isHindi ? "ग्राहक खाता हटाएं" : "Delete Customer Profile"}</span>
                     </button>
                   </div>
                 </div>

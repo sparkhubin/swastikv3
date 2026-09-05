@@ -114,6 +114,9 @@ router.put("/products/:id", async (req, res) => {
 
 router.delete("/products", async (req, res) => {
   try {
+    try {
+      await db.execute("UPDATE order_item SET product_id = NULL");
+    } catch (e) {}
     await db.execute("DELETE FROM product");
     if (db.savePersistentSnapshot) {
       try { await db.savePersistentSnapshot(); } catch (e) {}
@@ -127,6 +130,9 @@ router.delete("/products", async (req, res) => {
 router.delete("/products/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
+    try {
+      await db.execute("UPDATE order_item SET product_id = NULL WHERE product_id = ?", [id]);
+    } catch (e) {}
     await db.execute("DELETE FROM product WHERE id = ?", [id]);
     if (db.savePersistentSnapshot) {
       try { await db.savePersistentSnapshot(); } catch (e) {}

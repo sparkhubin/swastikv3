@@ -240,6 +240,10 @@ export const db = {
         phone_number VARCHAR(20) NOT NULL UNIQUE,
         password_hash VARCHAR(255) NOT NULL,
         role_id INT DEFAULT 1,
+        email VARCHAR(255) DEFAULT '',
+        permissions ${textType} DEFAULT '[]',
+        status VARCHAR(50) DEFAULT 'Active',
+        is_master_admin ${booleanType} DEFAULT ${isPg ? 'FALSE' : 0},
         delivery_address ${textType},
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -448,10 +452,19 @@ export const db = {
     // Seed default roles if not present
     try {
       const roles = await this.query("SELECT * FROM role");
-      if (roles.length === 0) {
-        console.log("🌱 Seeding default roles into the Database...");
-        await this.execute("INSERT INTO role (name, description) VALUES (?, ?)", ["user", "Standard Customer Account"]);
-        await this.execute("INSERT INTO role (name, description) VALUES (?, ?)", ["admin", "Administrator Dashboard Account"]);
+      const existingNames = new Set((roles || []).map(r => r.name.toLowerCase()));
+      const defaultRoles = [
+        { id: 1, name: "customer", description: "Standard Customer Account" },
+        { id: 2, name: "admin", description: "Store Super Admin" },
+        { id: 3, name: "manager", description: "Inventory & Stock Incharge" },
+        { id: 4, name: "rider", description: "Delivery Partner / Rider" },
+        { id: 5, name: "support", description: "Customer Support & Orders Desk" }
+      ];
+
+      for (const r of defaultRoles) {
+        if (!existingNames.has(r.name) && !(r.name === "customer" && existingNames.has("user"))) {
+          await this.execute("INSERT INTO role (id, name, description) VALUES (?, ?, ?)", [r.id, r.name, r.description]);
+        }
       }
     } catch (e) {}
 
@@ -511,6 +524,13 @@ export const db = {
       { name: "cod_settlement_note", sqlite: "TEXT", pg: "TEXT", my: "TEXT" }
     ];
 
+    const userColumns = [
+      { name: "email", sqlite: "TEXT DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
+      { name: "permissions", sqlite: "TEXT DEFAULT '[]'", pg: "TEXT DEFAULT '[]'", my: "TEXT" },
+      { name: "status", sqlite: "TEXT DEFAULT 'Active'", pg: "VARCHAR(50) DEFAULT 'Active'", my: "VARCHAR(50) DEFAULT 'Active'" },
+      { name: "is_master_admin", sqlite: "INT DEFAULT 0", pg: "BOOLEAN DEFAULT FALSE", my: "INT DEFAULT 0" }
+    ];
+
     // 1. SQLite Schema Migration
     if (sqliteDb) {
       try {
@@ -531,6 +551,29 @@ export const db = {
                 });
               });
               console.log(`✓ SQLite migrated: added column ${col.name} to "order" table.`);
+            } catch (colErr) {
+              console.warn(`Notice SQLite column add ${col.name}:`, colErr.message);
+            }
+          }
+        }
+
+        const existingUserSQLite = await new Promise((resolve) => {
+          sqliteDb.all('PRAGMA table_info("user")', (err, rows) => {
+            if (err) resolve([]);
+            else resolve(rows || []);
+          });
+        });
+        const existingUserColNames = new Set(existingUserSQLite.map((c) => c.name));
+        for (const col of userColumns) {
+          if (!existingUserColNames.has(col.name)) {
+            try {
+              await new Promise((resolve, reject) => {
+                sqliteDb.run(`ALTER TABLE "user" ADD COLUMN ${col.name} ${col.sqlite}`, (err) => {
+                  if (err && !err.message.includes("duplicate column")) reject(err);
+                  else resolve();
+                });
+              });
+              console.log(`✓ SQLite migrated: added column ${col.name} to "user" table.`);
             } catch (colErr) {
               console.warn(`Notice SQLite column add ${col.name}:`, colErr.message);
             }
