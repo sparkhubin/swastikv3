@@ -3,7 +3,7 @@ import Account from './Account';
 import { useLanguage } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
 import { useData } from '../context/DataContext';
-import { resolveProductImage, markImageFailed, DEFAULT_PRODUCT_FALLBACK } from '../utils/imageHelper';
+import { resolveProductImage, getNextCandidateImage, markImageFailed, DEFAULT_PRODUCT_FALLBACK } from '../utils/imageHelper';
 import { 
   Trash2, 
   MapPin, 
@@ -106,8 +106,8 @@ const CartItemImage = ({ product, r2PublicUrl, className }) => {
 
   const handleImageError = () => {
     if (imgSrc && imgSrc !== DEFAULT_PRODUCT_FALLBACK) {
-      markImageFailed(imgSrc);
-      setImgSrc(DEFAULT_PRODUCT_FALLBACK);
+      const next = getNextCandidateImage(product, imgSrc, r2PublicUrl);
+      setImgSrc(next || DEFAULT_PRODUCT_FALLBACK);
     }
   };
 
@@ -126,7 +126,11 @@ const CartItemImage = ({ product, r2PublicUrl, className }) => {
 
 export default function CartCheckout({ onViewChange }) {
   const { t, language, isHindi } = useLanguage();
-  const { orders, addOrder, offers, contactSettings, products, setProducts, referralSettings, locationGroups, celebrationSettings, customers, addCustomer, upsertCustomer, updateCustomer, r2PublicUrl, paymentEnabled, paymentEnvironment } = useData();
+  const { orders, addOrder, offers, contactSettings, products, setProducts, referralSettings, locationGroups, celebrationSettings, customers, addCustomer, upsertCustomer, updateCustomer, r2PublicUrl, paymentEnabled, paymentEnvironment, fetchProducts, fetchCustomers } = useData();
+
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
 
   const {
     cartItems,

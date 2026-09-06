@@ -24,7 +24,9 @@ import {
   Plus,
   Trash2,
   Save,
-  Lock
+  Lock,
+  XCircle,
+  Ban
 } from 'lucide-react';
 import R2ImageUploader from './R2ImageUploader';
 import NotificationCenter from '../../components/NotificationCenter';
@@ -32,7 +34,13 @@ import { isOrder1HourLocked, getLockTimeRemainingFormatted } from '../../utils/o
 
 export default function OrdersManager({ userRole }) {
   const { isHindi } = useLanguage();
-  const { orders, updateOrder, deleteOrder, addOrder, products, offers, staff, contactSettings, customers } = useData();
+  const { orders, updateOrder, deleteOrder, addOrder, products, offers, staff, contactSettings, customers, fetchOrders, fetchCustomers, fetchStaff } = useData();
+
+  React.useEffect(() => {
+    fetchOrders();
+    fetchCustomers();
+    fetchStaff();
+  }, [fetchOrders, fetchCustomers, fetchStaff]);
 
   // Relational resolution helpers: Resolve customer details dynamically from customer ID / phone
   const getCustName = React.useCallback((ord) => {
@@ -93,11 +101,41 @@ export default function OrdersManager({ userRole }) {
     let computedGst = 0;
 
     const mappedItems = items.map((it, idx) => {
-      const rate = it.gstPercent !== undefined ? Number(it.gstPercent) : 5;
+      // Find matching product in catalog to verify GST column presence
+      const matchedProd = products.find(p => String(p.id) === String(it.productId || it.id) || String(p.code) === String(it.code || ''));
+      
+      let rawGst = undefined;
+      // Check if product table has GST column
+      if (matchedProd) {
+        if (matchedProd.gstPercent !== undefined && matchedProd.gstPercent !== null && matchedProd.gstPercent !== '') {
+          rawGst = Number(matchedProd.gstPercent);
+        } else if (matchedProd.gst_percent !== undefined && matchedProd.gst_percent !== null && matchedProd.gst_percent !== '') {
+          rawGst = Number(matchedProd.gst_percent);
+        } else if (matchedProd.gst !== undefined && matchedProd.gst !== null && matchedProd.gst !== '') {
+          rawGst = Number(matchedProd.gst);
+        }
+      } else if (it.gstPercent !== undefined && it.gstPercent !== null && it.gstPercent !== '') {
+        rawGst = Number(it.gstPercent);
+      } else if (it.gst !== undefined && it.gst !== null && it.gst !== '') {
+        rawGst = Number(it.gst);
+      }
+
+      // If product has no GST column or GST is 0, do not treat as GST applicable
+      const hasItemGst = rawGst !== undefined && rawGst !== null && !isNaN(rawGst) && rawGst > 0;
+      const rate = hasItemGst ? rawGst : 0;
+
+      // Brand: Only show if brand exists and is not a generic placeholder
+      let itemBrand = '';
+      const rawBrandCandidate = (it.brand || (matchedProd ? (matchedProd.brand || matchedProd.subEn) : '') || '').trim();
+      const lowerB = rawBrandCandidate.toLowerCase();
+      if (rawBrandCandidate && !['general', 'fresh', 'n/a', 'none', 'null', 'undefined', '-', 'grocery'].includes(lowerB)) {
+        itemBrand = rawBrandCandidate;
+      }
+
       const qty = Number(it.qty || it.quantity || 1);
       const unitPrice = Number(it.price || 0);
       const lineTaxable = Math.round(unitPrice * qty * 100) / 100;
-      const taxAmount = Math.round(((lineTaxable * rate) / 100) * 100) / 100;
+      const taxAmount = hasItemGst ? Math.round(((lineTaxable * rate) / 100) * 100) / 100 : 0;
       const cgst = Math.round((taxAmount / 2) * 100) / 100;
       const sgst = Math.round((taxAmount - cgst) * 100) / 100;
       const lineTotal = Math.round((lineTaxable + taxAmount) * 100) / 100;
@@ -105,16 +143,20 @@ export default function OrdersManager({ userRole }) {
       computedTaxable += lineTaxable;
       computedGst += taxAmount;
 
-      if (!slabMap[rate]) {
-        slabMap[rate] = { slab: rate, taxable: 0, cgst: 0, sgst: 0, totalTax: 0 };
+      if (hasItemGst) {
+        if (!slabMap[rate]) {
+          slabMap[rate] = { slab: rate, taxable: 0, cgst: 0, sgst: 0, totalTax: 0 };
+        }
+        slabMap[rate].taxable += lineTaxable;
+        slabMap[rate].cgst += cgst;
+        slabMap[rate].sgst += sgst;
+        slabMap[rate].totalTax += taxAmount;
       }
-      slabMap[rate].taxable += lineTaxable;
-      slabMap[rate].cgst += cgst;
-      slabMap[rate].sgst += sgst;
-      slabMap[rate].totalTax += taxAmount;
 
       return {
         ...it,
+        brand: itemBrand,
+        hasItemGst,
         rate,
         qty,
         unitPrice,
@@ -126,8 +168,10 @@ export default function OrdersManager({ userRole }) {
       };
     });
 
+    const hasAnyGst = mappedItems.some(it => it.hasItemGst);
+
     const subtotal = Number(order.subtotal || computedTaxable || 0);
-    const gst = Number(order.gst || computedGst || 0);
+    const gst = hasAnyGst ? Number(order.gst || computedGst || 0) : 0;
     const cgstTotal = Math.round((gst / 2) * 100) / 100;
     const sgstTotal = Math.round((gst - cgstTotal) * 100) / 100;
     const deliveryFee = Number(order.deliveryFee || 0);
@@ -143,7 +187,7 @@ export default function OrdersManager({ userRole }) {
       <html>
         <head>
           <meta charset="utf-8">
-          <title>Tax Invoice - #${order.id} - ${storeName}</title>
+          <title>${hasAnyGst ? 'Tax Invoice' : 'Order Invoice'} - #${order.id} - ${storeName}</title>
           <style>
             * { box-sizing: border-box; }
             body { font-family: 'Segoe UI', Arial, sans-serif; background: #ffffff; color: #0f172a; margin: 0; padding: 24px; font-size: 11px; line-height: 1.4; }
@@ -165,9 +209,9 @@ export default function OrdersManager({ userRole }) {
             table { width: 100%; border-collapse: collapse; margin-top: 8px; margin-bottom: 14px; }
             th { background: #0f172a; color: #ffffff; text-transform: uppercase; font-size: 9.5px; font-weight: 800; padding: 8px 10px; text-align: left; letter-spacing: 0.4px; }
             td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-size: 10.5px; font-weight: 600; }
-            .bottom-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; align-items: start; }
+            .bottom-grid { display: grid; grid-template-columns: ${hasAnyGst ? '1.2fr 1fr' : '1fr'}; gap: 14px; align-items: start; }
             .gst-breakdown-card { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 12px; }
-            .summary-box { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 14px; }
+            .summary-box { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 14px; ${hasAnyGst ? '' : 'max-width: 360px; margin-left: auto;'} }
             .summary-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 10.5px; }
             .total-row { border-top: 2px solid #0f172a; padding-top: 8px; margin-top: 6px; font-size: 14px; font-weight: 900; color: #0284c7; }
             .footer { margin-top: 20px; text-align: center; border-top: 1px dashed #cbd5e1; padding-top: 12px; font-size: 9.5px; color: #64748b; }
@@ -192,7 +236,7 @@ export default function OrdersManager({ userRole }) {
                 </div>
               </div>
               <div class="invoice-heading">
-                <div class="tax-badge">TAX INVOICE</div>
+                <div class="tax-badge">${hasAnyGst ? 'TAX INVOICE' : 'RETAIL INVOICE / RECEIPT'}</div>
                 <div class="inv-no">ORDER #${order.id}</div>
                 <div style="font-size: 10px; color: #64748b; margin-top: 2px;">
                   Date: ${order.orderDate ? new Date(order.orderDate).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB')}
@@ -226,9 +270,11 @@ export default function OrdersManager({ userRole }) {
                   <th>Pack / Unit</th>
                   <th style="text-align:center;">Qty</th>
                   <th style="text-align:right;">Rate (₹)</th>
-                  <th style="text-align:center;">GST %</th>
-                  <th style="text-align:right;">Taxable Amt</th>
-                  <th style="text-align:right;">Tax (CGST+SGST)</th>
+                  ${hasAnyGst ? `
+                    <th style="text-align:center;">GST %</th>
+                    <th style="text-align:right;">Taxable Amt</th>
+                    <th style="text-align:right;">Tax (CGST+SGST)</th>
+                  ` : ''}
                   <th style="text-align:right;">Total (₹)</th>
                 </tr>
               </thead>
@@ -236,13 +282,22 @@ export default function OrdersManager({ userRole }) {
                 ${mappedItems.map((it, idx) => `
                   <tr>
                     <td>${idx + 1}</td>
-                    <td><b>${it.nameEn || it.nameHi || it.name || 'Grocery Item'}</b></td>
+                    <td>
+                      <b>${it.nameEn || it.nameHi || it.name || 'Grocery Item'}</b>
+                      ${it.brand ? `<div style="font-size: 9px; color: #64748b; font-weight: 700; margin-top: 1px;">Brand: ${it.brand}</div>` : ''}
+                    </td>
                     <td>${it.weight || it.unit || '1 Unit'}</td>
                     <td style="text-align:center;"><b>${it.qty}</b></td>
                     <td style="text-align:right;">₹${it.unitPrice.toFixed(2)}</td>
-                    <td style="text-align:center;"><span style="background:#e0f2fe; color:#0369a1; padding:2px 6px; border-radius:4px; font-weight:700;">${it.rate}%</span></td>
-                    <td style="text-align:right;">₹${it.lineTaxable.toFixed(2)}</td>
-                    <td style="text-align:right; color:#64748b;">₹${it.taxAmount.toFixed(2)}</td>
+                    ${hasAnyGst ? `
+                      <td style="text-align:center;">
+                        ${it.hasItemGst 
+                          ? `<span style="background:#e0f2fe; color:#0369a1; padding:2px 6px; border-radius:4px; font-weight:700;">${it.rate}%</span>` 
+                          : `<span style="color:#94a3b8; font-size:9.5px;">-</span>`}
+                      </td>
+                      <td style="text-align:right;">₹${it.lineTaxable.toFixed(2)}</td>
+                      <td style="text-align:right; color:#64748b;">₹${it.taxAmount.toFixed(2)}</td>
+                    ` : ''}
                     <td style="text-align:right; font-weight:800; color:#0f172a;">₹${it.lineTotal.toFixed(2)}</td>
                   </tr>
                 `).join('')}
@@ -250,39 +305,43 @@ export default function OrdersManager({ userRole }) {
             </table>
 
             <div class="bottom-grid">
-              <!-- GST Rate-wise computation box -->
-              <div class="gst-breakdown-card">
-                <div class="card-head">GST TAX BREAKDOWN (कर विवरण)</div>
-                <table style="margin: 0; font-size: 10px;">
-                  <thead>
-                    <tr style="background:#334155;">
-                      <th style="padding:4px 6px; font-size:9px;">Rate</th>
-                      <th style="padding:4px 6px; font-size:9px; text-align:right;">Taxable Value</th>
-                      <th style="padding:4px 6px; font-size:9px; text-align:right;">CGST</th>
-                      <th style="padding:4px 6px; font-size:9px; text-align:right;">SGST</th>
-                      <th style="padding:4px 6px; font-size:9px; text-align:right;">Total Tax</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${Object.values(slabMap).map(s => `
-                      <tr>
-                        <td style="padding:4px 6px; font-weight:700;">${s.slab}%</td>
-                        <td style="padding:4px 6px; text-align:right;">₹${s.taxable.toFixed(2)}</td>
-                        <td style="padding:4px 6px; text-align:right;">₹${s.cgst.toFixed(2)}</td>
-                        <td style="padding:4px 6px; text-align:right;">₹${s.sgst.toFixed(2)}</td>
-                        <td style="padding:4px 6px; text-align:right; font-weight:700; color:#0284c7;">₹${s.totalTax.toFixed(2)}</td>
+              ${hasAnyGst ? `
+                <!-- GST Rate-wise computation box -->
+                <div class="gst-breakdown-card">
+                  <div class="card-head">GST TAX BREAKDOWN (कर विवरण)</div>
+                  <table style="margin: 0; font-size: 10px;">
+                    <thead>
+                      <tr style="background:#334155;">
+                        <th style="padding:4px 6px; font-size:9px;">Rate</th>
+                        <th style="padding:4px 6px; font-size:9px; text-align:right;">Taxable Value</th>
+                        <th style="padding:4px 6px; font-size:9px; text-align:right;">CGST</th>
+                        <th style="padding:4px 6px; font-size:9px; text-align:right;">SGST</th>
+                        <th style="padding:4px 6px; font-size:9px; text-align:right;">Total Tax</th>
                       </tr>
-                    `).join('')}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      ${Object.values(slabMap).map(s => `
+                        <tr>
+                          <td style="padding:4px 6px; font-weight:700;">${s.slab}%</td>
+                          <td style="padding:4px 6px; text-align:right;">₹${s.taxable.toFixed(2)}</td>
+                          <td style="padding:4px 6px; text-align:right;">₹${s.cgst.toFixed(2)}</td>
+                          <td style="padding:4px 6px; text-align:right;">₹${s.sgst.toFixed(2)}</td>
+                          <td style="padding:4px 6px; text-align:right; font-weight:700; color:#0284c7;">₹${s.totalTax.toFixed(2)}</td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              ` : ''}
 
               <!-- Grand Total Summary box -->
               <div class="summary-box">
-                <div class="summary-row"><span class="row-label">Taxable Subtotal:</span> <span class="row-val">₹${subtotal.toFixed(2)}</span></div>
-                <div class="summary-row"><span class="row-label">CGST (Central Tax):</span> <span class="row-val">₹${cgstTotal.toFixed(2)}</span></div>
-                <div class="summary-row"><span class="row-label">SGST (State Tax):</span> <span class="row-val">₹${sgstTotal.toFixed(2)}</span></div>
-                <div class="summary-row" style="font-weight:700;"><span class="row-label">Total GST Tax:</span> <span class="row-val" style="color:#0284c7;">₹${gst.toFixed(2)}</span></div>
+                <div class="summary-row"><span class="row-label">Subtotal:</span> <span class="row-val">₹${subtotal.toFixed(2)}</span></div>
+                ${hasAnyGst ? `
+                  <div class="summary-row"><span class="row-label">CGST (Central Tax):</span> <span class="row-val">₹${cgstTotal.toFixed(2)}</span></div>
+                  <div class="summary-row"><span class="row-label">SGST (State Tax):</span> <span class="row-val">₹${sgstTotal.toFixed(2)}</span></div>
+                  <div class="summary-row" style="font-weight:700;"><span class="row-label">Total GST Tax:</span> <span class="row-val" style="color:#0284c7;">₹${gst.toFixed(2)}</span></div>
+                ` : ''}
                 <div class="summary-row"><span class="row-label">Delivery Charges:</span> <span class="row-val">${deliveryFee === 0 ? 'FREE' : `₹${deliveryFee.toFixed(2)}`}</span></div>
                 ${referralDiscount > 0 ? `<div class="summary-row" style="color:#d97706;"><span class="row-label">Loyalty Points Discount:</span> <span class="row-val">-₹${referralDiscount.toFixed(2)}</span></div>` : ''}
                 ${couponDiscount > 0 ? `<div class="summary-row" style="color:#16a34a;"><span class="row-label">Coupon Discount:</span> <span class="row-val">-₹${couponDiscount.toFixed(2)}</span></div>` : ''}
@@ -297,8 +356,8 @@ export default function OrdersManager({ userRole }) {
 
             <div class="footer">
               <p style="font-weight: 800; color: #0284c7; margin-bottom: 2px;">THANK YOU FOR SHOPPING AT ${storeName.toUpperCase()}!</p>
-              <p>This is a computer-generated tax invoice under the GST Act. All taxes are calculated as per applicable rates.</p>
-              <p style="font-size: 8.5px; font-family: monospace; color: #94a3b8; margin-top: 4px;">GSTIN: ${storeGst} | FSSAI LIC: ${storeFssai} | STORE HELPLINE: ${storePhone}</p>
+              <p>${hasAnyGst ? 'This is a computer-generated tax invoice under the GST Act. All taxes are calculated as per applicable rates.' : 'This is a computer-generated invoice and sales receipt.'}</p>
+              <p style="font-size: 8.5px; font-family: monospace; color: #94a3b8; margin-top: 4px;">${storeGst && hasAnyGst ? `GSTIN: ${storeGst} | ` : ''}FSSAI LIC: ${storeFssai} | STORE HELPLINE: ${storePhone}</p>
             </div>
           </div>
 
@@ -317,6 +376,17 @@ export default function OrdersManager({ userRole }) {
 
   // Modal State for selected order details popup
   const [selectedOrder, setSelectedOrder] = useState(null);
+
+  // Dedicated in-app Modal State for Order Cancellation (No window.confirm)
+  const [orderToCancel, setOrderToCancel] = useState(null);
+
+  // Delivery & Payment Verification Modal State (Ask payment before finalizing dispatch & arrival)
+  const [deliveryPaymentModalOrder, setDeliveryPaymentModalOrder] = useState(null);
+  const [deliveryPaymentStepTarget, setDeliveryPaymentStepTarget] = useState(2); // 1 = Dispatched, 2 = Delivered
+  const [deliveryVerifyMethod, setDeliveryVerifyMethod] = useState('cod');
+  const [deliveryVerifyPaymentStatus, setDeliveryVerifyPaymentStatus] = useState('PAID');
+  const [deliveryVerifyRiderCash, setDeliveryVerifyRiderCash] = useState(true);
+  const [deliveryVerifyStaffId, setDeliveryVerifyStaffId] = useState('');
 
   // Security Password Modal State for Order Deletion
   const [orderToDelete, setOrderToDelete] = useState(null);
@@ -544,7 +614,10 @@ export default function OrdersManager({ userRole }) {
       (o.shippingAddress && o.shippingAddress.toLowerCase().includes(searchTerm.toLowerCase()));
 
     // 2. Status Match
-    const matchesStatus = filterStatus === 'All' || (o.status || "Confirmed") === filterStatus;
+    const orderStatusStr = o.status || "Confirmed";
+    const matchesStatus = filterStatus === 'All' || 
+      orderStatusStr.toLowerCase() === filterStatus.toLowerCase() ||
+      (filterStatus.toLowerCase() === 'delivered' && orderStatusStr.toLowerCase() === 'completed');
 
     // 3. Date range match
     const matchesDate = isWithinDateRange(o.orderDate || o.date || new Date().toISOString());
@@ -596,6 +669,14 @@ export default function OrdersManager({ userRole }) {
         <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider">
           <CheckCircle className="h-3 w-3" />
           <span>Delivered</span>
+        </span>
+      );
+    }
+    if (status === "cancelled") {
+      return (
+        <span className="inline-flex items-center gap-1 bg-rose-500/20 text-rose-300 border border-rose-500/35 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider">
+          <XCircle className="h-3 w-3 text-rose-400" />
+          <span>Cancelled</span>
         </span>
       );
     }
@@ -811,26 +892,55 @@ export default function OrdersManager({ userRole }) {
     const existingOrder = orders.find(o => String(o.id) === String(id)) || (selectedOrder && String(selectedOrder.id) === String(id) ? selectedOrder : null);
     
     if (existingOrder) {
-      if (isOrder1HourLocked(existingOrder)) {
-        alert(isHindi 
-          ? '🔒 यह ऑर्डर डिलीवर होने के 1 घंटे बाद पूरी तरह लॉक हो चुका है! एडमिन व स्टाफ दोनों के लिए स्थिति या विवरण बदलना बंद है। केवल भुगतान विवरण ही अपडेट हो सकते हैं।' 
-          : '🔒 This order was delivered over 1 hour ago and is permanently locked! Status or order details cannot be changed for both Admin & Staff. Only payment details can be updated.');
-        return;
-      }
       const targetSt = (existingOrder.status || '').toLowerCase();
-      const isCurrentlyDelivered = targetSt === 'delivered' || targetSt === 'completed';
-      if (isCurrentlyDelivered && userRole !== 'admin') {
-        alert(isHindi ? 'डिलीवरी के बाद केवल एडमिन स्थिति बदल सकता है!' : 'Only Admin can change the status after an order is marked Delivered!');
+      const isCurrentlyDelivered = targetSt === 'delivered' || targetSt === 'completed' || isOrder1HourLocked(existingOrder);
+      if (isCurrentlyDelivered) {
+        alert(isHindi 
+          ? '🔒 यह ऑर्डर डिलीवर हो चुका है और स्थायी रूप से लॉक है! डिलीवर होने के बाद स्थिति या विवरण में कोई बदलाव नहीं किया जा सकता।' 
+          : '🔒 This order is delivered and permanently locked! No status changes or modifications are allowed after delivery.');
         return;
       }
     }
 
+    // Intercept Step 2 (Delivered) or Step 1 (Dispatched) to verify and ask payment first!
+    if (step === 2 || statusKey === "Delivered") {
+      const ord = existingOrder || { id };
+      setDeliveryPaymentModalOrder(ord);
+      setDeliveryPaymentStepTarget(2);
+      const isCod = (ord.paymentMethod || 'cod').toLowerCase() === 'cod';
+      setDeliveryVerifyMethod(isCod ? 'cod' : (ord.paymentMethod || 'upi'));
+      setDeliveryVerifyPaymentStatus(ord.paymentStatus === 'PAID' ? 'PAID' : 'PAID');
+      setDeliveryVerifyRiderCash(true);
+      setDeliveryVerifyStaffId(ord.deliveryStaffId ? String(ord.deliveryStaffId) : '');
+      return;
+    }
+
+    if (step === 1 || statusKey === "Dispatched" || statusKey === "In Transit" || statusKey === "Out for Delivery") {
+      const ord = existingOrder || { id };
+      setDeliveryPaymentModalOrder(ord);
+      setDeliveryPaymentStepTarget(1);
+      const isCod = (ord.paymentMethod || 'cod').toLowerCase() === 'cod';
+      setDeliveryVerifyMethod(isCod ? 'cod' : (ord.paymentMethod || 'upi'));
+      setDeliveryVerifyPaymentStatus(ord.paymentStatus || (isCod ? 'PENDING' : 'PAID'));
+      setDeliveryVerifyRiderCash(false);
+      setDeliveryVerifyStaffId(ord.deliveryStaffId ? String(ord.deliveryStaffId) : '');
+      return;
+    }
+
+    // Direct execution for step 0 or other steps
+    executeStepUpdate(id, step, statusKey, isActive, existingOrder);
+  };
+
+  const executeStepUpdate = (id, step, statusKey, isActive, existingOrder, extraFields = {}) => {
     const isNowDelivered = statusKey === "Delivered" || step === 2;
+    const isNowCancelled = statusKey === "Cancelled" || step === -1;
     const payload = {
-      step,
+      step: isNowCancelled ? -1 : step,
       status: statusKey,
-      isActive,
-      deliveryDate: isNowDelivered ? (existingOrder?.deliveryDate || new Date().toISOString()) : existingOrder?.deliveryDate
+      isActive: isNowCancelled ? false : isActive,
+      deliveryDate: isNowDelivered ? (existingOrder?.deliveryDate || new Date().toISOString()) : existingOrder?.deliveryDate,
+      cancelledAt: isNowCancelled ? new Date().toISOString() : existingOrder?.cancelledAt,
+      ...extraFields
     };
 
     updateOrder(id, payload);
@@ -843,17 +953,130 @@ export default function OrdersManager({ userRole }) {
       setSelectedOrder(updatedOrder);
     }
 
-    if (statusKey === "Delivered" || step === 2) {
+    if (isNowDelivered) {
       setTimeout(() => {
         handleSendWhatsappInvoice(updatedOrder);
-        alert(`Status updated to DELIVERED successfully!\nSimulated WhatsApp Notification & signed PDF Bill invoice auto-dispatched to the customer!`);
+        alert(`Status updated to DELIVERED & PERMANENTLY LOCKED!\nSigned Tax Bill invoice auto-dispatched to customer!`);
       }, 300);
-    } else if (step === 1 || statusKey === "Dispatched" || statusKey === "Out for Delivery") {
+    } else if (step === 1 || statusKey === "Dispatched" || statusKey === "In Transit" || statusKey === "Out for Delivery") {
       setTimeout(() => {
         handleSendWhatsappDispatchAlert(updatedOrder);
-        alert(`Status updated to DISPATCHED!\nAutomated 'order_dispatch_alert' WhatsApp notification sent to ${getCustName(updatedOrder)}!`);
+        alert(`Status updated to DISPATCHED!\nDispatch alert sent to ${getCustName(updatedOrder)}!`);
       }, 300);
+    } else if (isNowCancelled) {
+      alert(isHindi 
+        ? `ऑर्डर #${id} की स्थिति सफलतापूर्वक रद्द (Cancelled) कर दी गई है।` 
+        : `Order #${id} status changed to CANCELLED successfully.`);
     }
+  };
+
+  // Handler for Confirming Delivery & Payment from Modal
+  const handleConfirmDeliveryPayment = () => {
+    if (!deliveryPaymentModalOrder) return;
+    const ord = deliveryPaymentModalOrder;
+    const isDeliveredTarget = deliveryPaymentStepTarget === 2;
+    const isCod = deliveryVerifyMethod === 'cod';
+
+    const chosenStaff = staff?.find(s => String(s.id) === String(deliveryVerifyStaffId));
+
+    const extraFields = {
+      paymentMethod: deliveryVerifyMethod,
+      deliveryStaffId: deliveryVerifyStaffId ? Number(deliveryVerifyStaffId) : ord.deliveryStaffId,
+      deliveryPartnerName: chosenStaff ? chosenStaff.name : (ord.deliveryPartnerName || 'Pradeep Kumar'),
+      deliveryPartnerPhone: chosenStaff ? chosenStaff.mobile : (ord.deliveryPartnerPhone || '+91 95400 12099')
+    };
+
+    if (isDeliveredTarget) {
+      if (isCod) {
+        if (deliveryVerifyRiderCash) {
+          extraFields.paymentStatus = 'PAID';
+          extraFields.codStatus = 'COLLECTED_BY_RIDER';
+          extraFields.cashCollectedByRider = 1;
+          extraFields.codCollectedAt = new Date().toISOString();
+        } else {
+          extraFields.paymentStatus = 'UNPAID';
+          extraFields.codStatus = 'PENDING_CLEARANCE';
+          extraFields.cashCollectedByRider = 0;
+        }
+      } else {
+        extraFields.paymentStatus = deliveryVerifyPaymentStatus;
+        extraFields.codStatus = 'CLEARED_TO_ADMIN';
+      }
+    } else {
+      // Dispatched target
+      extraFields.paymentStatus = deliveryVerifyPaymentStatus;
+      if (isCod) {
+        extraFields.codStatus = 'PENDING_CLEARANCE';
+      }
+    }
+
+    executeStepUpdate(
+      ord.id,
+      deliveryPaymentStepTarget,
+      isDeliveredTarget ? 'Delivered' : 'In Transit',
+      true,
+      ord,
+      extraFields
+    );
+
+    setDeliveryPaymentModalOrder(null);
+  };
+
+  const handleCancelOrder = (orderId = null) => {
+    const id = orderId || (selectedOrder ? selectedOrder.id : null);
+    if (!id) return;
+    const existingOrder = orders.find(o => String(o.id) === String(id)) || (selectedOrder && String(selectedOrder.id) === String(id) ? selectedOrder : null);
+    if (!existingOrder) return;
+
+    const targetSt = (existingOrder.status || '').toLowerCase();
+    const isCurrentlyDelivered = targetSt === 'delivered' || targetSt === 'completed' || isOrder1HourLocked(existingOrder);
+    if (isCurrentlyDelivered) {
+      alert(isHindi 
+        ? '🔒 यह ऑर्डर डिलीवर हो चुका है और स्थायी रूप से लॉक है! डिलीवर होने के बाद ऑर्डर रद्द नहीं किया जा सकता।' 
+        : '🔒 This order is delivered and permanently locked! An order cannot be cancelled after delivery.');
+      return;
+    }
+
+    if (targetSt === 'cancelled') {
+      alert(isHindi ? 'यह ऑर्डर पहले से ही रद्द है।' : 'This order is already marked as Cancelled.');
+      return;
+    }
+
+    // Open dedicated in-app modal (never blocked by iframe)
+    setOrderToCancel(existingOrder);
+  };
+
+  const handleConfirmCancelOrder = () => {
+    if (!orderToCancel) return;
+    const id = orderToCancel.id;
+    const existingOrder = orders.find(o => String(o.id) === String(id)) || orderToCancel;
+
+    executeStepUpdate(id, -1, 'Cancelled', false, existingOrder);
+    setOrderToCancel(null);
+  };
+
+  // One-click handler for Store Admin marking cash received from delivery staff
+  const handleMarkAdminReceivedCash = (order) => {
+    if (!order) return;
+    const clearTime = new Date().toISOString();
+    const payload = {
+      codStatus: 'CLEARED_TO_ADMIN',
+      adminReceivedCash: 1,
+      adminCashReceivedAt: clearTime,
+      codClearedAt: clearTime,
+      codClearedBy: 'Admin',
+      codClearanceNote: 'Physical cash received by Store Admin from delivery staff'
+    };
+
+    updateOrder(order.id, payload);
+
+    if (selectedOrder && String(selectedOrder.id) === String(order.id)) {
+      setSelectedOrder(prev => ({ ...prev, ...payload }));
+    }
+
+    alert(isHindi 
+      ? `✅ डिलीवरी स्टाफ से ₹${order.total || order.grandTotal || 0} का भौतिक नगद भुगतान एडमिन द्वारा सफलतापूर्वक प्राप्त व दर्ज किया गया!`
+      : `✅ Received ₹${order.total || order.grandTotal || 0} cash from delivery staff (${order.deliveryPartnerName || 'Staff'}) successfully recorded in store ledger!`);
   };
 
   const handleSendWhatsappDispatchAlert = async (specificOrder = null) => {
@@ -1076,16 +1299,16 @@ export default function OrdersManager({ userRole }) {
 
           <div className="md:col-span-6 flex items-center gap-2">
             <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider shrink-0">Status:</span>
-            <div className="flex bg-slate-950 border border-white/10 p-0.5 rounded-lg w-full">
-              {['All', 'Confirmed', 'In Transit', 'Delivered'].map((statusKey) => (
+            <div className="flex bg-slate-950 border border-white/10 p-0.5 rounded-lg w-full overflow-x-auto">
+              {['All', 'Confirmed', 'In Transit', 'Delivered', 'Cancelled'].map((statusKey) => (
                 <button
                   key={statusKey}
                   type="button"
                   onClick={() => setFilterStatus(statusKey)}
-                  className={`w-full py-1 rounded text-[9px] font-extrabold uppercase transition-all ${
+                  className={`w-full py-1 px-2 rounded text-[9px] font-extrabold uppercase transition-all whitespace-nowrap ${
                     filterStatus === statusKey 
-                      ? 'bg-cyan-500 text-slate-950 font-black' 
-                      : 'text-slate-400 hover:text-white'
+                      ? (statusKey === 'Cancelled' ? 'bg-rose-500 text-white font-black' : 'bg-cyan-500 text-slate-950 font-black')
+                      : (statusKey === 'Cancelled' ? 'text-rose-400/80 hover:text-rose-300' : 'text-slate-400 hover:text-white')
                   }`}
                 >
                   {statusKey}
@@ -1280,6 +1503,17 @@ export default function OrdersManager({ userRole }) {
                           <Eye className="h-3 w-3" />
                           <span>Manage</span>
                         </button>
+                        {userRole !== 'customer' && !isOrder1HourLocked(o) && (o.status || '').toLowerCase() !== 'cancelled' && (
+                          <button
+                            type="button"
+                            onClick={() => handleCancelOrder(o.id)}
+                            className="p-1.5 px-2 bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 rounded-lg font-black text-[9px] uppercase tracking-wider inline-flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+                            title="Cancel Order (Before Delivery)"
+                          >
+                            <Ban className="h-3 w-3 text-rose-400" />
+                            <span className="hidden xl:inline">Cancel</span>
+                          </button>
+                        )}
                         <button
                           onClick={() => {
                             setOrderToDelete(o);
@@ -1721,24 +1955,31 @@ export default function OrdersManager({ userRole }) {
                         <p className="text-[9px] text-slate-500 font-semibold font-sans mt-0.5">Modify, edit or permanently remove this order</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (isEditingOrder) {
-                              setIsEditingOrder(false);
-                            } else {
-                              handleStartEditOrder(selectedOrder);
-                            }
-                          }}
-                          className={`px-3 py-1.5 rounded-xl font-bold text-[10px] uppercase flex items-center gap-1 border transition-all cursor-pointer active:scale-95 ${
-                            isEditingOrder 
-                              ? 'bg-amber-400/20 text-amber-300 border-amber-400/30'
-                              : 'bg-cyan-500/10 text-cyan-300 border-cyan-400/30 hover:bg-cyan-500/20'
-                          }`}
-                        >
-                          <Edit className="h-3 w-3" />
-                          <span>{isEditingOrder ? "View Bill" : "Modify details"}</span>
-                        </button>
+                        {isOrder1HourLocked(selectedOrder) ? (
+                          <span className="px-3 py-1.5 rounded-xl font-bold text-[10px] uppercase flex items-center gap-1 border border-rose-500/30 bg-rose-500/10 text-rose-300 cursor-not-allowed">
+                            <Lock className="h-3 w-3 text-rose-400" />
+                            <span>Permanently Locked</span>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (isEditingOrder) {
+                                setIsEditingOrder(false);
+                              } else {
+                                handleStartEditOrder(selectedOrder);
+                              }
+                            }}
+                            className={`px-3 py-1.5 rounded-xl font-bold text-[10px] uppercase flex items-center gap-1 border transition-all cursor-pointer active:scale-95 ${
+                              isEditingOrder 
+                                ? 'bg-amber-400/20 text-amber-300 border-amber-400/30'
+                                : 'bg-cyan-500/10 text-cyan-300 border-cyan-400/30 hover:bg-cyan-500/20'
+                            }`}
+                          >
+                            <Edit className="h-3 w-3" />
+                            <span>{isEditingOrder ? "View Bill" : "Modify details"}</span>
+                          </button>
+                        )}
 
                         <button
                           type="button"
@@ -1759,13 +2000,33 @@ export default function OrdersManager({ userRole }) {
 
                 {/* Stepper Stage modifier */}
                 <div className="bg-slate-900 border border-white/10 rounded-2xl p-4 space-y-3">
-                  <h4 className="text-[10px] font-black uppercase text-cyan-300 tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-2">
-                    <span>Logistics Dispatch Stage Tracks</span>
-                  </h4>
+                  <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                    <h4 className="text-[10px] font-black uppercase text-cyan-300 tracking-wider flex items-center gap-1.5">
+                      <span>Logistics Dispatch Stage Tracks</span>
+                    </h4>
+                    {isOrder1HourLocked(selectedOrder) && (
+                      <span className="text-[8px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-md font-mono font-black uppercase flex items-center gap-1">
+                        <Lock className="h-3 w-3 text-rose-400" />
+                        <span>Permanently Locked</span>
+                      </span>
+                    )}
+                  </div>
 
                   {userRole === 'customer' ? (
                     <div className="text-[10px] text-amber-400 bg-amber-500/10 p-3 rounded-lg font-bold">
                       ⚠️ Viewing-only clearance level. Cannot step transit path routes.
+                    </div>
+                  ) : isOrder1HourLocked(selectedOrder) ? (
+                    <div className="p-3.5 rounded-xl bg-slate-950 border border-rose-500/30 text-rose-300 space-y-2">
+                      <div className="flex items-center gap-2 text-xs font-black uppercase text-rose-400">
+                        <Lock className="h-4 w-4" />
+                        <span>Order Delivered — Permanently Locked</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+                        {isHindi
+                          ? '🔒 यह ऑर्डर डिलीवर हो चुका है और स्थायी रूप से लॉक है! डिलीवर होने के बाद कोई भी स्थिति, उत्पाद, या विवरण नहीं बदला जा सकता।'
+                          : '🔒 This order has been delivered and is permanently locked! Nothing can be changed after delivery.'}
+                      </p>
                     </div>
                   ) : (
                     <div className="flex flex-col gap-2">
@@ -1775,19 +2036,42 @@ export default function OrdersManager({ userRole }) {
                         { step: 2, label: "2. Dispatch Arrived Success", keyStr: "Delivered", active: false }
                       ].map((stp) => (
                         <button
-                          key={stp.step}
+                          key={`order-step-btn-${stp.step}`}
                           type="button"
                           onClick={() => handleUpdateStep(selectedOrder.id, stp.step, stp.keyStr, stp.active)}
                           className={`w-full px-3 py-2 border rounded-xl text-left flex items-center justify-between text-[11px] font-black transition-all cursor-pointer ${
-                            selectedOrder.step === stp.step
+                            selectedOrder.step === stp.step && selectedOrder.status !== 'Cancelled'
                               ? 'border-cyan-400 bg-cyan-400/10 text-cyan-300'
                               : 'border-white/5 hover:bg-white/5 text-slate-400'
                           }`}
                         >
                           <span>{stp.label}</span>
-                          {selectedOrder.step === stp.step && <CheckCircle className="h-3.5 w-3.5 text-cyan-400 shrink-0" />}
+                          {selectedOrder.step === stp.step && selectedOrder.status !== 'Cancelled' && <CheckCircle className="h-3.5 w-3.5 text-cyan-400 shrink-0" />}
                         </button>
                       ))}
+
+                      {/* Option to change order status to Cancelled before delivery */}
+                      <button
+                        key="order-cancel-btn-action"
+                        type="button"
+                        onClick={() => handleCancelOrder(selectedOrder.id)}
+                        className={`w-full px-3 py-2 border rounded-xl text-left flex items-center justify-between text-[11px] font-black transition-all cursor-pointer mt-1 ${
+                          selectedOrder.status === 'Cancelled'
+                            ? 'border-rose-500 bg-rose-500/20 text-rose-300 shadow-sm'
+                            : 'border-rose-500/30 bg-rose-500/5 hover:bg-rose-500/15 text-rose-400'
+                        }`}
+                        title="Change order status to Cancelled before it is delivered"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <XCircle className="h-3.5 w-3.5 text-rose-400" />
+                          <span>❌ Cancel Order (Before Delivery)</span>
+                        </span>
+                        {selectedOrder.status === 'Cancelled' && (
+                          <span className="text-[9px] uppercase px-2 py-0.5 rounded bg-rose-500/30 text-rose-200 font-mono font-bold">
+                            Cancelled
+                          </span>
+                        )}
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1855,9 +2139,9 @@ export default function OrdersManager({ userRole }) {
                           type="text" 
                           value={selectedOrder.deliveryPartnerPhone || ''}
                           onChange={(e) => handleAgentDetailsChange('deliveryPartnerPhone', e.target.value)}
-                          disabled={userRole === 'customer'}
+                          disabled={userRole === 'customer' || isOrder1HourLocked(selectedOrder)}
                           placeholder="+91 95400 12099"
-                          className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white"
+                          className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white disabled:opacity-60"
                         />
                       </div>
                       <div>
@@ -1866,45 +2150,73 @@ export default function OrdersManager({ userRole }) {
                           type="text" 
                           value={selectedOrder.eta || ''}
                           onChange={(e) => handleAgentDetailsChange('eta', e.target.value)}
-                          disabled={userRole === 'customer'}
+                          disabled={userRole === 'customer' || isOrder1HourLocked(selectedOrder)}
                           placeholder="15 Mins"
-                          className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white"
+                          className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white disabled:opacity-60"
                         />
                       </div>
                     </div>
 
-                    {/* Admin COD Cash Clearance Toggle */}
-                    <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs">
-                      <span className="text-[9px] font-bold text-slate-300">
-                        COD Cash Settlement with Admin:
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextStatus = selectedOrder.codStatus === 'CLEARED_TO_ADMIN' ? 'PENDING_CLEARANCE' : 'CLEARED_TO_ADMIN';
-                          handleAgentDetailsChange('codStatus', nextStatus);
-                          if (nextStatus === 'CLEARED_TO_ADMIN') {
-                            handleAgentDetailsChange('codClearedAt', new Date().toISOString());
-                          }
-                        }}
-                        disabled={userRole === 'customer'}
-                        className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition ${
-                          selectedOrder.codStatus === 'CLEARED_TO_ADMIN'
-                            ? 'bg-emerald-500 text-slate-950 hover:bg-emerald-400'
-                            : 'bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30'
-                        }`}
-                      >
-                        {selectedOrder.codStatus === 'CLEARED_TO_ADMIN' ? 'Mark Pending' : 'Mark Cash Received'}
-                      </button>
-                    </div>
+                    {/* COD 2-step Cash Flow: Rider collection -> Admin receipt */}
+                    {((selectedOrder.paymentMethod || '').toLowerCase() === 'cod') && (
+                      <div className="pt-3 border-t border-white/5 space-y-2.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-[9px] font-black uppercase text-slate-300">
+                            1. Doorstep Rider Cash:
+                          </span>
+                          {selectedOrder.codStatus === 'COLLECTED_BY_RIDER' || selectedOrder.cashCollectedByRider ? (
+                            <span className="text-[9px] font-bold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-500/30">
+                              💵 Received by Rider ({selectedOrder.deliveryPartnerName || 'Staff'})
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30">
+                              ⏳ Not Yet Collected
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-[9px] font-black uppercase text-slate-300">
+                            2. Store Admin Cash Handover:
+                          </span>
+                          {selectedOrder.codStatus === 'CLEARED_TO_ADMIN' || selectedOrder.adminReceivedCash ? (
+                            <span className="text-[9px] font-bold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3 text-emerald-400" />
+                              <span>Cash Received by Admin</span>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleMarkAdminReceivedCash(selectedOrder)}
+                              className="px-2.5 py-1 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 rounded-lg text-[9px] font-black uppercase tracking-wider transition active:scale-95 shadow cursor-pointer"
+                            >
+                              Mark Cash Received by Admin
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* 5. Payment Configurations Box (Requirement 5) */}
+                {/* 5. Payment Configurations Box */}
                 <div className="bg-slate-900 border border-white/10 rounded-2xl p-4 space-y-3">
-                  <h4 className="text-[10px] font-black uppercase text-cyan-300 tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-2">
+                  <h4 className="text-[10px] font-black uppercase text-cyan-300 tracking-wider flex items-center justify-between border-b border-white/5 pb-2">
                     <span>Payment Processing Node</span>
+                    {isOrder1HourLocked(selectedOrder) && (
+                      <span className="text-[8px] uppercase font-bold text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30 flex items-center gap-1">
+                        <Lock className="w-2.5 h-2.5" />
+                        <span>Locked Post-Delivery</span>
+                      </span>
+                    )}
                   </h4>
+
+                  {isOrder1HourLocked(selectedOrder) && (
+                    <div className="text-[10px] text-amber-300 bg-amber-500/10 border border-amber-500/20 p-2 rounded-xl flex items-center gap-1.5 font-bold">
+                      <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>{isHindi ? 'डिलीवर होने के बाद भुगतान स्थिति पूरी तरह से लॉक है।' : 'Payment details are permanently locked once order is delivered.'}</span>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -1912,8 +2224,8 @@ export default function OrdersManager({ userRole }) {
                       <select 
                         value={selectedOrder.paymentMethod || 'card'}
                         onChange={(e) => handleAgentDetailsChange('paymentMethod', e.target.value)}
-                        disabled={userRole === 'customer'}
-                        className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none cursor-pointer"
+                        disabled={userRole === 'customer' || isOrder1HourLocked(selectedOrder)}
+                        className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed"
                       >
                         <option value="card">💳 Card Payment</option>
                         <option value="upi">📲 UPI Instant Transfer</option>
@@ -1926,8 +2238,8 @@ export default function OrdersManager({ userRole }) {
                       <select 
                         value={selectedOrder.paymentStatus || 'PAID'}
                         onChange={(e) => handleAgentDetailsChange('paymentStatus', e.target.value)}
-                        disabled={userRole === 'customer'}
-                        className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none cursor-pointer"
+                        disabled={userRole === 'customer' || isOrder1HourLocked(selectedOrder)}
+                        className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed"
                       >
                         <option value="PENDING">🕒 Pending Checkout</option>
                         <option value="PAID">✓ Settled (PAID)</option>
@@ -2417,6 +2729,255 @@ export default function OrdersManager({ userRole }) {
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>{isHindi ? "हटाएं" : "Delete Order"}</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* IN-APP CANCEL ORDER CONFIRMATION MODAL (Never blocked by browser)    */}
+      {/* ==================================================================== */}
+      {orderToCancel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-red-500/30 w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4 relative">
+            
+            <div className="flex items-center gap-3 border-b border-white/10 pb-3">
+              <div className="p-2.5 rounded-2xl bg-red-500/20 text-red-400 border border-red-500/30">
+                <AlertTriangle className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-white">
+                  {isHindi ? `ऑर्डर #${orderToCancel.id} रद्द करें` : `Cancel Order #${orderToCancel.id}`}
+                </h3>
+                <p className="text-xs text-slate-400 font-medium">
+                  {isHindi ? 'क्या आप वाकई इस ऑर्डर को रद्द करना चाहते हैं?' : 'Are you sure you want to cancel this order?'}
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-950/60 p-4 rounded-2xl border border-white/5 space-y-2 text-xs">
+              <div className="flex justify-between text-slate-300">
+                <span>{isHindi ? 'ग्राहक:' : 'Customer:'}</span>
+                <span className="font-bold text-white">{getCustName(orderToCancel)}</span>
+              </div>
+              <div className="flex justify-between text-slate-300">
+                <span>{isHindi ? 'कुल राशि:' : 'Grand Total:'}</span>
+                <span className="font-black text-emerald-400 font-mono">₹{orderToCancel.total || orderToCancel.grandTotal || 0}</span>
+              </div>
+              <div className="flex justify-between text-slate-300">
+                <span>{isHindi ? 'भुगतान विधि:' : 'Payment:'}</span>
+                <span className="font-bold uppercase text-amber-300 font-mono">{orderToCancel.paymentMethod || 'COD'}</span>
+              </div>
+            </div>
+
+            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-[11px] text-red-300 font-medium leading-relaxed">
+              {isHindi 
+                ? '⚠️ ऑर्डर रद्द होने के बाद इसकी स्थिति "Cancelled" दर्ज होगी और यह डिलीवर नहीं किया जा सकेगा।'
+                : '⚠️ Cancelling this order will mark its status as Cancelled and remove it from active dispatch.'}
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setOrderToCancel(null)}
+                className="w-1/2 py-2.5 bg-slate-950 hover:bg-slate-800 text-slate-300 border border-white/10 rounded-xl text-xs font-bold uppercase tracking-wider transition cursor-pointer"
+              >
+                {isHindi ? 'वापस' : 'Back'}
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCancelOrder}
+                className="w-1/2 py-2.5 bg-red-600 hover:bg-red-500 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider transition shadow-lg shadow-red-500/20 active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <XCircle className="w-4 h-4" />
+                <span>{isHindi ? 'हाँ, रद्द करें' : 'Confirm Cancel'}</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* PAYMENT VERIFICATION BEFORE DISPATCH / DELIVERED MODAL               */}
+      {/* ==================================================================== */}
+      {deliveryPaymentModalOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-cyan-500/30 w-full max-w-lg rounded-3xl p-6 shadow-2xl space-y-4 relative">
+            
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                  <CreditCard className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white">
+                    {deliveryPaymentStepTarget === 2
+                      ? (isHindi ? 'डिलीवरी और भुगतान पुष्टि' : 'Verify Payment & Finalize Delivery')
+                      : (isHindi ? 'डिस्पैच और डिलीवरी स्टाफ पुष्टि' : 'Verify Details & Finalize Dispatch')}
+                  </h3>
+                  <p className="text-xs text-slate-400 font-medium">
+                    Order #{deliveryPaymentModalOrder.id} • {getCustName(deliveryPaymentModalOrder)}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeliveryPaymentModalOrder(null)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/5 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Order Brief */}
+            <div className="bg-slate-950 p-3.5 rounded-2xl border border-white/5 grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <span className="text-[9px] uppercase text-slate-400 font-bold block">{isHindi ? 'कुल देय राशि' : 'Amount to Collect'}</span>
+                <span className="text-xl font-black text-emerald-400 font-mono">
+                  ₹{deliveryPaymentModalOrder.total || deliveryPaymentModalOrder.grandTotal || 0}
+                </span>
+              </div>
+              <div>
+                <span className="text-[9px] uppercase text-slate-400 font-bold block">{isHindi ? 'ग्राहक पता' : 'Delivery Address'}</span>
+                <span className="text-xs text-slate-300 line-clamp-2">
+                  {getCustAddress(deliveryPaymentModalOrder)}
+                </span>
+              </div>
+            </div>
+
+            {/* Form to confirm / update payment & delivery boy */}
+            <div className="space-y-3">
+              
+              {/* Delivery Staff Assigned */}
+              <div>
+                <label className="text-[9px] font-black uppercase text-slate-300 block mb-1">
+                  {isHindi ? 'डिलीवरी बॉय / स्टाफ चुनें' : 'Assigned Delivery Staff'}
+                </label>
+                <select
+                  value={deliveryVerifyStaffId}
+                  onChange={(e) => setDeliveryVerifyStaffId(e.target.value)}
+                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-400"
+                >
+                  <option value="">{deliveryPaymentModalOrder.deliveryPartnerName || 'Pradeep Kumar (Default)'}</option>
+                  {staff?.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.role} - {s.mobile || 'No Phone'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Payment Mode */}
+              <div>
+                <label className="text-[9px] font-black uppercase text-slate-300 block mb-1">
+                  {isHindi ? 'भुगतान विधि' : 'Payment Method'}
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'cod', label: '💵 Cash on Delivery (COD)' },
+                    { id: 'upi', label: '📲 UPI / QR' },
+                    { id: 'card', label: '💳 Online Card' }
+                  ].map(m => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setDeliveryVerifyMethod(m.id)}
+                      className={`p-2 rounded-xl text-[10px] font-black uppercase tracking-wider text-center border transition cursor-pointer ${
+                        deliveryVerifyMethod === m.id
+                          ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400 shadow-md'
+                          : 'bg-slate-950 text-slate-400 border-white/10 hover:border-white/20'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Specific Payment Status / Cash Collection check */}
+              {deliveryVerifyMethod === 'cod' ? (
+                deliveryPaymentStepTarget === 2 ? (
+                  <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl space-y-2">
+                    <span className="text-[9px] font-black uppercase text-emerald-300 block">
+                      {isHindi ? 'नगद वसूली स्थिति (COD Collection):' : 'Cash Received by Delivery Boy:'}
+                    </span>
+                    <label className="flex items-center gap-2 text-xs text-white font-bold cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={deliveryVerifyRiderCash}
+                        onChange={(e) => setDeliveryVerifyRiderCash(e.target.checked)}
+                        className="w-4 h-4 rounded text-emerald-500 focus:ring-0 bg-slate-950 cursor-pointer"
+                      />
+                      <span>
+                        {isHindi 
+                          ? `हाँ, डिलीवरी बॉय ने ग्राहक से ₹${deliveryPaymentModalOrder.total || deliveryPaymentModalOrder.grandTotal || 0} नगद प्राप्त कर लिया है` 
+                          : `Yes, Delivery Boy received ₹${deliveryPaymentModalOrder.total || deliveryPaymentModalOrder.grandTotal || 0} cash from customer`}
+                      </span>
+                    </label>
+                    <p className="text-[10px] text-slate-400">
+                      {isHindi 
+                        ? 'यह राशि डिलीवरी राइडर के खाते में दर्ज होगी और स्टोर काउंटर पर एडमिन को हैंडओवर करने के बाद क्लियर होगी।'
+                        : 'This cash will be held by the rider until handed over to Admin at store counter.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-2.5 bg-slate-950 border border-white/5 rounded-xl text-[10px] text-slate-300">
+                    ℹ️ {isHindi ? 'डिस्पैच होने पर राइडर ग्राहक से ₹' + (deliveryPaymentModalOrder.total || 0) + ' नगद एकत्र करेगा।' : `Rider will collect ₹${deliveryPaymentModalOrder.total || 0} in cash upon doorstep delivery.`}
+                  </div>
+                )
+              ) : (
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black uppercase text-slate-300 block">
+                    {isHindi ? 'ऑनलाइन भुगतान स्थिति' : 'Payment Status Verification'}
+                  </label>
+                  <select
+                    value={deliveryVerifyPaymentStatus}
+                    onChange={(e) => setDeliveryVerifyPaymentStatus(e.target.value)}
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-400"
+                  >
+                    <option value="PAID">✓ Settled & Verified (PAID)</option>
+                    <option value="PENDING">🕒 Pending Checkout</option>
+                  </select>
+                </div>
+              )}
+
+            </div>
+
+            {/* Permanent Lock Warning */}
+            {deliveryPaymentStepTarget === 2 && (
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[10px] font-medium flex items-center gap-2">
+                <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>
+                  {isHindi
+                    ? '🔒 महत्वपूर्ण: डिलीवर होने के बाद यह ऑर्डर स्थायी रूप से लॉक हो जाएगा। इसके बाद विवरण या भुगतान स्थिति नहीं बदली जा सकेगी।'
+                    : '🔒 Important: Marking as Delivered permanently locks this order and seals all details & payment status.'}
+                </span>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeliveryPaymentModalOrder(null)}
+                className="w-1/3 py-2.5 bg-slate-950 hover:bg-slate-800 text-slate-300 border border-white/10 rounded-xl text-xs font-bold uppercase tracking-wider transition cursor-pointer"
+              >
+                {isHindi ? 'रद्द करें' : 'Back'}
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeliveryPayment}
+                className="w-2/3 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black rounded-xl text-xs uppercase tracking-wider transition shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>
+                  {deliveryPaymentStepTarget === 2
+                    ? (isHindi ? 'भुगतान पुष्टि करें व डिलीवर मार्क करें' : 'Confirm Payment & Mark Delivered')
+                    : (isHindi ? 'पुष्टि करें व डिस्पैच करें' : 'Confirm & Mark Dispatched')}
+                </span>
               </button>
             </div>
 

@@ -343,6 +343,7 @@ export function mapProduct(p) {
     originalPrice: p.original_price ? Number(p.original_price) : undefined,
     discountTag: p.discount_tag || "",
     imageUrl: p.image_url,
+    image: p.image_url,
     stockCount: p.stock_count,
     unit: p.unit,
     unitPrices: p.unit_prices,

@@ -3,7 +3,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
 import { useData } from '../context/DataContext';
 import ProductCard from '../components/ProductCard';
-import { resolveProductImage, markImageFailed, DEFAULT_PRODUCT_FALLBACK, hasCustomProductImage } from '../utils/imageHelper';
+import { resolveProductImage, getNextCandidateImage, markImageFailed, DEFAULT_PRODUCT_FALLBACK, hasCustomProductImage } from '../utils/imageHelper';
 import { 
   Search, 
   SlidersHorizontal, 
@@ -36,8 +36,12 @@ async function getCapacitorSpeech() {
 export default function Shop({ categoryFilterState, onCategoryFilterChange, searchQueryProp, onSearchQueryChange }) {
   const { t, language } = useLanguage();
   const isHindi = language === 'hi';
-  const { products, categories: dynamicCategories, r2PublicUrl, contactSettings } = useData();
+  const { products, categories: dynamicCategories, r2PublicUrl, contactSettings, fetchProducts } = useData();
   const [searchQuery, setSearchQuery] = useState(searchQueryProp || '');
+
+  React.useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
 
   React.useEffect(() => {
     if (searchQueryProp !== undefined) {
@@ -353,7 +357,13 @@ export default function Shop({ categoryFilterState, onCategoryFilterChange, sear
     }
 
     // Sorting block
-    if (sortBy === 'low-high') {
+    if (sortBy === 'default') {
+      result.sort((a, b) => {
+        const aHas = hasCustomProductImage(a) ? 1 : 0;
+        const bHas = hasCustomProductImage(b) ? 1 : 0;
+        return bHas - aHas;
+      });
+    } else if (sortBy === 'low-high') {
       result.sort((a, b) => a.price - b.price);
     } else if (sortBy === 'high-low') {
       result.sort((a, b) => b.price - a.price);
@@ -706,7 +716,15 @@ export default function Shop({ categoryFilterState, onCategoryFilterChange, sear
             <div className="flex flex-col gap-3.5" id="products-shop-list">
               {displayedProducts.map((prod) => {
                 const name = language === 'hi' ? prod.nameHi : prod.nameEn;
-                const categoryTag = language === 'hi' ? prod.subHi : prod.subEn;
+                const brandName = (() => {
+                  const rawBrand = (prod.brand && prod.brand.trim()) || '';
+                  if (rawBrand && rawBrand.toLowerCase() !== 'general') return rawBrand;
+                  const rawSub = (language === 'hi' ? (prod.subHi || prod.subEn) : prod.subEn) || '';
+                  if (rawSub && rawSub.trim() && rawSub.trim().toLowerCase() !== 'general') {
+                    return rawSub.trim();
+                  }
+                  return '';
+                })();
                 const packSize = language === 'hi' ? (prod.packHi || '') : (prod.packEn || '');
                 return (
                   <div 
@@ -721,8 +739,8 @@ export default function Shop({ categoryFilterState, onCategoryFilterChange, sear
                         loading="lazy"
                         decoding="async"
                         onError={(e) => {
-                          markImageFailed(e.target.src);
-                          e.target.src = DEFAULT_PRODUCT_FALLBACK;
+                          const next = getNextCandidateImage(prod, e.target.src, r2PublicUrl);
+                          e.target.src = next || DEFAULT_PRODUCT_FALLBACK;
                         }}
                         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                         referrerPolicy="no-referrer"
@@ -736,9 +754,11 @@ export default function Shop({ categoryFilterState, onCategoryFilterChange, sear
 
                     {/* Center details */}
                     <div className="flex-grow text-center sm:text-left text-slate-900 overflow-hidden">
-                      <span className="text-[9px] font-extrabold uppercase tracking-widest text-emerald-700">
-                        {categoryTag}
-                      </span>
+                      {brandName ? (
+                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-emerald-700">
+                          {brandName}
+                        </span>
+                      ) : null}
                       <h4 className="font-extrabold text-sm leading-snug text-slate-900 mt-0.5">
                         {name}
                       </h4>

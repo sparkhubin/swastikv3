@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Bike, MapPin, Phone, DollarSign, CheckCircle2, Clock, Navigation, 
   Upload, ShieldCheck, AlertCircle, ChevronDown, Search, Filter, 
@@ -11,7 +11,12 @@ import { isOrder1HourLocked } from '../../utils/orderLock';
 
 export default function DeliveryDashboard({ userRole, onNavigateToReports }) {
   const { isHindi } = useLanguage();
-  const { orders = [], updateOrder, staff = [], contactSettings } = useData();
+  const { orders = [], updateOrder, staff = [], contactSettings, fetchOrders, fetchStaff } = useData();
+
+  useEffect(() => {
+    fetchOrders();
+    fetchStaff();
+  }, [fetchOrders, fetchStaff]);
 
   // Retrieve logged-in staff from storage or fallback
   const loggedInStaff = useMemo(() => {
@@ -178,9 +183,11 @@ export default function DeliveryDashboard({ userRole, onNavigateToReports }) {
     const targetSt = (target.status || '').toLowerCase();
     const isCurrentlyDelivered = targetSt === 'delivered' || targetSt === 'completed';
 
-    // STRICT PERMISSION RULE: Only Admin can change status after an order is marked Delivered
-    if (isCurrentlyDelivered && userRole !== 'admin') {
-      alert(isHindi ? 'डिलीवरी के बाद केवल एडमिन स्थिति बदल सकता है!' : 'Only Admin can change the status after an order is marked Delivered!');
+    // PERMANENT LOCK: Once marked Delivered, the order is locked permanently!
+    if (isCurrentlyDelivered) {
+      alert(isHindi 
+        ? '🔒 यह ऑर्डर डिलीवर हो चुका है और स्थायी रूप से लॉक है!' 
+        : '🔒 This order is delivered and permanently locked!');
       return;
     }
 
@@ -188,13 +195,15 @@ export default function DeliveryDashboard({ userRole, onNavigateToReports }) {
     const isNowDelivered = newStatus === 'delivered' || newStatus === 'Delivered';
 
     const updatedPayload = {
-      ...target,
       status: newStatus,
+      step: isNowDelivered ? 2 : 1,
       deliveryDate: isNowDelivered ? (target.deliveryDate || new Date().toISOString()) : target.deliveryDate
     };
 
-    if (isNowDelivered && isCOD && !target.codStatus) {
-      updatedPayload.codStatus = 'PENDING_CLEARANCE';
+    if (isNowDelivered && isCOD) {
+      updatedPayload.codStatus = 'COLLECTED_BY_RIDER';
+      updatedPayload.cashCollectedByRider = 1;
+      updatedPayload.paymentStatus = 'PAID';
       updatedPayload.codCollectedAt = new Date().toISOString();
     }
 
@@ -225,15 +234,14 @@ export default function DeliveryDashboard({ userRole, onNavigateToReports }) {
 
     const clearTime = new Date().toISOString();
     selectedOrdersToClear.forEach(id => {
-      const target = orders.find(o => o.id === id);
-      if (target) {
-        updateOrder(id, {
-          ...target,
-          codStatus: 'CLEARED_TO_ADMIN',
-          codClearedAt: clearTime,
-          codClearanceNote: settlementNote
-        });
-      }
+      updateOrder(id, {
+        codStatus: 'CLEARED_TO_ADMIN',
+        adminReceivedCash: 1,
+        adminCashReceivedAt: clearTime,
+        codClearedAt: clearTime,
+        codClearedBy: 'Admin',
+        codClearanceNote: settlementNote
+      });
     });
 
     const clearedAmount = Math.round(selectedOrdersToClear.reduce((acc, id) => acc + Number(orders.find(o => o.id === id)?.total || 0), 0));

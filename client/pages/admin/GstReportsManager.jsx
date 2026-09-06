@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../../context/DataContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { 
@@ -24,7 +24,11 @@ import {
 
 export default function GstReportsManager({ userRole }) {
   const { isHindi } = useLanguage();
-  const { orders, contactSettings } = useData();
+  const { orders, contactSettings, fetchOrders } = useData();
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
 
   // Store information
   const storeName = contactSettings?.brandName || "Swastik Supermarket";

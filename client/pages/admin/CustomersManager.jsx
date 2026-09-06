@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { useLanguage } from '../../context/LanguageContext';
 import { useData } from '../../context/DataContext';
@@ -206,7 +206,11 @@ const metaApprovalTemplates = [
 
 export default function CustomersManager() {
   const { isHindi } = useLanguage();
-  const { customers, addCustomer, updateCustomer, deleteCustomer, orders = [], primeSettings, dataDeletionRequests = [] } = useData();
+  const { customers, addCustomer, updateCustomer, deleteCustomer, orders = [], primeSettings, dataDeletionRequests = [], fetchCustomers } = useData();
+
+  useEffect(() => {
+    fetchCustomers();
+  }, [fetchCustomers]);
 
   // Navigation sub-tabs
   const [activeSubTab, setActiveSubTab] = useState('directory'); // directory | groups | broadcast | meta_templates
@@ -1226,10 +1230,10 @@ export default function CustomersManager() {
                     <td colSpan="8" className="p-8 text-center text-slate-500 font-bold uppercase font-mono">No customers found.</td>
                   </tr>
                 ) : (
-                  paginatedCustomers.map(cust => {
+                  paginatedCustomers.map((cust, idx) => {
                     const stats = getCustomerStats(cust);
                     return (
-                      <tr key={cust.id} className="hover:bg-white/5">
+                      <tr key={cust.id ? `cust-row-${cust.id}` : `cust-row-idx-${idx}`} className="hover:bg-white/5">
                         <td className="p-4">
                           <div 
                             onClick={() => setSelectedDetailCust(cust)}
@@ -1415,11 +1419,11 @@ export default function CustomersManager() {
                   }
                   return pages.map((pVal, idx) => {
                     if (typeof pVal === 'string') {
-                      return <span key={`${pVal}-${idx}`} className="px-1.5 select-none text-[10px] text-slate-500">..</span>;
+                      return <span key={`cust-page-dots-${pVal}-${idx}`} className="px-1.5 select-none text-[10px] text-slate-500">..</span>;
                     }
                     return (
                       <button
-                        key={pVal}
+                        key={`cust-page-num-${pVal}-${idx}`}
                         type="button"
                         onClick={() => setCurrentPage(pVal)}
                         className={`w-8 h-8 rounded-xl font-bold transition-all text-[11px] ${
@@ -1534,10 +1538,10 @@ export default function CustomersManager() {
               <div className="space-y-1">
                 <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Assign Customers List</label>
                 <div className="bg-slate-950 border border-white/10 p-2.5 rounded-xl max-h-40 overflow-y-auto space-y-1.5 shadow-inner">
-                  {allCustomersList.map(c => {
+                  {allCustomersList.map((c, cIdx) => {
                     const checked = selectedGroupMembers.includes(c.id);
                     return (
-                      <label key={c.id} className="flex items-center gap-2 cursor-pointer hover:bg-white/5 p-1 rounded transition-all text-xs text-slate-300">
+                      <label key={c.id ? `grp-c-${c.id}` : `grp-c-idx-${cIdx}`} className="flex items-center gap-2 cursor-pointer hover:bg-white/5 p-1 rounded transition-all text-xs text-slate-300">
                         <input 
                           type="checkbox"
                           checked={checked}
@@ -1718,9 +1722,9 @@ export default function CustomersManager() {
                         {select2FilteredCustomers.length === 0 ? (
                           <div className="text-[10px] text-slate-600 text-center py-4">No matching accounts found on system nodes.</div>
                         ) : (
-                          select2FilteredCustomers.map(c => (
+                          select2FilteredCustomers.map((c, sIdx) => (
                             <div
-                              key={c.id}
+                              key={c.id ? `sel2-c-${c.id}` : `sel2-c-idx-${sIdx}`}
                               onClick={() => {
                                 setSelectedTargetCustId(c.id);
                                 setSelect2Open(false);

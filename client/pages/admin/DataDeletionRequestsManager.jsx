@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useData } from '../../context/DataContext';
 import { 
@@ -34,8 +34,13 @@ export default function DataDeletionRequestsManager() {
     rejectDataDeletionRequest, 
     deleteDataDeletionRequest,
     customers = [],
-    orders = []
+    orders = [],
+    fetchDataDeletionRequests
   } = useData();
+
+  useEffect(() => {
+    fetchDataDeletionRequests();
+  }, [fetchDataDeletionRequests]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL'); // ALL | Pending | Approved & Deleted | Rejected

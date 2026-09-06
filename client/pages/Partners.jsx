@@ -1,12 +1,16 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useData } from '../context/DataContext';
 import { Award, Users, Star } from 'lucide-react';
 
 export default function Partners() {
   const { language } = useLanguage();
-  const { partners } = useData();
+  const { partners, fetchPartners } = useData();
   const isHindi = language === 'hi';
+
+  useEffect(() => {
+    fetchPartners();
+  }, [fetchPartners]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans py-8 sm:py-16" id="partners-view">

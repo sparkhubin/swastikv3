@@ -405,7 +405,7 @@ export const db = {
 
       // 13. Customer Table (Relational ID Mapping)
       `CREATE TABLE IF NOT EXISTS customer (
-        id INT PRIMARY KEY,
+        id ${serialType},
         name VARCHAR(255) NOT NULL,
         phone VARCHAR(50) NOT NULL,
         email VARCHAR(255) DEFAULT '',
@@ -928,58 +928,148 @@ export const db = {
         existingCustRows = await this.query("SELECT * FROM customer");
       } catch (e) {}
 
-      let customersToLoad = [];
-      if (existingCustRows && existingCustRows.length > 0) {
-        customersToLoad = existingCustRows.map(c => ({
-          id: Number(c.id),
-          name: c.name,
-          phone: c.phone,
-          email: c.email || "",
-          address: c.address || "",
-          status: c.status || "Active",
-          registeredAt: c.registered_at,
-          orderCount: Number(c.order_count || 0),
-          totalSpent: Number(c.total_spent || 0),
-          points: Number(c.points || 100),
-          isPrimeActive: Boolean(c.is_prime_active),
-          primeMembershipNo: c.prime_membership_no || "",
-          dob: c.dob || "",
-          anniversary: c.anniversary || ""
-        }));
-      } else {
-        // Check app_settings for swastik_customers
-        const rows = await this.query("SELECT value_text FROM app_settings WHERE key_name = 'swastik_customers'");
-        if (rows.length > 0 && rows[0].value_text) {
-          try {
-            const parsed = JSON.parse(rows[0].value_text);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              customersToLoad = parsed;
-            }
-          } catch (e) {}
+      // Group and clean customers to deduplicate by phone and guarantee valid positive IDs
+      const custByPhone = new Map();
+      let maxCustId = 100;
+
+      for (const row of existingCustRows) {
+        if (row.id && Number(row.id) > maxCustId) {
+          maxCustId = Number(row.id);
         }
-        if (customersToLoad.length === 0) {
-          customersToLoad = defaultCustomers;
+      }
+
+      for (const row of existingCustRows) {
+        const cleanP = String(row.phone || "").replace(/\D/g, "").slice(-10);
+        if (!cleanP) continue;
+        
+        if (!custByPhone.has(cleanP)) {
+          custByPhone.set(cleanP, {
+            id: row.id && Number(row.id) > 0 ? Number(row.id) : null,
+            name: row.name || `Customer ${cleanP.slice(-4)}`,
+            phone: row.phone,
+            email: row.email || "",
+            address: row.address || "",
+            status: row.status || "Active",
+            registeredAt: row.registered_at || new Date().toISOString(),
+            orderCount: Number(row.order_count || 0),
+            totalSpent: Number(row.total_spent || 0),
+            points: Number(row.points || 100),
+            isPrimeActive: Boolean(row.is_prime_active),
+            primeMembershipNo: row.prime_membership_no || "",
+            dob: row.dob || "",
+            anniversary: row.anniversary || ""
+          });
+        } else {
+          // Merge stats if duplicate entry existed
+          const existing = custByPhone.get(cleanP);
+          if (!existing.id && row.id && Number(row.id) > 0) {
+            existing.id = Number(row.id);
+          }
+          if (row.name && (!existing.name || existing.name.startsWith("Customer "))) {
+            existing.name = row.name;
+          }
+          if (row.address && !existing.address) existing.address = row.address;
+          if (row.email && !existing.email) existing.email = row.email;
+          if (row.prime_membership_no && !existing.primeMembershipNo) existing.primeMembershipNo = row.prime_membership_no;
+          if (row.is_prime_active) existing.isPrimeActive = true;
+        }
+      }
+
+      // If customer table was empty, check app_settings for swastik_customers or fallback
+      if (custByPhone.size === 0) {
+        let loaded = [];
+        try {
+          const rows = await this.query("SELECT value_text FROM app_settings WHERE key_name = 'swastik_customers'");
+          if (rows.length > 0 && rows[0].value_text) {
+            const parsed = JSON.parse(rows[0].value_text);
+            if (Array.isArray(parsed) && parsed.length > 0) loaded = parsed;
+          }
+        } catch (e) {}
+
+        if (loaded.length === 0) loaded = defaultCustomers;
+
+        for (const c of loaded) {
+          const cleanP = String(c.phone || "").replace(/\D/g, "").slice(-10);
+          if (cleanP && !custByPhone.has(cleanP)) {
+            custByPhone.set(cleanP, {
+              id: c.id && Number(c.id) > 0 ? Number(c.id) : ++maxCustId,
+              name: c.name,
+              phone: c.phone,
+              email: c.email || "",
+              address: c.address || "",
+              status: c.status || "Active",
+              registeredAt: c.registeredAt || new Date().toISOString(),
+              orderCount: Number(c.orderCount || 0),
+              totalSpent: Number(c.totalSpent || 0),
+              points: Number(c.points || 100),
+              isPrimeActive: Boolean(c.isPrimeActive),
+              primeMembershipNo: c.primeMembershipNo || "",
+              dob: c.dob || "",
+              anniversary: c.anniversary || ""
+            });
+          }
+        }
+      }
+
+      // Ensure every customer has a unique ID and recalculate accurate order count & total spent from orders
+      const cleanCustomerList = [];
+      for (const [cleanP, cust] of custByPhone.entries()) {
+        if (!cust.id || cust.id <= 0) {
+          maxCustId += 1;
+          cust.id = maxCustId;
         }
 
-        // Insert into customer table
-        for (const c of customersToLoad) {
-          try {
+        // Query real stats from order table
+        try {
+          const stats = await this.query(
+            `SELECT COUNT(*) as ord_cnt, SUM(COALESCE(grand_total, total, 0)) as spent 
+             FROM "order" 
+             WHERE customer_id = ? 
+                OR user_id = ?
+                OR REPLACE(REPLACE(REPLACE(customer_phone, ' ', ''), '-', ''), '+', '') LIKE ?
+                OR customer_phone = ?`,
+            [cust.id, cust.id, `%${cleanP}%`, cust.phone]
+          );
+          if (stats && stats.length > 0 && stats[0].ord_cnt > 0) {
+            cust.orderCount = Number(stats[0].ord_cnt);
+            cust.totalSpent = Number(stats[0].spent || 0);
+          }
+        } catch (stErr) {}
+
+        cleanCustomerList.push(cust);
+      }
+
+      // Re-sync customer table: delete duplicates and upsert clean records
+      for (const c of cleanCustomerList) {
+        try {
+          const cleanP = String(c.phone || "").replace(/\D/g, "").slice(-10);
+          // Delete any duplicate null or wrong id rows for this phone
+          await this.execute(
+            `DELETE FROM customer WHERE (id != ? OR id IS NULL) AND (REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '+', '') LIKE ? OR phone = ?)`,
+            [c.id, `%${cleanP}%`, c.phone]
+          );
+
+          const ex = await this.query("SELECT id FROM customer WHERE id = ?", [c.id]);
+          if (ex && ex.length > 0) {
+            await this.execute(
+              `UPDATE customer SET name = ?, phone = ?, email = ?, address = ?, status = ?, order_count = ?, total_spent = ?, points = ?, is_prime_active = ?, prime_membership_no = ?, dob = ?, anniversary = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+              [c.name, c.phone, c.email || '', c.address || '', c.status || 'Active', c.orderCount, c.totalSpent, c.points, c.isPrimeActive ? 1 : 0, c.primeMembershipNo || '', c.dob || '', c.anniversary || '', c.id]
+            );
+          } else {
             await this.execute(
               `INSERT INTO customer (id, name, phone, email, address, status, registered_at, order_count, total_spent, points, is_prime_active, prime_membership_no, dob, anniversary)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [
-                c.id, c.name, c.phone, c.email || "", c.address || "", c.status || "Active",
-                c.registeredAt || new Date().toISOString(), c.orderCount || 0, c.totalSpent || 0,
-                c.points || 100, c.isPrimeActive ? 1 : 0, c.primeMembershipNo || "", c.dob || "", c.anniversary || ""
-              ]
+              [c.id, c.name, c.phone, c.email || '', c.address || '', c.status || 'Active', c.registeredAt || new Date().toISOString(), c.orderCount, c.totalSpent, c.points, c.isPrimeActive ? 1 : 0, c.primeMembershipNo || '', c.dob || '', c.anniversary || '']
             );
-          } catch (err) {}
+          }
+        } catch (syncErr) {
+          console.warn("Notice updating clean customer:", syncErr.message);
         }
       }
 
       // Always synchronize app_settings copy
       try {
-        const jsonVal = JSON.stringify(customersToLoad);
+        const jsonVal = JSON.stringify(cleanCustomerList);
         const exSettings = await this.query("SELECT key_name FROM app_settings WHERE key_name = 'swastik_customers'");
         if (exSettings.length > 0) {
           await this.execute("UPDATE app_settings SET value_text = ?, updated_at = CURRENT_TIMESTAMP WHERE key_name = 'swastik_customers'", [jsonVal]);
@@ -989,27 +1079,21 @@ export const db = {
       } catch (e) {}
 
       // ENFORCE PROPER ID MAPPING ON ALL ORDERS
-      for (const c of customersToLoad) {
+      for (const c of cleanCustomerList) {
         const cleanP = String(c.phone || "").replace(/\D/g, "").slice(-10);
         if (cleanP) {
-          // Link unassigned orders by matching phone digits or exact phone
           await this.execute(
             `UPDATE "order" SET customer_id = ?, user_id = ?, customer_name = ? 
-             WHERE (customer_id IS NULL OR user_id IS NULL OR user_id = 0) 
+             WHERE (customer_id IS NULL OR user_id IS NULL OR user_id = 0 OR customer_id != ?) 
                AND (
                  REPLACE(REPLACE(REPLACE(customer_phone, ' ', ''), '-', ''), '+', '') LIKE ? 
                  OR customer_phone = ?
                )`,
-            [c.id, c.id, c.name, `%${cleanP}%`, c.phone]
-          );
-          // Sync current profile name across all historical orders for this customer_id / user_id
-          await this.execute(
-            `UPDATE "order" SET customer_name = ?, customer_phone = ? WHERE customer_id = ? OR user_id = ?`,
-            [c.name, c.phone, c.id, c.id]
+            [c.id, c.id, c.name, c.id, `%${cleanP}%`, c.phone]
           );
         }
       }
-      console.log(`✓ Synchronized ${customersToLoad.length} customers and mapped order IDs.`);
+      console.log(`✓ Synchronized ${cleanCustomerList.length} customers and mapped order IDs cleanly.`);
     } catch (err) {
       console.warn("Notice in syncCustomerTableAndOrders:", err.message);
     }
@@ -1025,13 +1109,16 @@ export const db = {
       const products = await this.query("SELECT * FROM product");
       const orders = await this.query('SELECT * FROM "order"');
       const orderItems = await this.query("SELECT * FROM order_item");
-      const customers = await this.query("SELECT * FROM customer");
+      const customers = await this.query("SELECT * FROM customer WHERE id IS NOT NULL AND id > 0");
       const users = await this.query('SELECT * FROM "user"');
       const partners = await this.query("SELECT * FROM partner");
       const reviews = await this.query("SELECT * FROM review");
       const appSettings = await this.query("SELECT * FROM app_settings");
       const paymentSettings = await this.query("SELECT * FROM payment_settings");
       const margSettings = await this.query("SELECT * FROM marg_settings");
+      const whatsappSettings = await this.query("SELECT * FROM whatsapp_settings");
+      const notifications = await this.query("SELECT * FROM notification");
+      const roles = await this.query("SELECT * FROM role");
 
       const snapshot = {
         updatedAt: new Date().toISOString(),
@@ -1045,12 +1132,17 @@ export const db = {
           review: reviews,
           app_settings: appSettings,
           payment_settings: paymentSettings,
-          marg_settings: margSettings
+          marg_settings: margSettings,
+          whatsapp_settings: whatsappSettings,
+          notification: notifications,
+          role: roles
         }
       };
 
-      fs.writeFileSync(snapshotPath, JSON.stringify(snapshot, null, 2), "utf-8");
-      console.log(`✓ Persistent snapshot updated at ${snapshotPath} (${orders.length} orders, ${products.length} products, ${customers.length} customers)`);
+      const tempPath = `${snapshotPath}.tmp`;
+      fs.writeFileSync(tempPath, JSON.stringify(snapshot, null, 2), "utf-8");
+      fs.renameSync(tempPath, snapshotPath);
+      console.log(`✓ Persistent snapshot updated at ${snapshotPath} (${orders.length} orders, ${products.length} products, ${customers.length} customers, ${notifications.length} notifications)`);
     } catch (err) {
       console.warn("Notice in savePersistentSnapshot:", err.message);
     }
@@ -1071,6 +1163,36 @@ export const db = {
 
       const { tables } = data;
 
+      // 1. Rehydrate Products if table is empty or missing snapshot items
+      if (Array.isArray(tables.product) && tables.product.length > 0) {
+        const prodCountRows = await this.query("SELECT COUNT(*) as cnt FROM product");
+        const prodCount = Number(prodCountRows[0]?.cnt || prodCountRows[0]?.['count(*)'] || 0);
+
+        if (prodCount === 0) {
+          console.log(`📥 Rehydrating ${tables.product.length} products from persistent snapshot...`);
+          for (const p of tables.product) {
+            try {
+              await this.execute(
+                `INSERT INTO product (
+                  id, code, name_en, name_hi, category, sub_en, sub_hi,
+                  price, original_price, discount_tag, image_url, stock_count,
+                  unit, unit_prices, pack_en, pack_hi, gst_percent, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                  p.id, p.code || '', p.name_en, p.name_hi, p.category, p.sub_en || '', p.sub_hi || '',
+                  p.price, p.original_price || p.price, p.discount_tag || '', p.image_url || '',
+                  p.stock_count !== undefined ? p.stock_count : 100, p.unit || '',
+                  typeof p.unit_prices === 'object' ? JSON.stringify(p.unit_prices) : (p.unit_prices || ''),
+                  p.pack_en || '', p.pack_hi || '', p.gst_percent !== undefined ? p.gst_percent : 5,
+                  p.created_at || new Date().toISOString(), p.updated_at || new Date().toISOString()
+                ]
+              );
+            } catch (pe) {}
+          }
+        }
+      }
+
+      // 2. Rehydrate Orders
       const currentOrders = await this.query('SELECT COUNT(*) as cnt FROM "order"');
       const orderCount = Number(currentOrders[0]?.cnt || currentOrders[0]?.['count(*)'] || 0);
 
@@ -1079,22 +1201,31 @@ export const db = {
         for (const o of tables.order) {
           try {
             await this.execute(
-              `INSERT INTO "order" (id, user_id, order_date, is_active, step_level, status_label, delivery_partner_name, delivery_partner_phone, dispatch_hub, grand_total, subtotal, delivery_fee, gst_amount, customer_name, customer_phone, shipping_address, referral_discount, applied_points, coupon_discount, coupon_code, celebration_discount, celebration_offer_name, customer_email, payment_method, payment_status, total)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO "order" (
+                id, customer_id, user_id, order_date, is_active, step_level, status_label,
+                delivery_partner_name, delivery_partner_phone, dispatch_hub, eta_status,
+                grand_total, subtotal, delivery_fee, gst_amount, customer_name, customer_phone,
+                customer_email, shipping_address, referral_discount, applied_points, coupon_discount,
+                coupon_code, celebration_discount, celebration_offer_name, payment_method, payment_status,
+                total, delivery_staff_id, cod_status, cod_settled_at, cod_cleared_by, cod_settlement_note
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
-                o.id, o.user_id || null, o.order_date, o.is_active ? 1 : 0, o.step_level || 0, o.status_label || 'Placed',
-                o.delivery_partner_name || '', o.delivery_partner_phone || '', o.dispatch_hub || '',
+                o.id, o.customer_id || o.user_id || null, o.user_id || null, o.order_date || new Date().toISOString(),
+                o.is_active ? 1 : 0, o.step_level || 0, o.status_label || 'Placed',
+                o.delivery_partner_name || '', o.delivery_partner_phone || '', o.dispatch_hub || '', o.eta_status || '',
                 o.grand_total || o.total || 0, o.subtotal || 0, o.delivery_fee || 0, o.gst_amount || 0,
-                o.customer_name || '', o.customer_phone || '', o.shipping_address || '', o.referral_discount || 0,
-                o.applied_points || 0, o.coupon_discount || 0, o.coupon_code || '', o.celebration_discount || 0,
-                o.celebration_offer_name || '', o.customer_email || '', o.payment_method || 'COD',
-                o.payment_status || 'UNPAID', o.total || o.grand_total || 0
+                o.customer_name || '', o.customer_phone || '', o.customer_email || '', o.shipping_address || '',
+                o.referral_discount || 0, o.applied_points || 0, o.coupon_discount || 0, o.coupon_code || '',
+                o.celebration_discount || 0, o.celebration_offer_name || '', o.payment_method || 'COD',
+                o.payment_status || 'UNPAID', o.total || o.grand_total || 0, o.delivery_staff_id || null,
+                o.cod_status || null, o.cod_settled_at || null, o.cod_cleared_by || null, o.cod_settlement_note || null
               ]
             );
           } catch (oe) {}
         }
       }
 
+      // 3. Rehydrate Order Items
       if (Array.isArray(tables.order_item) && tables.order_item.length > 0) {
         const currentItems = await this.query('SELECT COUNT(*) as cnt FROM order_item');
         const itemCount = Number(currentItems[0]?.cnt || currentItems[0]?.['count(*)'] || 0);
@@ -1102,17 +1233,19 @@ export const db = {
           for (const item of tables.order_item) {
             try {
               await this.execute(
-                `INSERT INTO order_item (order_id, product_id, name_en, name_hi, price, qty, weight_label)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                [item.order_id, item.product_id, item.name_en, item.name_hi, item.price, item.qty, item.weight_label]
+                `INSERT INTO order_item (id, order_id, product_id, name_en, name_hi, price, qty, weight_label)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [item.id || null, item.order_id, item.product_id, item.name_en, item.name_hi, item.price, item.qty, item.weight_label]
               );
             } catch (ie) {}
           }
         }
       }
 
+      // 4. Rehydrate Customers
       if (Array.isArray(tables.customer) && tables.customer.length > 0) {
         for (const c of tables.customer) {
+          if (!c.id) continue;
           try {
             const ex = await this.query("SELECT id FROM customer WHERE id = ?", [c.id]);
             if (ex.length === 0) {
@@ -1129,6 +1262,157 @@ export const db = {
           } catch (ce) {}
         }
       }
+
+      // 5. Rehydrate Staff and Users
+      const userCountRows = await this.query('SELECT COUNT(*) as cnt FROM "user"');
+      const userCount = Number(userCountRows[0]?.cnt || userCountRows[0]?.['count(*)'] || 0);
+      if (userCount === 0) {
+        if (Array.isArray(tables.user) && tables.user.length > 0) {
+          for (const u of tables.user) {
+            try {
+              await this.execute(
+                `INSERT INTO "user" (id, role_id, full_name, phone_number, email, password_hash, permissions, status, is_master_admin, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                  u.id, u.role_id, u.full_name, u.phone_number, u.email || '', u.password_hash || 'user123',
+                  typeof u.permissions === 'object' ? JSON.stringify(u.permissions) : (u.permissions || '[]'),
+                  u.status || 'Active', u.is_master_admin ? 1 : 0, u.created_at || new Date().toISOString(), u.updated_at || new Date().toISOString()
+                ]
+              );
+            } catch (ue) {}
+          }
+        }
+        // If still no staff in user table, seed default staff members
+        const staffCheck = await this.query('SELECT COUNT(*) as cnt FROM "user" WHERE role_id != 1');
+        const staffCount = Number(staffCheck[0]?.cnt || staffCheck[0]?.['count(*)'] || 0);
+        if (staffCount === 0) {
+          const defaultStaff = [
+            { id: 1, name: "Balram Patidar", mobile: "9999999999", role_id: 2, password: "admin", permissions: JSON.stringify(["dashboard", "products", "categories", "orders", "inventory", "delivery", "customers", "whatsapp", "settings", "pos", "staff", "reports"]), is_master: 1 },
+            { id: 2, name: "Ramesh Sharma", mobile: "9812345670", role_id: 3, password: "staff", permissions: JSON.stringify(["dashboard", "products", "categories", "inventory"]), is_master: 0 },
+            { id: 3, name: "Vikram Singh", mobile: "9876543210", role_id: 4, password: "staff", permissions: JSON.stringify(["delivery", "orders"]), is_master: 0 },
+            { id: 4, name: "Rahul Verma", mobile: "9898989898", role_id: 4, password: "staff", permissions: JSON.stringify(["delivery"]), is_master: 0 },
+            { id: 5, name: "Anita Gupta", mobile: "9823456789", role_id: 5, password: "staff", permissions: JSON.stringify(["orders", "customers", "whatsapp"]), is_master: 0 }
+          ];
+          for (const s of defaultStaff) {
+            try {
+              await this.execute(
+                `INSERT INTO "user" (id, role_id, full_name, phone_number, password_hash, permissions, status, is_master_admin)
+                 VALUES (?, ?, ?, ?, ?, ?, 'Active', ?)`,
+                [s.id, s.role_id, s.name, s.mobile, s.password, s.permissions, s.is_master]
+              );
+            } catch (se) {}
+          }
+        }
+      }
+
+      // 6. Rehydrate Partners
+      const partnerCountRows = await this.query("SELECT COUNT(*) as cnt FROM partner");
+      const partnerCount = Number(partnerCountRows[0]?.cnt || partnerCountRows[0]?.['count(*)'] || 0);
+      if (partnerCount === 0 && Array.isArray(tables.partner) && tables.partner.length > 0) {
+        for (const p of tables.partner) {
+          try {
+            await this.execute(
+              `INSERT INTO partner (id, name_en, name_hi, role_en, role_hi, location_en, location_hi, items_en, items_hi, since_year, quote_en, quote_hi, image_url)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [p.id, p.name_en, p.name_hi, p.role_en, p.role_hi, p.location_en, p.location_hi, p.items_en, p.items_hi, p.since_year, p.quote_en, p.quote_hi, p.image_url]
+            );
+          } catch (pe) {}
+        }
+      }
+
+      // 7. Rehydrate Reviews
+      const reviewCountRows = await this.query("SELECT COUNT(*) as cnt FROM review");
+      const reviewCount = Number(reviewCountRows[0]?.cnt || reviewCountRows[0]?.['count(*)'] || 0);
+      if (reviewCount === 0 && Array.isArray(tables.review) && tables.review.length > 0) {
+        for (const r of tables.review) {
+          try {
+            await this.execute(
+              `INSERT INTO review (id, user_id, author_name, rating, comment_en, comment_hi, verified_purchase)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`,
+              [r.id, r.user_id || 1, r.author_name, r.rating, r.comment_en, r.comment_hi, r.verified_purchase ? 1 : 0]
+            );
+          } catch (re) {}
+        }
+      }
+
+      // 8. Rehydrate App Settings (Banners, Categories, Locations, etc.)
+      if (Array.isArray(tables.app_settings) && tables.app_settings.length > 0) {
+        for (const s of tables.app_settings) {
+          try {
+            const ex = await this.query("SELECT key_name FROM app_settings WHERE key_name = ?", [s.key_name]);
+            if (ex.length === 0) {
+              await this.execute(
+                "INSERT INTO app_settings (key_name, value_text) VALUES (?, ?)",
+                [s.key_name, s.value_text]
+              );
+            }
+          } catch (se) {}
+        }
+      }
+
+      // 9. Rehydrate Payment Settings
+      if (Array.isArray(tables.payment_settings) && tables.payment_settings.length > 0) {
+        const ps = tables.payment_settings[0];
+        try {
+          const ex = await this.query("SELECT id FROM payment_settings WHERE id = 1");
+          if (ex.length === 0) {
+            await this.execute(
+              `INSERT INTO payment_settings (id, enabled, app_id, secret_key, environment, razorpay_enabled, razorpay_key_id, razorpay_key_secret, active_gateway)
+               VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [ps.enabled ? 1 : 0, ps.app_id || '', ps.secret_key || '', ps.environment || 'TEST', ps.razorpay_enabled ? 1 : 0, ps.razorpay_key_id || '', ps.razorpay_key_secret || '', ps.active_gateway || 'RAZORPAY']
+            );
+          }
+        } catch (pse) {}
+      }
+
+      // 10. Rehydrate MARG Settings
+      if (Array.isArray(tables.marg_settings) && tables.marg_settings.length > 0) {
+        const ms = tables.marg_settings[0];
+        try {
+          const ex = await this.query("SELECT id FROM marg_settings WHERE id = 1");
+          if (ex.length === 0) {
+            await this.execute(
+              `INSERT INTO marg_settings (id, api_token, points_ratio, auto_notify_whatsapp, simulate_delay)
+               VALUES (1, ?, ?, ?, ?)`,
+              [ms.api_token || '', ms.points_ratio || 10, ms.auto_notify_whatsapp ? 1 : 0, ms.simulate_delay || 0]
+            );
+          }
+        } catch (mse) {}
+      }
+
+      // 11. Rehydrate WhatsApp Settings
+      if (Array.isArray(tables.whatsapp_settings) && tables.whatsapp_settings.length > 0) {
+        const ws = tables.whatsapp_settings[0];
+        try {
+          const ex = await this.query("SELECT id FROM whatsapp_settings WHERE id = 1");
+          if (ex.length === 0) {
+            await this.execute(
+              `INSERT INTO whatsapp_settings (id, meta_phone_number_id, meta_access_token, meta_business_account_id, meta_template_name, twilio_account_sid, twilio_auth_token, twilio_whatsapp_from, enabled)
+               VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [ws.meta_phone_number_id || '', ws.meta_access_token || '', ws.meta_business_account_id || '', ws.meta_template_name || '', ws.twilio_account_sid || '', ws.twilio_auth_token || '', ws.twilio_whatsapp_from || '', ws.enabled ? 1 : 0]
+            );
+          }
+        } catch (wse) {}
+      }
+
+      // 12. Rehydrate Notifications
+      if (Array.isArray(tables.notification) && tables.notification.length > 0) {
+        const notifCountRows = await this.query("SELECT COUNT(*) as cnt FROM notification");
+        const notifCount = Number(notifCountRows[0]?.cnt || notifCountRows[0]?.['count(*)'] || 0);
+        if (notifCount === 0) {
+          for (const n of tables.notification) {
+            try {
+              await this.execute(
+                `INSERT INTO notification (id, recipient_role, recipient_phone, order_id, title_en, title_hi, message_en, message_hi, type, is_read, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [n.id || null, n.recipient_role, n.recipient_phone, n.order_id, n.title_en, n.title_hi, n.message_en, n.message_hi, n.type || 'order_update', n.is_read ? 1 : 0, n.created_at || new Date().toISOString()]
+              );
+            } catch (ne) {}
+          }
+        }
+      }
+
+      console.log("✓ Completed state rehydration from persistent snapshot.");
     } catch (err) {
       console.warn("Notice in rehydrateFromPersistentSnapshot:", err.message);
     }

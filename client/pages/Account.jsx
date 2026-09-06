@@ -58,7 +58,7 @@ import PrivacyDataTab from '../components/account/PrivacyDataTab';
 export default function Account({ onViewChange }) {
   const { language, setLanguage, t } = useLanguage();
   const isHindi = language === 'hi';
-  const { orders, referralSettings, customers, primeSettings, updateCustomer, addCustomer, upsertCustomer, addOrder, deleteOrder, paymentEnabled, paymentEnvironment, contactSettings, staff, setUserRole } = useData();
+  const { products = [], orders, referralSettings, customers, primeSettings, updateCustomer, addCustomer, upsertCustomer, addOrder, deleteOrder, paymentEnabled, paymentEnvironment, contactSettings, staff, setUserRole, fetchOrders, fetchCustomers, fetchProducts, fetchDataDeletionRequests } = useData();
 
   // Print Official Tax Invoice PDF
   const handlePrintInvoice = (order) => {
@@ -84,11 +84,32 @@ export default function Account({ onViewChange }) {
     let computedGst = 0;
 
     const mappedItems = items.map((it, idx) => {
-      const rate = it.gstPercent !== undefined ? Number(it.gstPercent) : 5;
+      // Find matching product in catalog to check if GST column exists
+      const matchedProd = products.find(p => String(p.id) === String(it.productId || it.id) || String(p.code) === String(it.code || ''));
+      
+      let rawGst = undefined;
+      if (it.gstPercent !== undefined && it.gstPercent !== null && it.gstPercent !== '') {
+        rawGst = Number(it.gstPercent);
+      } else if (matchedProd) {
+        if (matchedProd.gstPercent !== undefined && matchedProd.gstPercent !== null && matchedProd.gstPercent !== '') {
+          rawGst = Number(matchedProd.gstPercent);
+        } else if (matchedProd.gst_percent !== undefined && matchedProd.gst_percent !== null && matchedProd.gst_percent !== '') {
+          rawGst = Number(matchedProd.gst_percent);
+        }
+      }
+
+      // If product has no GST or GST is 0, do not treat as GST applicable
+      const hasItemGst = rawGst !== undefined && rawGst !== null && rawGst > 0;
+      const rate = hasItemGst ? rawGst : 0;
+
+      // Brand: Only show if brand exists and is not a generic placeholder
+      const rawBrand = (it.brand || (matchedProd ? (matchedProd.brand || matchedProd.subEn) : '') || '').trim();
+      const itemBrand = (rawBrand && rawBrand.toLowerCase() !== 'general') ? rawBrand : '';
+
       const qty = Number(it.qty || it.quantity || 1);
       const unitPrice = Number(it.price || 0);
       const lineTaxable = Math.round(unitPrice * qty * 100) / 100;
-      const taxAmount = Math.round(((lineTaxable * rate) / 100) * 100) / 100;
+      const taxAmount = hasItemGst ? Math.round(((lineTaxable * rate) / 100) * 100) / 100 : 0;
       const cgst = Math.round((taxAmount / 2) * 100) / 100;
       const sgst = Math.round((taxAmount - cgst) * 100) / 100;
       const lineTotal = Math.round((lineTaxable + taxAmount) * 100) / 100;
@@ -96,16 +117,20 @@ export default function Account({ onViewChange }) {
       computedTaxable += lineTaxable;
       computedGst += taxAmount;
 
-      if (!slabMap[rate]) {
-        slabMap[rate] = { slab: rate, taxable: 0, cgst: 0, sgst: 0, totalTax: 0 };
+      if (hasItemGst) {
+        if (!slabMap[rate]) {
+          slabMap[rate] = { slab: rate, taxable: 0, cgst: 0, sgst: 0, totalTax: 0 };
+        }
+        slabMap[rate].taxable += lineTaxable;
+        slabMap[rate].cgst += cgst;
+        slabMap[rate].sgst += sgst;
+        slabMap[rate].totalTax += taxAmount;
       }
-      slabMap[rate].taxable += lineTaxable;
-      slabMap[rate].cgst += cgst;
-      slabMap[rate].sgst += sgst;
-      slabMap[rate].totalTax += taxAmount;
 
       return {
         ...it,
+        brand: itemBrand,
+        hasItemGst,
         rate,
         qty,
         unitPrice,
@@ -117,8 +142,10 @@ export default function Account({ onViewChange }) {
       };
     });
 
+    const hasAnyGst = mappedItems.some(it => it.hasItemGst);
+
     const subtotal = Number(order.subtotal || computedTaxable || 0);
-    const gst = Number(order.gst || computedGst || 0);
+    const gst = hasAnyGst ? Number(order.gst || computedGst || 0) : 0;
     const cgstTotal = Math.round((gst / 2) * 100) / 100;
     const sgstTotal = Math.round((gst - cgstTotal) * 100) / 100;
     const deliveryFee = Number(order.deliveryFee || 0);
@@ -134,7 +161,7 @@ export default function Account({ onViewChange }) {
       <html>
         <head>
           <meta charset="utf-8">
-          <title>Tax Invoice - #${order.id} - ${storeName}</title>
+          <title>${hasAnyGst ? 'Tax Invoice' : 'Order Invoice'} - #${order.id} - ${storeName}</title>
           <style>
             * { box-sizing: border-box; }
             body { font-family: 'Segoe UI', Arial, sans-serif; background: #ffffff; color: #0f172a; margin: 0; padding: 24px; font-size: 11px; line-height: 1.4; }
@@ -156,9 +183,9 @@ export default function Account({ onViewChange }) {
             table { width: 100%; border-collapse: collapse; margin-top: 8px; margin-bottom: 14px; }
             th { background: #0f172a; color: #ffffff; text-transform: uppercase; font-size: 9.5px; font-weight: 800; padding: 8px 10px; text-align: left; letter-spacing: 0.4px; }
             td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-size: 10.5px; font-weight: 600; }
-            .bottom-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; align-items: start; }
+            .bottom-grid { display: grid; grid-template-columns: ${hasAnyGst ? '1.2fr 1fr' : '1fr'}; gap: 14px; align-items: start; }
             .gst-breakdown-card { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 12px; }
-            .summary-box { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 14px; }
+            .summary-box { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 14px; ${hasAnyGst ? '' : 'max-width: 360px; margin-left: auto;'} }
             .summary-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 10.5px; }
             .total-row { border-top: 2px solid #0f172a; padding-top: 8px; margin-top: 6px; font-size: 14px; font-weight: 900; color: #0284c7; }
             .footer { margin-top: 20px; text-align: center; border-top: 1px dashed #cbd5e1; padding-top: 12px; font-size: 9.5px; color: #64748b; }
@@ -183,7 +210,7 @@ export default function Account({ onViewChange }) {
                 </div>
               </div>
               <div class="invoice-heading">
-                <div class="tax-badge">TAX INVOICE</div>
+                <div class="tax-badge">${hasAnyGst ? 'TAX INVOICE' : 'RETAIL INVOICE / RECEIPT'}</div>
                 <div class="inv-no">ORDER #${order.id}</div>
                 <div style="font-size: 10px; color: #64748b; margin-top: 2px;">
                   Date: ${order.orderDate ? new Date(order.orderDate).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB')}
@@ -217,9 +244,11 @@ export default function Account({ onViewChange }) {
                   <th>Pack / Unit</th>
                   <th style="text-align:center;">Qty</th>
                   <th style="text-align:right;">Rate (₹)</th>
-                  <th style="text-align:center;">GST %</th>
-                  <th style="text-align:right;">Taxable Amt</th>
-                  <th style="text-align:right;">Tax (CGST+SGST)</th>
+                  ${hasAnyGst ? `
+                    <th style="text-align:center;">GST %</th>
+                    <th style="text-align:right;">Taxable Amt</th>
+                    <th style="text-align:right;">Tax (CGST+SGST)</th>
+                  ` : ''}
                   <th style="text-align:right;">Total (₹)</th>
                 </tr>
               </thead>
@@ -227,13 +256,22 @@ export default function Account({ onViewChange }) {
                 ${mappedItems.map((it, idx) => `
                   <tr>
                     <td>${idx + 1}</td>
-                    <td><b>${it.nameEn || it.nameHi || it.name || 'Grocery Item'}</b></td>
+                    <td>
+                      <b>${it.nameEn || it.nameHi || it.name || 'Grocery Item'}</b>
+                      ${it.brand ? `<div style="font-size: 9px; color: #64748b; font-weight: 700; margin-top: 1px;">Brand: ${it.brand}</div>` : ''}
+                    </td>
                     <td>${it.weight || it.unit || '1 Unit'}</td>
                     <td style="text-align:center;"><b>${it.qty}</b></td>
                     <td style="text-align:right;">₹${it.unitPrice.toFixed(2)}</td>
-                    <td style="text-align:center;"><span style="background:#e0f2fe; color:#0369a1; padding:2px 6px; border-radius:4px; font-weight:700;">${it.rate}%</span></td>
-                    <td style="text-align:right;">₹${it.lineTaxable.toFixed(2)}</td>
-                    <td style="text-align:right; color:#64748b;">₹${it.taxAmount.toFixed(2)}</td>
+                    ${hasAnyGst ? `
+                      <td style="text-align:center;">
+                        ${it.hasItemGst 
+                          ? `<span style="background:#e0f2fe; color:#0369a1; padding:2px 6px; border-radius:4px; font-weight:700;">${it.rate}%</span>` 
+                          : `<span style="color:#94a3b8; font-size:9.5px;">-</span>`}
+                      </td>
+                      <td style="text-align:right;">₹${it.lineTaxable.toFixed(2)}</td>
+                      <td style="text-align:right; color:#64748b;">₹${it.taxAmount.toFixed(2)}</td>
+                    ` : ''}
                     <td style="text-align:right; font-weight:800; color:#0f172a;">₹${it.lineTotal.toFixed(2)}</td>
                   </tr>
                 `).join('')}
@@ -241,39 +279,43 @@ export default function Account({ onViewChange }) {
             </table>
 
             <div class="bottom-grid">
-              <!-- GST Rate-wise computation box -->
-              <div class="gst-breakdown-card">
-                <div class="card-head">GST TAX BREAKDOWN (कर विवरण)</div>
-                <table style="margin: 0; font-size: 10px;">
-                  <thead>
-                    <tr style="background:#334155;">
-                      <th style="padding:4px 6px; font-size:9px;">Rate</th>
-                      <th style="padding:4px 6px; font-size:9px; text-align:right;">Taxable Value</th>
-                      <th style="padding:4px 6px; font-size:9px; text-align:right;">CGST</th>
-                      <th style="padding:4px 6px; font-size:9px; text-align:right;">SGST</th>
-                      <th style="padding:4px 6px; font-size:9px; text-align:right;">Total Tax</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${Object.values(slabMap).map(s => `
-                      <tr>
-                        <td style="padding:4px 6px; font-weight:700;">${s.slab}%</td>
-                        <td style="padding:4px 6px; text-align:right;">₹${s.taxable.toFixed(2)}</td>
-                        <td style="padding:4px 6px; text-align:right;">₹${s.cgst.toFixed(2)}</td>
-                        <td style="padding:4px 6px; text-align:right;">₹${s.sgst.toFixed(2)}</td>
-                        <td style="padding:4px 6px; text-align:right; font-weight:700; color:#0284c7;">₹${s.totalTax.toFixed(2)}</td>
+              ${hasAnyGst ? `
+                <!-- GST Rate-wise computation box -->
+                <div class="gst-breakdown-card">
+                  <div class="card-head">GST TAX BREAKDOWN (कर विवरण)</div>
+                  <table style="margin: 0; font-size: 10px;">
+                    <thead>
+                      <tr style="background:#334155;">
+                        <th style="padding:4px 6px; font-size:9px;">Rate</th>
+                        <th style="padding:4px 6px; font-size:9px; text-align:right;">Taxable Value</th>
+                        <th style="padding:4px 6px; font-size:9px; text-align:right;">CGST</th>
+                        <th style="padding:4px 6px; font-size:9px; text-align:right;">SGST</th>
+                        <th style="padding:4px 6px; font-size:9px; text-align:right;">Total Tax</th>
                       </tr>
-                    `).join('')}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      ${Object.values(slabMap).map(s => `
+                        <tr>
+                          <td style="padding:4px 6px; font-weight:700;">${s.slab}%</td>
+                          <td style="padding:4px 6px; text-align:right;">₹${s.taxable.toFixed(2)}</td>
+                          <td style="padding:4px 6px; text-align:right;">₹${s.cgst.toFixed(2)}</td>
+                          <td style="padding:4px 6px; text-align:right;">₹${s.sgst.toFixed(2)}</td>
+                          <td style="padding:4px 6px; text-align:right; font-weight:700; color:#0284c7;">₹${s.totalTax.toFixed(2)}</td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              ` : ''}
 
               <!-- Grand Total Summary box -->
               <div class="summary-box">
-                <div class="summary-row"><span class="row-label">Taxable Subtotal:</span> <span class="row-val">₹${subtotal.toFixed(2)}</span></div>
-                <div class="summary-row"><span class="row-label">CGST (Central Tax):</span> <span class="row-val">₹${cgstTotal.toFixed(2)}</span></div>
-                <div class="summary-row"><span class="row-label">SGST (State Tax):</span> <span class="row-val">₹${sgstTotal.toFixed(2)}</span></div>
-                <div class="summary-row" style="font-weight:700;"><span class="row-label">Total GST Tax:</span> <span class="row-val" style="color:#0284c7;">₹${gst.toFixed(2)}</span></div>
+                <div class="summary-row"><span class="row-label">Subtotal:</span> <span class="row-val">₹${subtotal.toFixed(2)}</span></div>
+                ${hasAnyGst ? `
+                  <div class="summary-row"><span class="row-label">CGST (Central Tax):</span> <span class="row-val">₹${cgstTotal.toFixed(2)}</span></div>
+                  <div class="summary-row"><span class="row-label">SGST (State Tax):</span> <span class="row-val">₹${sgstTotal.toFixed(2)}</span></div>
+                  <div class="summary-row" style="font-weight:700;"><span class="row-label">Total GST Tax:</span> <span class="row-val" style="color:#0284c7;">₹${gst.toFixed(2)}</span></div>
+                ` : ''}
                 <div class="summary-row"><span class="row-label">Delivery Charges:</span> <span class="row-val">${deliveryFee === 0 ? 'FREE' : `₹${deliveryFee.toFixed(2)}`}</span></div>
                 ${referralDiscount > 0 ? `<div class="summary-row" style="color:#d97706;"><span class="row-label">Loyalty Points Discount:</span> <span class="row-val">-₹${referralDiscount.toFixed(2)}</span></div>` : ''}
                 ${couponDiscount > 0 ? `<div class="summary-row" style="color:#16a34a;"><span class="row-label">Coupon Discount:</span> <span class="row-val">-₹${couponDiscount.toFixed(2)}</span></div>` : ''}
@@ -288,8 +330,8 @@ export default function Account({ onViewChange }) {
 
             <div class="footer">
               <p style="font-weight: 800; color: #0284c7; margin-bottom: 2px;">THANK YOU FOR SHOPPING AT ${storeName.toUpperCase()}!</p>
-              <p>This is a computer-generated tax invoice under the GST Act. All taxes are calculated as per applicable rates.</p>
-              <p style="font-size: 8.5px; font-family: monospace; color: #94a3b8; margin-top: 4px;">GSTIN: ${storeGst} | FSSAI LIC: ${storeFssai} | STORE HELPLINE: ${storePhone}</p>
+              <p>${hasAnyGst ? 'This is a computer-generated tax invoice under the GST Act. All taxes are calculated as per applicable rates.' : 'This is a computer-generated invoice and sales receipt.'}</p>
+              <p style="font-size: 8.5px; font-family: monospace; color: #94a3b8; margin-top: 4px;">${storeGst && hasAnyGst ? `GSTIN: ${storeGst} | ` : ''}FSSAI LIC: ${storeFssai} | STORE HELPLINE: ${storePhone}</p>
             </div>
           </div>
 
@@ -1028,6 +1070,18 @@ export default function Account({ onViewChange }) {
 
   const { cartItems, removeFromCart, updateQuantity, subtotal, grandTotal } = useCart();
   const [activeTab, setActiveTab] = useState('profile'); // profile | orders | password | membership | rewards | cart | preferences
+
+  useEffect(() => {
+    if (activeTab === 'orders') {
+      fetchOrders();
+    } else if (activeTab === 'membership' || activeTab === 'rewards') {
+      fetchCustomers();
+    } else if (activeTab === 'cart') {
+      fetchProducts();
+    } else if (activeTab === 'privacy') {
+      fetchDataDeletionRequests();
+    }
+  }, [activeTab, fetchOrders, fetchCustomers, fetchProducts, fetchDataDeletionRequests]);
 
   const [isEditing, setIsEditing] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('••••••••');

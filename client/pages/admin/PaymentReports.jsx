@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Search, 
   Filter, 
@@ -27,7 +27,12 @@ import { useData } from '../../context/DataContext';
 
 export default function PaymentReports({ userRole, loggedInStaff }) {
   const { isHindi } = useLanguage();
-  const { orders: rawOrders = [], updateOrder, staff = [] } = useData();
+  const { orders: rawOrders = [], updateOrder, staff = [], fetchOrders, fetchStaff } = useData();
+
+  useEffect(() => {
+    fetchOrders();
+    fetchStaff();
+  }, [fetchOrders, fetchStaff]);
 
   // Retrieve logged-in staff from storage if not passed directly
   const activeStaff = useMemo(() => {
@@ -357,27 +362,25 @@ export default function PaymentReports({ userRole, loggedInStaff }) {
     };
   }, [filteredPaymentOrders]);
 
-  // Batch clear cash for a rider from Admin Report
+  // Batch clear cash for a rider from Admin Report (Delivery Staff Cash Handover)
   const handleBatchClearRiderCash = (riderName, orderIdsToClear) => {
     if (!orderIdsToClear || orderIdsToClear.length === 0) return;
-    const confirmMsg = isHindi 
-      ? `क्या आप ${riderName} से प्राप्त नगद राशि को क्लियर करना चाहते हैं?` 
-      : `Confirm receipt of cash payment from ${riderName}?`;
-
-    if (!window.confirm(confirmMsg)) return;
 
     const clearTime = new Date().toISOString();
     orderIdsToClear.forEach(id => {
-      const target = orders.find(o => o.id === id);
-      if (target) {
-        updateOrder(id, {
-          ...target,
-          codStatus: 'CLEARED_TO_ADMIN',
-          codClearedAt: clearTime,
-          codClearanceNote: 'Settled by Admin in Payment Reports'
-        });
-      }
+      updateOrder(id, {
+        codStatus: 'CLEARED_TO_ADMIN',
+        adminReceivedCash: 1,
+        adminCashReceivedAt: clearTime,
+        codClearedAt: clearTime,
+        codClearedBy: 'Admin',
+        codClearanceNote: 'Settled by Admin in Delivery Reports'
+      });
     });
+
+    alert(isHindi 
+      ? `✅ ${riderName} से प्राप्त नगद राशि स्टोर लेजर में एडमिन द्वारा सफलतापूर्वक दर्ज व क्लियर कर दी गई!` 
+      : `✅ Received cash payment from ${riderName} recorded & cleared in store ledger successfully!`);
   };
 
   // Toggle single order clearance state
@@ -385,12 +388,16 @@ export default function PaymentReports({ userRole, loggedInStaff }) {
     const target = orders.find(o => o.id === orderId);
     if (!target) return;
 
-    const newCodStatus = currentStatus === 'CLEARED_TO_ADMIN' ? 'PENDING_CLEARANCE' : 'CLEARED_TO_ADMIN';
+    const isClearing = currentStatus !== 'CLEARED_TO_ADMIN';
+    const newCodStatus = isClearing ? 'CLEARED_TO_ADMIN' : 'COLLECTED_BY_RIDER';
+    const clearTime = new Date().toISOString();
     updateOrder(orderId, {
-      ...target,
       codStatus: newCodStatus,
-      codClearedAt: newCodStatus === 'CLEARED_TO_ADMIN' ? new Date().toISOString() : null,
-      codClearanceNote: newCodStatus === 'CLEARED_TO_ADMIN' ? 'Marked Cleared by Admin' : 'Reverted to Pending by Admin'
+      adminReceivedCash: isClearing ? 1 : 0,
+      adminCashReceivedAt: isClearing ? clearTime : null,
+      codClearedAt: isClearing ? clearTime : null,
+      codClearedBy: isClearing ? 'Admin' : null,
+      codClearanceNote: isClearing ? 'Marked Cleared by Admin' : 'Marked Pending by Admin'
     });
   };
 

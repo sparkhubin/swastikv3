@@ -1,11 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useData } from '../../context/DataContext';
 import { Crown, CheckCircle2, Shield, Users, Edit3, Award, Sparkles, AlertCircle } from 'lucide-react';
 
 export default function MembershipManager({ userRole, isAdminDark = true }) {
   const { isHindi } = useLanguage();
-  const { primeSettings, setPrimeSettings, customers, updateCustomer } = useData();
+  const { primeSettings, setPrimeSettings, customers, updateCustomer, fetchCustomers } = useData();
+
+  useEffect(() => {
+    fetchCustomers();
+  }, [fetchCustomers]);
 
   // Settings state
   const [isMembershipEnabled, setIsMembershipEnabled] = useState(() => primeSettings?.isMembershipEnabled ?? true);

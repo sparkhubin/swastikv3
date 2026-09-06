@@ -43,17 +43,57 @@ export function hasCustomProductImage(product) {
 /**
  * Resolves the fastest, optimized image URL for a product
  */
+export function getCandidateImages(product, r2PublicUrl) {
+  if (!product) return [];
+  const candidates = [];
+  const raw = (product.imageUrl || product.image || '').trim();
+  const isGenericPlaceholder = !raw || raw.includes(GENERIC_PLACEHOLDER_KEY);
+
+  // If a non-placeholder custom URL exists
+  if (raw && !isGenericPlaceholder) {
+    let resolved = raw;
+    if (raw.startsWith('/uploads/')) {
+      resolved = resolveImageUrl(raw);
+    }
+    candidates.push(resolved);
+  }
+
+  // If code and R2 public URL exist, add format candidates prioritizing .webp
+  const code = (product.code || product.Code || '').trim();
+  if (code && r2PublicUrl) {
+    const cleanR2Base = r2PublicUrl.replace(/\/$/, '');
+    const candidateCodes = [code];
+    if (code.toUpperCase().startsWith('SW-')) {
+      candidateCodes.push(code.replace(/^SW-/i, ''));
+    } else {
+      candidateCodes.push(`SW-${code}`);
+    }
+
+    for (const c of candidateCodes) {
+      // Cloudflare R2 images are overwhelmingly .webp (1000+ files)
+      const variants = [c, `${c} `, `${c}_`, `${c} (2)`];
+      for (const v of variants) {
+        const encoded = encodeURIComponent(v);
+        candidates.push(`${cleanR2Base}/${encoded}.webp`);
+        candidates.push(`${cleanR2Base}/${encoded}.jpeg`);
+        candidates.push(`${cleanR2Base}/${encoded}.jpg`);
+        candidates.push(`${cleanR2Base}/${encoded}.png`);
+      }
+    }
+  }
+
+  return candidates;
+}
+
 export function resolveProductImage(product, r2PublicUrl, size = 300) {
   if (!product) return DEFAULT_PRODUCT_FALLBACK;
 
   let raw = (product.imageUrl || product.image || '').trim();
 
-  // If a valid custom image URL is present and not failed
-  // If raw is the generic Unsplash placeholder, we first attempt to resolve from R2 using product code
+  // If product has a direct custom URL (e.g. Cloudflare R2, uploads, or custom link) and not placeholder
   const isGenericPlaceholder = !raw || raw.includes(GENERIC_PLACEHOLDER_KEY);
 
   if (raw && !isGenericPlaceholder && !failedUrlCache.has(raw)) {
-    // Automatically resolve relative /uploads/ path if frontend is on a separate server
     if (raw.startsWith('/uploads/')) {
       raw = resolveImageUrl(raw);
     }
@@ -63,30 +103,11 @@ export function resolveProductImage(product, r2PublicUrl, size = 300) {
     return raw;
   }
 
-  // If code and R2 public URL exist, check if R2 URL hasn't failed yet
-  const code = (product.code || product.Code || '').trim();
-  if (code && r2PublicUrl) {
-    const cleanR2Base = r2PublicUrl.replace(/\/$/, '');
-    
-    // Check candidate keys: direct code, code without SW- prefix, etc.
-    const candidateCodes = [code];
-    if (code.startsWith('SW-')) {
-      candidateCodes.push(code.replace(/^SW-/, '')); // e.g. SW-SW0038 -> SW0038
-    }
-
-    for (const c of candidateCodes) {
-      const r2Png = `${cleanR2Base}/${c}.png`;
-      if (!failedUrlCache.has(r2Png)) {
-        return r2Png;
-      }
-      const r2Jpg = `${cleanR2Base}/${c}.jpg`;
-      if (!failedUrlCache.has(r2Jpg)) {
-        return r2Jpg;
-      }
-      const r2Webp = `${cleanR2Base}/${c}.webp`;
-      if (!failedUrlCache.has(r2Webp)) {
-        return r2Webp;
-      }
+  // Check candidate keys from Cloudflare R2
+  const candidates = getCandidateImages(product, r2PublicUrl);
+  for (const candidate of candidates) {
+    if (!failedUrlCache.has(candidate)) {
+      return candidate;
     }
   }
 
@@ -96,6 +117,16 @@ export function resolveProductImage(product, r2PublicUrl, size = 300) {
   }
 
   return DEFAULT_PRODUCT_FALLBACK;
+}
+
+/**
+ * Gets the next fallback candidate if the current URL failed
+ */
+export function getNextCandidateImage(product, currentUrl, r2PublicUrl) {
+  if (currentUrl) {
+    failedUrlCache.add(currentUrl);
+  }
+  return resolveProductImage(product, r2PublicUrl);
 }
 
 /**

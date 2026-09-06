@@ -39,10 +39,24 @@ export default function NotificationCenter({ role = 'customer', phone = '', clas
   };
 
   useEffect(() => {
+    // For customers, only poll if they are logged in with a phone number
+    if (role === 'customer' && !phone) return;
+
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 5000); // 5s live polling
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        fetchNotifications();
+      }
+    }, 30000); // Smart 30s polling
     return () => clearInterval(interval);
   }, [role, phone]);
+
+  // When user opens the dropdown, fetch immediately for fresh data
+  useEffect(() => {
+    if (isOpen) {
+      fetchNotifications();
+    }
+  }, [isOpen]);
 
   // Close dropdown on outside click
   useEffect(() => {

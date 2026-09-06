@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { useLanguage } from '../../context/LanguageContext';
 import { useData } from '../../context/DataContext';
 import R2ImageUploader from './R2ImageUploader';
 import { 
   resolveProductImage, 
+  getNextCandidateImage,
   markImageFailed, 
   hasCustomProductImage, 
   DEFAULT_PRODUCT_FALLBACK 
@@ -33,8 +34,8 @@ const ListProductImage = ({ p, r2PublicUrl }) => {
 
   const handleImageError = () => {
     if (imgSrc && imgSrc !== DEFAULT_PRODUCT_FALLBACK) {
-      markImageFailed(imgSrc);
-      setImgSrc(DEFAULT_PRODUCT_FALLBACK);
+      const next = getNextCandidateImage(p, imgSrc, r2PublicUrl);
+      setImgSrc(next || DEFAULT_PRODUCT_FALLBACK);
     }
   };
 
@@ -66,7 +67,11 @@ const ListProductImage = ({ p, r2PublicUrl }) => {
 
 export default function ProductsManager({ searchQuery, setSearchQuery, userRole }) {
   const { isHindi } = useLanguage();
-  const { products, addProduct, updateProduct, deleteProduct, clearAllProducts, categories, r2PublicUrl, contactSettings, setContactSettings } = useData();
+  const { products, addProduct, updateProduct, deleteProduct, clearAllProducts, categories, r2PublicUrl, contactSettings, setContactSettings, fetchProducts } = useData();
+
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
 
   // Selected edit ID state
   const [editingProdId, setEditingProdId] = useState(null);
@@ -92,6 +97,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
   const [filterPromoStatus, setFilterPromoStatus] = useState('all'); // all | promo | normal
   const [filterBrand, setFilterBrand] = useState('all');
   const [filterImageStatus, setFilterImageStatus] = useState('all'); // all | with-image | no-image
+  const [filterStockStatus, setFilterStockStatus] = useState('all'); // all | low-stock | out-of-stock | in-stock
 
   // Image statistics
   const { withImageCount, noImageCount } = React.useMemo(() => {
@@ -102,6 +108,34 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
       else noImg++;
     });
     return { withImageCount: withImg, noImageCount: noImg };
+  }, [products]);
+
+  // Stock statistics
+  const getStockCount = (p) => {
+    if (!p) return 0;
+    if (p.stockCount !== undefined && p.stockCount !== null && p.stockCount !== '') return Number(p.stockCount);
+    if (p.stock_count !== undefined && p.stock_count !== null && p.stock_count !== '') return Number(p.stock_count);
+    if (p.stock !== undefined && p.stock !== null && p.stock !== '') return Number(p.stock);
+    if (p.quantity !== undefined && p.quantity !== null && p.quantity !== '') return Number(p.quantity);
+    return 100;
+  };
+
+  const { lowStockCount, outOfStockCount, inStockCount } = React.useMemo(() => {
+    let low = 0;
+    let out = 0;
+    let inStk = 0;
+    products.forEach(p => {
+      const count = getStockCount(p);
+      if (count <= 0) {
+        out++;
+        low++;
+      } else if (count <= 10) {
+        low++;
+      } else {
+        inStk++;
+      }
+    });
+    return { lowStockCount: low, outOfStockCount: out, inStockCount: inStk };
   }, [products]);
 
   const availableBrands = React.useMemo(() => {
@@ -121,7 +155,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
 
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterCategory, filterPromoStatus, filterBrand, filterImageStatus, itemsPerPage]);
+  }, [searchQuery, filterCategory, filterPromoStatus, filterBrand, filterImageStatus, filterStockStatus, itemsPerPage]);
 
   const downloadSampleProductsExcel = () => {
     const sampleData = [
@@ -498,7 +532,13 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
                          (filterImageStatus === 'with-image' && hasImg) ||
                          (filterImageStatus === 'no-image' && !hasImg);
 
-    return textMatches && categoryMatches && promoMatches && brandMatches && imageMatches;
+    const stockCount = getStockCount(p);
+    const stockMatches = filterStockStatus === 'all' ||
+                         (filterStockStatus === 'low-stock' && stockCount <= 10) ||
+                         (filterStockStatus === 'out-of-stock' && stockCount <= 0) ||
+                         (filterStockStatus === 'in-stock' && stockCount > 10);
+
+    return textMatches && categoryMatches && promoMatches && brandMatches && imageMatches && stockMatches;
   });
 
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage) || 1;
@@ -962,11 +1002,53 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
                   : 'bg-slate-950 border-white/10 text-white'
               }`}
             >
-              <option value="all">🖼️ All Products ({products.length})</option>
+              <option value="all">🖼️ All Images ({products.length})</option>
               <option value="with-image">📷 With Image ({withImageCount})</option>
               <option value="no-image">⚠️ Missing Image ({noImageCount})</option>
             </select>
           </div>
+
+          {/* Stock Level Filter (Low Stock / Out of Stock / In Stock) */}
+          <div className="flex items-center gap-1.5 text-xs text-slate-400 font-bold">
+            <span>Stock:</span>
+            <select 
+              value={filterStockStatus}
+              onChange={(e) => setFilterStockStatus(e.target.value)}
+              className={`border font-extrabold text-[11px] rounded-lg px-2.5 py-1.5 outline-none cursor-pointer transition-all ${
+                filterStockStatus === 'low-stock'
+                  ? 'bg-amber-950/80 border-amber-400 text-amber-300 shadow-md shadow-amber-900/30'
+                  : filterStockStatus === 'out-of-stock'
+                  ? 'bg-rose-950/80 border-rose-400 text-rose-300'
+                  : filterStockStatus === 'in-stock'
+                  ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300'
+                  : 'bg-slate-950 border-white/10 text-white'
+              }`}
+            >
+              <option value="all">📦 All Stock ({products.length})</option>
+              <option value="low-stock">⚠️ Low Stock Items (≤ 10) ({lowStockCount})</option>
+              <option value="out-of-stock">🔴 Out of Stock (0) ({outOfStockCount})</option>
+              <option value="in-stock">✅ In Stock (&gt; 10) ({inStockCount})</option>
+            </select>
+          </div>
+
+          {/* Quick Toggle Button for Low Stock */}
+          <button
+            type="button"
+            onClick={() => setFilterStockStatus(prev => prev === 'low-stock' ? 'all' : 'low-stock')}
+            className={`text-[10px] font-extrabold px-3 py-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 ${
+              filterStockStatus === 'low-stock'
+                ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-md scale-105'
+                : 'bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20'
+            }`}
+            title="Toggle filter for Low Stock items (10 or fewer units remaining)"
+          >
+            <span>⚠️ Low Stock</span>
+            <span className={`px-1.5 py-0.2 rounded font-mono text-[9px] ${
+              filterStockStatus === 'low-stock' ? 'bg-slate-900 text-amber-300' : 'bg-amber-500/20 text-amber-200'
+            }`}>
+              {lowStockCount}
+            </span>
+          </button>
 
         </div>
       </div>
@@ -996,16 +1078,29 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
                 </td>
               </tr>
             ) : (
-              paginatedProducts.map(p => (
-                <tr key={p.id} className="hover:bg-white/[0.02] transition-colors">
-                  <td className="p-4 flex items-center gap-3">
-                    <ListProductImage p={p} r2PublicUrl={r2PublicUrl} />
-                    <div className="space-y-0.5">
-                      <span className="text-[8px] font-black font-mono text-slate-500 block leading-none uppercase">{p.subEn || (contactSettings?.brandName ? `${contactSettings.brandName} Stock` : 'In Stock')}</span>
-                      <h4 className="text-white font-extrabold uppercase tracking-tight text-xs">{p.nameEn || p.nameHi}</h4>
-                      <span className="text-[8px] font-bold text-slate-400 block font-mono">ID: {p.id} {(p.code || p.Code) ? `| CODE: ${p.code || p.Code}` : ''}</span>
-                    </div>
-                  </td>
+              paginatedProducts.map(p => {
+                const brandName = (() => {
+                  const rawBrand = (p.brand && p.brand.trim()) || '';
+                  if (rawBrand && rawBrand.toLowerCase() !== 'general') return rawBrand;
+                  const rawSub = (p.subEn && p.subEn.trim()) || '';
+                  if (rawSub && rawSub.toLowerCase() !== 'general') return rawSub;
+                  return '';
+                })();
+
+                return (
+                  <tr key={p.id} className="hover:bg-white/[0.02] transition-colors">
+                    <td className="p-4 flex items-center gap-3">
+                      <ListProductImage p={p} r2PublicUrl={r2PublicUrl} />
+                      <div className="space-y-0.5">
+                        {brandName ? (
+                          <span className="text-[8px] font-black font-mono text-emerald-400/90 block leading-none uppercase">
+                            {brandName}
+                          </span>
+                        ) : null}
+                        <h4 className="text-white font-extrabold uppercase tracking-tight text-xs">{p.nameEn || p.nameHi}</h4>
+                        <span className="text-[8px] font-bold text-slate-400 block font-mono">ID: {p.id} {(p.code || p.Code) ? `| CODE: ${p.code || p.Code}` : ''}</span>
+                      </div>
+                    </td>
                   <td className="p-4">
                     <span className="bg-slate-950 px-2 py-1 border border-white/5 text-slate-400 rounded-lg text-[9px] font-black uppercase font-mono tracking-tight">
                       {p.category}
@@ -1035,18 +1130,20 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
                   </td>
                   <td className="p-4 text-center">
                     <span className="inline-flex items-center px-2 py-0.5 rounded font-mono font-black text-xs bg-amber-500/15 border border-amber-500/30 text-amber-300">
-                      {p.gstPercent !== undefined ? p.gstPercent : (p.gst_percent !== undefined ? p.gst_percent : 5)}%
+                      {p.gstPercent !== undefined && p.gstPercent !== null && p.gstPercent !== ''
+                        ? `${p.gstPercent}%`
+                        : (p.gst_percent !== undefined && p.gst_percent !== null && p.gst_percent !== '' ? `${p.gst_percent}%` : '0%')}
                     </span>
                   </td>
                   <td className="p-4">
                     <span className={`font-mono font-black px-2 py-1 rounded text-xs border ${
-                      (p.stockCount !== undefined ? p.stockCount : 100) <= 0 
+                      getStockCount(p) <= 0 
                         ? 'bg-red-500/15 text-red-400 border-red-500/20' 
-                        : (p.stockCount !== undefined ? p.stockCount : 100) <= 10 
+                        : getStockCount(p) <= 10 
                         ? 'bg-amber-500/15 text-amber-400 border-amber-500/20 animate-pulse' 
                         : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/15'
                     }`}>
-                      {p.stockCount !== undefined ? p.stockCount : 100}
+                      {getStockCount(p)}
                     </span>
                   </td>
                   <td className="p-4">
@@ -1081,8 +1178,9 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
                     )}
                   </td>
                 </tr>
-              ))
-            )}
+              );
+            })
+          )}
           </tbody>
         </table>
 

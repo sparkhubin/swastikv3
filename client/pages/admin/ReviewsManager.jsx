@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useData } from '../../context/DataContext';
 import { 
@@ -23,7 +23,11 @@ import R2ImageUploader from './R2ImageUploader';
 
 export default function ReviewsManager({ userRole }) {
   const { isHindi } = useLanguage();
-  const { reviews, addReview, updateReview, deleteReview } = useData();
+  const { reviews, addReview, updateReview, deleteReview, fetchReviews } = useData();
+
+  useEffect(() => {
+    fetchReviews();
+  }, [fetchReviews]);
 
   const [editorModal, setEditorModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);

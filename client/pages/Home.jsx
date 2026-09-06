@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useData } from '../context/DataContext';
 import ProductCard from '../components/ProductCard';
@@ -29,7 +29,13 @@ const hasValidKey = Boolean(API_KEY) && API_KEY !== 'YOUR_API_KEY';
 
 export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
   const { t, language } = useLanguage();
-  const { products, reviews, slides: dynamicSlides, contactSettings, categories: dynamicCategories } = useData();
+  const { products, reviews, slides: dynamicSlides, contactSettings, categories: dynamicCategories, fetchProducts, fetchReviews } = useData();
+
+  useEffect(() => {
+    fetchProducts();
+    fetchReviews();
+  }, [fetchProducts, fetchReviews]);
+
   const [activeSlide, setActiveSlide] = useState(0);
   const [activeTestimonial, setActiveTestimonial] = useState(0);
   const [showDirections, setShowDirections] = useState(false);
@@ -118,10 +124,15 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
         { id: 'personal', label: language === 'hi' ? 'व्यक्तिगत देखभाल' : 'Personal Care', icon: "🧴" }
       ];
 
-  // Featured first 4 items list (respecting store photo display setting)
-  const candidateProducts = contactSettings?.showOnlyWithPhoto
-    ? products.filter(hasCustomProductImage)
-    : products;
+  // Featured first 4 items list (prioritizing products with actual photos)
+  const candidateProducts = useMemo(() => {
+    if (contactSettings?.showOnlyWithPhoto) {
+      return products.filter(hasCustomProductImage);
+    }
+    const withPhoto = products.filter(hasCustomProductImage);
+    const withoutPhoto = products.filter(p => !hasCustomProductImage(p));
+    return [...withPhoto, ...withoutPhoto];
+  }, [products, contactSettings?.showOnlyWithPhoto]);
   const featuredList = candidateProducts.slice(0, 4);
 
   const storeLat = contactSettings?.latitude !== undefined ? Number(contactSettings.latitude) : 28.5708;

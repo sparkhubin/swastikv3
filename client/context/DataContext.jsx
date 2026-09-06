@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef, useCallback } from 'react';
 import { products as initialProducts } from '../data/products';
 import { isOrder1HourLocked } from '../utils/orderLock';
 
@@ -308,6 +308,63 @@ const initialSlides = [
   }
 ];
 
+const initialStaff = [
+  {
+    id: 1,
+    name: "Balram Patidar",
+    role: "Store Super Admin",
+    role_id: 2,
+    mobile: "9999999999",
+    password: "admin",
+    permissions: [
+      "dashboard", "products", "categories", "orders", "inventory", 
+      "delivery", "customers", "whatsapp", "settings", "pos", "staff", "reports"
+    ],
+    status: "Active",
+    isMasterAdmin: true
+  },
+  {
+    id: 2,
+    name: "Ramesh Sharma",
+    role: "Inventory & Stock Incharge",
+    role_id: 3,
+    mobile: "9812345670",
+    password: "staff",
+    permissions: ["products", "categories", "inventory"],
+    status: "Active"
+  },
+  {
+    id: 3,
+    name: "Pradeep Kumar",
+    role: "Senior Delivery Rider",
+    role_id: 4,
+    mobile: "9810120299",
+    password: "staff",
+    permissions: ["delivery", "orders"],
+    status: "Active"
+  },
+  {
+    id: 4,
+    name: "Suresh Mehra",
+    role: "Delivery Rider",
+    role_id: 4,
+    mobile: "9811122334",
+    password: "staff",
+    permissions: ["delivery"],
+    status: "Active"
+  },
+  {
+    id: 5,
+    name: "Anita Gupta",
+    role: "Customer Support & Orders Desk",
+    role_id: 5,
+    mobile: "9823456789",
+    password: "staff",
+    permissions: ["orders", "customers", "whatsapp"],
+    status: "Active"
+  }
+];
+
 // Helper for safely retrieving and parsing JSON from localStorage to prevent crashes
 function safeJsonParse(key, defaultValue) {
   try {
@@ -396,6 +453,14 @@ export function DataProvider({ children }) {
   const [customers, setCustomers] = useState(() => {
     return safeJsonParse('swastik_customers', initialCustomers);
   });
+
+  const [staff, setStaff] = useState(() => {
+    return safeJsonParse('swastik_staff', initialStaff);
+  });
+
+  useEffect(() => {
+    localStorage.setItem('swastik_staff', JSON.stringify(staff));
+  }, [staff]);
 
   // Data Deletion Requests State (User Requests for Account / Data Erasure)
   const [dataDeletionRequests, setDataDeletionRequests] = useState(() => {
@@ -585,182 +650,294 @@ export function DataProvider({ children }) {
     localStorage.setItem('swastik_orders', JSON.stringify(orders));
   }, [orders]);
 
-  const fetchAll = async () => {
-    // Load dynamic DB-level settings
-    try {
-      const settingsRes = await fetch('/api/settings');
-      if (settingsRes.ok) {
-        const settingsData = await settingsRes.json();
-        
-        // Prevent DB override triggered by React state changes during loading
-        settingsLoaded.current = false;
+  // Request tracking and cache flags to prevent redundant duplicate API calls
+  const loadedMap = useRef({
+    config: false,
+    settings: false,
+    products: false,
+    orders: false,
+    customers: false,
+    staff: false,
+    partners: false,
+    reviews: false,
+    deletionRequests: false
+  });
 
-        if (settingsData) {
-          if (settingsData.swastik_location_groups && Array.isArray(settingsData.swastik_location_groups) && settingsData.swastik_location_groups.length > 0) {
-            setLocationGroups(settingsData.swastik_location_groups);
-            try { localStorage.setItem('swastik_location_groups', JSON.stringify(settingsData.swastik_location_groups)); } catch (_) {}
+  const inFlightMap = useRef({});
+
+  // 1. App Configuration (Lightweight - R2 base URL & Payment switches)
+  const fetchConfig = useCallback(async (force = false) => {
+    if (loadedMap.current.config && !force) return;
+    if (inFlightMap.current.config) return inFlightMap.current.config;
+
+    inFlightMap.current.config = (async () => {
+      try {
+        const configRes = await fetch('/api/config');
+        if (configRes.ok) {
+          const data = await configRes.json();
+          if (data && data.r2PublicUrl) {
+            setR2PublicUrl(data.r2PublicUrl);
           }
-          if (settingsData.swastik_referral_settings) setReferralSettings(settingsData.swastik_referral_settings);
-          if (settingsData.swastik_celebration_settings) setCelebrationSettings(settingsData.swastik_celebration_settings);
-          if (settingsData.swastik_prime_settings) setPrimeSettings(settingsData.swastik_prime_settings);
-          if (settingsData.swastik_slides) setSlides(settingsData.swastik_slides);
-          if (settingsData.swastik_categories) setCategories(settingsData.swastik_categories);
-          if (settingsData.swastik_offers) setOffers(settingsData.swastik_offers);
-          if (settingsData.swastik_contact_messages) setContactMessages(settingsData.swastik_contact_messages);
-          if (settingsData.swastik_customers) setCustomers(settingsData.swastik_customers);
-          if (settingsData.swastik_about_settings) setAboutSettings(settingsData.swastik_about_settings);
-          if (settingsData.swastik_contact_settings) setContactSettings(settingsData.swastik_contact_settings);
-          if (settingsData.swastik_refund_sections && Array.isArray(settingsData.swastik_refund_sections)) setRefundSections(settingsData.swastik_refund_sections);
-          if (settingsData.swastik_privacy_sections && Array.isArray(settingsData.swastik_privacy_sections)) setPrivacySections(settingsData.swastik_privacy_sections);
-          if (settingsData.swastik_terms_sections && Array.isArray(settingsData.swastik_terms_sections)) setTermsSections(settingsData.swastik_terms_sections);
-          if (settingsData.swastik_data_deletion_requests && Array.isArray(settingsData.swastik_data_deletion_requests)) setDataDeletionRequests(settingsData.swastik_data_deletion_requests);
-        }
-      }
-    } catch (e) {
-      console.warn("Failed to fetch dynamic settings from DB:", e);
-    } finally {
-      // Delay marking as loaded so React state updates settle completely without triggering accidental DB overwrites
-      setTimeout(() => {
-        settingsLoaded.current = true;
-      }, 800);
-    }
-
-    try {
-      const delReqRes = await fetch('/api/data-deletion-requests');
-      if (delReqRes.ok) {
-        const delReqData = await delReqRes.json();
-        if (Array.isArray(delReqData) && delReqData.length > 0) {
-          setDataDeletionRequests(delReqData);
-          localStorage.setItem('swastik_data_deletion_requests', JSON.stringify(delReqData));
-        }
-      }
-    } catch (e) {
-      console.warn("Failed to fetch data deletion requests:", e);
-    }
-
-    try {
-      const custRes = await fetch('/api/customers');
-      if (custRes.ok) {
-        const custData = await custRes.json();
-        if (Array.isArray(custData) && custData.length > 0) {
-          setCustomers(custData);
-          localStorage.setItem('swastik_customers', JSON.stringify(custData));
-        }
-      }
-    } catch (e) {
-      console.warn("Failed to fetch customers from /api/customers:", e);
-    }
-
-    try {
-      const prodRes = await fetch('/api/products');
-      if (prodRes.ok) {
-        const data = await prodRes.json();
-        if (data && data.length > 0) setProducts(data);
-      }
-    } catch (e) {
-      console.warn("Failed to fetch products from backend, using fallback:", e);
-    }
-
-    try {
-      const configRes = await fetch('/api/config');
-      if (configRes.ok) {
-        const data = await configRes.json();
-        if (data && data.r2PublicUrl) {
-          setR2PublicUrl(data.r2PublicUrl);
-        }
-        if (data && data.paymentEnabled !== undefined) {
-          setPaymentEnabled(data.paymentEnabled);
-        }
-        if (data && data.paymentEnvironment) {
-          setPaymentEnvironment(data.paymentEnvironment);
-        }
-      }
-    } catch (e) {
-      console.warn("Failed to fetch R2 config:", e);
-    }
-
-    try {
-      const partnerRes = await fetch('/api/partners');
-      if (partnerRes.ok) {
-        const data = await partnerRes.json();
-        if (data && data.length > 0) setPartners(data);
-      }
-    } catch (e) {
-      console.warn("Failed to fetch partners from backend, using fallback:", e);
-    }
-
-    try {
-      const reviewRes = await fetch('/api/reviews');
-      if (reviewRes.ok) {
-        const data = await reviewRes.json();
-        if (data && data.length > 0) {
-          // GORM returns chronologically, we reverse to match "Just now" descending if needed
-          setReviews(data);
-        }
-      }
-    } catch (e) {
-      console.warn("Failed to fetch reviews from backend, using fallback:", e);
-    }
-
-    try {
-      const orderRes = await fetch('/api/orders');
-      if (orderRes.ok) {
-        const data = await orderRes.json();
-        if (data && data.length > 0) {
-          setOrders(data);
-          
-          // Synchronize MARG bill purchases and award loyalty points
-          const margOrders = data.filter(o => o.isMargBill && o.customerMobile);
-          if (margOrders.length > 0) {
-            let customersChanged = false;
-            let updatedCustomers = [...customers];
-            const processedMarg = safeJsonParse('swastik_processed_marg_orders', []);
-
-            margOrders.forEach(o => {
-              if (!processedMarg.includes(o.id)) {
-                const cleanNum = (ph) => ph ? ph.replace(/[^0-9]/g, '') : '';
-                const oPhoneClean = cleanNum(o.customerMobile).slice(-10);
-                
-                const custIndex = updatedCustomers.findIndex(c => cleanNum(c.phone).endsWith(oPhoneClean));
-                if (custIndex !== -1) {
-                  const cust = updatedCustomers[custIndex];
-                  const ptsEarned = o.pointsEarned || Math.floor(o.total / 10);
-                  updatedCustomers[custIndex] = {
-                    ...cust,
-                    points: (cust.points || 0) + ptsEarned
-                  };
-                  customersChanged = true;
-                  processedMarg.push(o.id);
-                  
-                  // Sync active logged-in profile
-                  const parsed = safeJsonParse('swastik_profile', null);
-                  if (parsed) {
-                    if (cleanNum(parsed.phone).endsWith(oPhoneClean)) {
-                      parsed.points = (parsed.points || 0) + ptsEarned;
-                      localStorage.setItem('swastik_profile', JSON.stringify(parsed));
-                      window.dispatchEvent(new Event('storage'));
-                    }
-                  }
-                }
-              }
-            });
-
-            if (customersChanged) {
-              setCustomers(updatedCustomers);
-              localStorage.setItem('swastik_customers', JSON.stringify(updatedCustomers));
-              localStorage.setItem('swastik_processed_marg_orders', JSON.stringify(processedMarg));
-            }
+          if (data && data.paymentEnabled !== undefined) {
+            setPaymentEnabled(data.paymentEnabled);
           }
+          if (data && data.paymentEnvironment) {
+            setPaymentEnvironment(data.paymentEnvironment);
+          }
+          loadedMap.current.config = true;
         }
+      } catch (e) {
+        console.warn("Failed to fetch R2 config:", e);
+      } finally {
+        delete inFlightMap.current.config;
       }
-    } catch (e) {
-      console.warn("Failed to fetch orders from backend, using fallback:", e);
-    }
-  };
-
-  useEffect(() => {
-    fetchAll();
+    })();
+    return inFlightMap.current.config;
   }, []);
+
+  // 2. Visual & Content Settings (Categories, Slides, Banners, Store Info)
+  const fetchSettings = useCallback(async (force = false) => {
+    if (loadedMap.current.settings && !force) return;
+    if (inFlightMap.current.settings) return inFlightMap.current.settings;
+
+    inFlightMap.current.settings = (async () => {
+      try {
+        const settingsRes = await fetch('/api/settings');
+        if (settingsRes.ok) {
+          const settingsData = await settingsRes.json();
+          settingsLoaded.current = false;
+
+          if (settingsData) {
+            if (settingsData.swastik_location_groups && Array.isArray(settingsData.swastik_location_groups) && settingsData.swastik_location_groups.length > 0) {
+              setLocationGroups(settingsData.swastik_location_groups);
+              try { localStorage.setItem('swastik_location_groups', JSON.stringify(settingsData.swastik_location_groups)); } catch (_) {}
+            }
+            if (settingsData.swastik_referral_settings) setReferralSettings(settingsData.swastik_referral_settings);
+            if (settingsData.swastik_celebration_settings) setCelebrationSettings(settingsData.swastik_celebration_settings);
+            if (settingsData.swastik_prime_settings) setPrimeSettings(settingsData.swastik_prime_settings);
+            if (settingsData.swastik_slides) setSlides(settingsData.swastik_slides);
+            if (settingsData.swastik_categories) setCategories(settingsData.swastik_categories);
+            if (settingsData.swastik_offers) setOffers(settingsData.swastik_offers);
+            if (settingsData.swastik_contact_messages) setContactMessages(settingsData.swastik_contact_messages);
+            if (settingsData.swastik_about_settings) setAboutSettings(settingsData.swastik_about_settings);
+            if (settingsData.swastik_contact_settings) setContactSettings(settingsData.swastik_contact_settings);
+            if (settingsData.swastik_refund_sections && Array.isArray(settingsData.swastik_refund_sections)) setRefundSections(settingsData.swastik_refund_sections);
+            if (settingsData.swastik_privacy_sections && Array.isArray(settingsData.swastik_privacy_sections)) setPrivacySections(settingsData.swastik_privacy_sections);
+            if (settingsData.swastik_terms_sections && Array.isArray(settingsData.swastik_terms_sections)) setTermsSections(settingsData.swastik_terms_sections);
+          }
+          loadedMap.current.settings = true;
+        }
+      } catch (e) {
+        console.warn("Failed to fetch settings:", e);
+      } finally {
+        setTimeout(() => {
+          settingsLoaded.current = true;
+        }, 500);
+        delete inFlightMap.current.settings;
+      }
+    })();
+    return inFlightMap.current.settings;
+  }, []);
+
+  // 3. Products Loader (Only fetched on Home, Shop, Cart, or Products Manager)
+  const fetchProducts = useCallback(async (force = false) => {
+    if (loadedMap.current.products && !force) return products;
+    if (inFlightMap.current.products) return inFlightMap.current.products;
+
+    inFlightMap.current.products = (async () => {
+      try {
+        const prodRes = await fetch('/api/products');
+        if (prodRes.ok) {
+          const data = await prodRes.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setProducts(data);
+            loadedMap.current.products = true;
+            return data;
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to fetch products:", e);
+      } finally {
+        delete inFlightMap.current.products;
+      }
+      return [];
+    })();
+    return inFlightMap.current.products;
+  }, [products]);
+
+  // 4. Orders Loader (Only fetched on Admin Dashboard, Orders Manager, or User Account History)
+  const fetchOrders = useCallback(async (force = false) => {
+    if (loadedMap.current.orders && !force) return orders;
+    if (inFlightMap.current.orders) return inFlightMap.current.orders;
+
+    inFlightMap.current.orders = (async () => {
+      try {
+        const orderRes = await fetch('/api/orders');
+        if (orderRes.ok) {
+          const data = await orderRes.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setOrders(data);
+            loadedMap.current.orders = true;
+            return data;
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to fetch orders:", e);
+      } finally {
+        delete inFlightMap.current.orders;
+      }
+      return [];
+    })();
+    return inFlightMap.current.orders;
+  }, [orders]);
+
+  // 5. Customers Loader (Only fetched on Customers Manager or Checkout Customer lookup)
+  const fetchCustomers = useCallback(async (force = false) => {
+    if (loadedMap.current.customers && !force) return customers;
+    if (inFlightMap.current.customers) return inFlightMap.current.customers;
+
+    inFlightMap.current.customers = (async () => {
+      try {
+        const custRes = await fetch('/api/customers');
+        if (custRes.ok) {
+          const custData = await custRes.json();
+          if (Array.isArray(custData) && custData.length > 0) {
+            setCustomers(custData);
+            loadedMap.current.customers = true;
+            try { localStorage.setItem('swastik_customers', JSON.stringify(custData)); } catch (_) {}
+            return custData;
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to fetch customers:", e);
+      } finally {
+        delete inFlightMap.current.customers;
+      }
+      return [];
+    })();
+    return inFlightMap.current.customers;
+  }, [customers]);
+
+  // 6. Staff Loader (Only fetched on Staff Manager, Delivery Dashboard, or Role checks)
+  const fetchStaff = useCallback(async (force = false) => {
+    if (loadedMap.current.staff && !force) return staff;
+    if (inFlightMap.current.staff) return inFlightMap.current.staff;
+
+    inFlightMap.current.staff = (async () => {
+      try {
+        const res = await fetch('/api/staff');
+        if (res.ok) {
+          const list = await res.json();
+          if (Array.isArray(list) && list.length > 0) {
+            setStaff(list);
+            loadedMap.current.staff = true;
+            try { localStorage.setItem('swastik_staff', JSON.stringify(list)); } catch (_) {}
+            return list;
+          }
+        }
+      } catch (e) {
+        console.warn("Could not fetch staff from server:", e);
+      } finally {
+        delete inFlightMap.current.staff;
+      }
+      return [];
+    })();
+    return inFlightMap.current.staff;
+  }, [staff]);
+
+  // 7. Partners Loader (Only fetched on Partners page or Partners Admin)
+  const fetchPartners = useCallback(async (force = false) => {
+    if (loadedMap.current.partners && !force) return partners;
+    if (inFlightMap.current.partners) return inFlightMap.current.partners;
+
+    inFlightMap.current.partners = (async () => {
+      try {
+        const partnerRes = await fetch('/api/partners');
+        if (partnerRes.ok) {
+          const data = await partnerRes.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setPartners(data);
+            loadedMap.current.partners = true;
+            return data;
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to fetch partners:", e);
+      } finally {
+        delete inFlightMap.current.partners;
+      }
+      return [];
+    })();
+    return inFlightMap.current.partners;
+  }, [partners]);
+
+  // 8. Reviews Loader (Only fetched on Reviews page or Reviews Admin)
+  const fetchReviews = useCallback(async (force = false) => {
+    if (loadedMap.current.reviews && !force) return reviews;
+    if (inFlightMap.current.reviews) return inFlightMap.current.reviews;
+
+    inFlightMap.current.reviews = (async () => {
+      try {
+        const reviewRes = await fetch('/api/reviews');
+        if (reviewRes.ok) {
+          const data = await reviewRes.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setReviews(data);
+            loadedMap.current.reviews = true;
+            return data;
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to fetch reviews:", e);
+      } finally {
+        delete inFlightMap.current.reviews;
+      }
+      return [];
+    })();
+    return inFlightMap.current.reviews;
+  }, [reviews]);
+
+  // 9. Data Deletion Requests Loader (Only fetched on Data Deletion Admin tab)
+  const fetchDataDeletionRequests = useCallback(async (force = false) => {
+    if (loadedMap.current.deletionRequests && !force) return dataDeletionRequests;
+    if (inFlightMap.current.deletionRequests) return inFlightMap.current.deletionRequests;
+
+    inFlightMap.current.deletionRequests = (async () => {
+      try {
+        const delReqRes = await fetch('/api/data-deletion-requests');
+        if (delReqRes.ok) {
+          const delReqData = await delReqRes.json();
+          if (Array.isArray(delReqData) && delReqData.length > 0) {
+            setDataDeletionRequests(delReqData);
+            loadedMap.current.deletionRequests = true;
+            try { localStorage.setItem('swastik_data_deletion_requests', JSON.stringify(delReqData)); } catch (_) {}
+            return delReqData;
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to fetch data deletion requests:", e);
+      } finally {
+        delete inFlightMap.current.deletionRequests;
+      }
+      return [];
+    })();
+    return inFlightMap.current.deletionRequests;
+  }, [dataDeletionRequests]);
+
+  // Backward-compatible fetchAll (only fetches core visual settings and products)
+  const fetchAll = useCallback(async () => {
+    await Promise.all([
+      fetchConfig(true),
+      fetchSettings(true),
+      fetchProducts(true)
+    ]);
+  }, [fetchConfig, fetchSettings, fetchProducts]);
+
+  // Initial App Mount: ONLY load lightweight config and settings (NO heavy tables)
+  useEffect(() => {
+    fetchConfig();
+    fetchSettings();
+  }, [fetchConfig, fetchSettings]);
 
   useEffect(() => {
     localStorage.setItem('swastik_user_role', userRole);
@@ -1012,16 +1189,19 @@ export function DataProvider({ children }) {
       const existingOrder = orders.find(o => String(o.id) === String(id));
       if (existingOrder && isOrder1HourLocked(existingOrder)) {
         const keys = Object.keys(updated);
-        const allowedPaymentKeys = [
-          'paymentStatus', 'paymentMethod', 'codStatus', 'codNotes', 
-          'codCollectedAt', 'adminCollectedConfirm', 'adminCollectedAt', 
-          'isSettled', 'settledAt', 'settlementStatus', 'settledAmount', 'id'
+        // Once an order is delivered and locked, paymentStatus and paymentMethod are also locked.
+        // The ONLY allowed updates are Admin cash clearance / settlement records.
+        const allowedSettlementKeys = [
+          'codStatus', 'codNotes', 'codClearedAt', 'codClearedBy', 'codClearanceNote',
+          'adminReceivedCash', 'adminCashReceivedAt', 'adminReceivedBy',
+          'adminCollectedConfirm', 'adminCollectedAt', 'isSettled', 'settledAt',
+          'settlementStatus', 'settledAmount', 'id'
         ];
-        const hasRestrictedChanges = keys.some(k => !allowedPaymentKeys.includes(k) && JSON.stringify(existingOrder[k]) !== JSON.stringify(updated[k]));
+        const hasRestrictedChanges = keys.some(k => !allowedSettlementKeys.includes(k) && JSON.stringify(existingOrder[k]) !== JSON.stringify(updated[k]));
         if (hasRestrictedChanges) {
-          console.warn(`Order #${id} is locked (delivered > 1 hour ago). Non-payment updates blocked.`);
+          console.warn(`Order #${id} is delivered and permanently locked. Status and payment marking are immutable. Only Admin cash receipt from delivery staff can be recorded.`);
           const sanitizedPayload = {};
-          allowedPaymentKeys.forEach(k => {
+          allowedSettlementKeys.forEach(k => {
             if (updated[k] !== undefined) sanitizedPayload[k] = updated[k];
           });
           if (Object.keys(sanitizedPayload).length === 0) return;
@@ -1379,90 +1559,6 @@ export function DataProvider({ children }) {
   // ------------------------------------
   // STAFF & PERMISSIONS SYSTEM
   // ------------------------------------
-  const initialStaff = [
-    {
-      id: 1,
-      name: "Balram Patidar",
-      role: "Store Super Admin",
-      role_id: 2,
-      mobile: "9999999999",
-      password: "admin",
-      permissions: [
-        "dashboard", "products", "categories", "orders", "inventory", 
-        "delivery", "customers", "whatsapp", "settings", "pos", "staff", "reports"
-      ],
-      status: "Active",
-      isMasterAdmin: true
-    },
-    {
-      id: 2,
-      name: "Ramesh Sharma",
-      role: "Inventory & Stock Incharge",
-      role_id: 3,
-      mobile: "9812345670",
-      password: "staff",
-      permissions: ["products", "categories", "inventory"],
-      status: "Active"
-    },
-    {
-      id: 3,
-      name: "Pradeep Kumar",
-      role: "Senior Delivery Rider",
-      role_id: 4,
-      mobile: "9810120299",
-      password: "staff",
-      permissions: ["delivery", "orders"],
-      status: "Active"
-    },
-    {
-      id: 4,
-      name: "Suresh Mehra",
-      role: "Delivery Rider",
-      role_id: 4,
-      mobile: "9811122334",
-      password: "staff",
-      permissions: ["delivery"],
-      status: "Active"
-    },
-    {
-      id: 5,
-      name: "Anita Gupta",
-      role: "Customer Support & Orders Desk",
-      role_id: 5,
-      mobile: "9823456789",
-      password: "staff",
-      permissions: ["orders", "customers", "whatsapp"],
-      status: "Active"
-    }
-  ];
-
-  const [staff, setStaff] = useState(() => {
-    return safeJsonParse('swastik_staff', initialStaff);
-  });
-
-  // Load staff from server on mount
-  useEffect(() => {
-    async function loadServerStaff() {
-      try {
-        const res = await fetch('/api/staff');
-        if (res.ok) {
-          const list = await res.json();
-          if (Array.isArray(list) && list.length > 0) {
-            setStaff(list);
-            localStorage.setItem('swastik_staff', JSON.stringify(list));
-          }
-        }
-      } catch (e) {
-        console.warn("Could not fetch staff from server:", e);
-      }
-    }
-    loadServerStaff();
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('swastik_staff', JSON.stringify(staff));
-  }, [staff]);
-
   const addStaff = async (s) => {
     const newId = staff.length > 0 ? Math.max(...staff.map(x => x.id)) + 1 : 1;
     const newRecord = { ...s, id: newId };
@@ -1685,7 +1781,18 @@ export function DataProvider({ children }) {
       addStaff,
       updateStaff,
       deleteStaff,
-      changeStaffPassword
+      changeStaffPassword,
+      // Granular on-demand data loaders
+      fetchConfig,
+      fetchSettings,
+      fetchProducts,
+      fetchOrders,
+      fetchCustomers,
+      fetchStaff,
+      fetchPartners,
+      fetchReviews,
+      fetchDataDeletionRequests,
+      fetchAll
     }}>
       {children}
     </DataContext.Provider>

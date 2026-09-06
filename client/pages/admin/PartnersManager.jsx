@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useData } from '../../context/DataContext';
 import { 
@@ -12,7 +12,11 @@ import R2ImageUploader from './R2ImageUploader';
 
 export default function PartnersManager({ userRole }) {
   const { isHindi } = useLanguage();
-  const { partners, addPartner, deletePartner } = useData();
+  const { partners, addPartner, deletePartner, fetchPartners } = useData();
+
+  useEffect(() => {
+    fetchPartners();
+  }, [fetchPartners]);
 
   const [partnerForm, setPartnerForm] = useState({
     name: '',

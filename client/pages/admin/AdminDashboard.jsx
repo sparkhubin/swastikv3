@@ -84,7 +84,14 @@ export default function AdminDashboard({ onViewChange }) {
     userRole, 
     setUserRole,
     slides,
-    locationGroups
+    locationGroups,
+    fetchOrders,
+    fetchProducts,
+    fetchCustomers,
+    fetchStaff,
+    fetchPartners,
+    fetchReviews,
+    fetchDataDeletionRequests
   } = useData();
 
   // Authentication State
@@ -205,6 +212,36 @@ export default function AdminDashboard({ onViewChange }) {
       }
     }
   }, [staff]);
+
+  // On-demand data loading for Admin Tabs (load only what the current active tab needs)
+  useEffect(() => {
+    if (!loggedInStaff) {
+      fetchStaff();
+      return;
+    }
+
+    if (activeTab === 'dashboard') {
+      fetchOrders();
+      fetchProducts();
+    } else if (activeTab === 'products') {
+      fetchProducts();
+    } else if (activeTab === 'orders' || activeTab === 'payment-reports' || activeTab === 'gst-reports' || activeTab === 'marg-billing') {
+      fetchOrders();
+      fetchCustomers();
+      fetchStaff();
+    } else if (activeTab === 'customers' || activeTab === 'membership') {
+      fetchCustomers();
+    } else if (activeTab === 'staff' || activeTab === 'delivery') {
+      fetchStaff();
+      if (activeTab === 'delivery') fetchOrders();
+    } else if (activeTab === 'partners') {
+      fetchPartners();
+    } else if (activeTab === 'reviews') {
+      fetchReviews();
+    } else if (activeTab === 'pages') {
+      fetchDataDeletionRequests();
+    }
+  }, [activeTab, loggedInStaff, fetchOrders, fetchProducts, fetchCustomers, fetchStaff, fetchPartners, fetchReviews, fetchDataDeletionRequests]);
 
   // Login Submission
   const handleLoginSubmit = (e) => {
@@ -1471,7 +1508,7 @@ export default function AdminDashboard({ onViewChange }) {
                         const count = products.filter(p => p.category === c.id).length;
                         const pct = Math.min(100, Math.round((count / (products.length || 1)) * 100));
                         return (
-                          <div key={index} className="space-y-1">
+                          <div key={c.id ? `cat-split-${c.id}` : `cat-split-idx-${index}`} className="space-y-1">
                             <div className="flex justify-between items-center text-[10px] font-bold">
                               <span className="text-white uppercase flex items-center gap-1 text-[9px] font-black">
                                 <span>{c.icon || '📦'}</span> 

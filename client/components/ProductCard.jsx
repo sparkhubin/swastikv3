@@ -3,7 +3,7 @@ import { ShoppingCart, Check, Plus, Minus } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
 import { useData } from '../context/DataContext';
-import { resolveProductImage, markImageFailed, DEFAULT_PRODUCT_FALLBACK } from '../utils/imageHelper';
+import { resolveProductImage, getNextCandidateImage, markImageFailed, DEFAULT_PRODUCT_FALLBACK } from '../utils/imageHelper';
 
 export default function ProductCard({ product }) {
   const { language, t } = useLanguage();
@@ -18,10 +18,10 @@ export default function ProductCard({ product }) {
     setImgSrc(resolveProductImage(product, r2PublicUrl, 300));
   }, [product, r2PublicUrl]);
 
-  const handleImageError = (e) => {
+  const handleImageError = () => {
     if (imgSrc && imgSrc !== DEFAULT_PRODUCT_FALLBACK) {
-      markImageFailed(imgSrc);
-      setImgSrc(DEFAULT_PRODUCT_FALLBACK);
+      const next = getNextCandidateImage(product, imgSrc, r2PublicUrl);
+      setImgSrc(next || DEFAULT_PRODUCT_FALLBACK);
     }
   };
 
@@ -40,7 +40,17 @@ export default function ProductCard({ product }) {
   const cartQty = cartItem ? cartItem.quantity : 0;
 
   const name = language === 'hi' ? product.nameHi : product.nameEn;
-  const categoryTag = language === 'hi' ? product.subHi : product.subEn;
+  
+  // Resolve brand: only show if brand exists and is not 'general'
+  const brandName = (() => {
+    const rawBrand = (product.brand && product.brand.trim()) || '';
+    if (rawBrand && rawBrand.toLowerCase() !== 'general') return rawBrand;
+    const rawSub = (language === 'hi' ? (product.subHi || product.subEn) : product.subEn) || '';
+    if (rawSub && rawSub.trim() && rawSub.trim().toLowerCase() !== 'general') {
+      return rawSub.trim();
+    }
+    return '';
+  })();
 
   const stockCount = product.stockCount !== undefined ? product.stockCount : 100;
   const isOutOfStock = stockCount <= 0;
@@ -98,9 +108,11 @@ export default function ProductCard({ product }) {
       {/* Details Box */}
       <div className="flex flex-grow flex-col p-3.5 text-slate-800">
         <div className="flex justify-between items-start gap-1">
-          <span className="text-[9px] font-extrabold uppercase tracking-widest text-emerald-700">
-            {categoryTag}
-          </span>
+          {brandName ? (
+            <span className="text-[9px] font-extrabold uppercase tracking-widest text-emerald-700 truncate max-w-[130px]" title={brandName}>
+              {brandName}
+            </span>
+          ) : <span />}
           {/* Subtle real-time stock tag */}
           <span className={`text-[9px] font-extrabold tracking-wider uppercase px-2 py-0.5 rounded-md border ${
             isOutOfStock 
