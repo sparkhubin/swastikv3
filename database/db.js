@@ -492,6 +492,43 @@ export const db = {
       }
     } catch (e) {}
 
+    // Seed default business investors and directors if not present
+    try {
+      const pRows = await this.query("SELECT COUNT(*) as count FROM partner");
+      const count = Number(pRows[0]?.count || 0);
+      if (count === 0) {
+        console.log("🌱 Seeding default business investors and directors into Database...");
+        const defaultPartners = [
+          {
+            name: "Rajesh Patidar",
+            designation: "Sourcing Director (Fruits & Vegetables)",
+            about: "Rajesh manages our fresh local grower networks. He is responsible for testing purity, supervising rapid logistics collection timelines, and ensuring organic quality on all botanical essentials.",
+            photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=300"
+          },
+          {
+            name: "Sunita Deshmukh",
+            designation: "Organic Dairy Lead",
+            about: "Sunita supervises our direct milk co-operatives and poultry segments in Greater Noida. She has over 15 years of quality control experience and works to assure pristine hormone-free daily dairy products.",
+            photo: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=300"
+          },
+          {
+            name: "Alok Singhania",
+            designation: "Technology & Micro-Warehousing Partner",
+            about: "Alok directs cold-chain storage and dark store inventory management. He implements automated FIFO stock rotation ensuring every packed grain reaches households at peak freshness.",
+            photo: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=300"
+          }
+        ];
+        for (const pt of defaultPartners) {
+          await this.execute(
+            "INSERT INTO partner (name, photo, designation, about) VALUES (?, ?, ?, ?)",
+            [pt.name, pt.photo, pt.designation, pt.about]
+          );
+        }
+      }
+    } catch (e) {
+      console.warn("Notice: Partner seeding check:", e.message);
+    }
+
     // Synchronize customer ID mapping and orders
     await this.syncCustomerTableAndOrders();
 
@@ -1288,10 +1325,9 @@ export const db = {
         if (staffCount === 0) {
           const defaultStaff = [
             { id: 1, name: "Balram Patidar", mobile: "9999999999", role_id: 2, password: "admin", permissions: JSON.stringify(["dashboard", "products", "categories", "orders", "inventory", "delivery", "customers", "whatsapp", "settings", "pos", "staff", "reports"]), is_master: 1 },
-            { id: 2, name: "Ramesh Sharma", mobile: "9812345670", role_id: 3, password: "staff", permissions: JSON.stringify(["dashboard", "products", "categories", "inventory"]), is_master: 0 },
+            { id: 2, name: "Suresh Mehra", mobile: "9811122334", role_id: 4, password: "staff", permissions: JSON.stringify(["delivery"]), is_master: 0 },
             { id: 3, name: "Vikram Singh", mobile: "9876543210", role_id: 4, password: "staff", permissions: JSON.stringify(["delivery", "orders"]), is_master: 0 },
-            { id: 4, name: "Rahul Verma", mobile: "9898989898", role_id: 4, password: "staff", permissions: JSON.stringify(["delivery"]), is_master: 0 },
-            { id: 5, name: "Anita Gupta", mobile: "9823456789", role_id: 5, password: "staff", permissions: JSON.stringify(["orders", "customers", "whatsapp"]), is_master: 0 }
+            { id: 4, name: "Rahul Verma", mobile: "9898989898", role_id: 4, password: "staff", permissions: JSON.stringify(["delivery"]), is_master: 0 }
           ];
           for (const s of defaultStaff) {
             try {

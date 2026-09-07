@@ -23,12 +23,21 @@ import {
 import DataDeletionModal from './DataDeletionModal';
 
 export default function PrivacyDataTab({ profile, myOrders = [], isHindi }) {
-  const { dataDeletionRequests, contactSettings } = useData();
+  const { dataDeletionRequests, contactSettings, customers } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Check if current user has any active/past deletion request
   const userPhoneDigits = (profile?.phone || '').replace(/\D/g, '').slice(-10);
   const userEmail = (profile?.email || '').toLowerCase().trim();
+
+  const matchedCustomer = (customers || []).find(c => {
+    if (userPhoneDigits && (c.phone || '').replace(/\D/g, '').endsWith(userPhoneDigits)) return true;
+    if (userEmail && c.email && c.email.toLowerCase().trim() === userEmail) return true;
+    if (profile?.id && Number(c.id) === Number(profile.id)) return true;
+    return false;
+  });
+
+  const resolvedName = profile?.fullName || profile?.name || matchedCustomer?.name || '';
 
   const userRequest = (dataDeletionRequests || []).find(r => {
     if (userPhoneDigits && (r.phone || '').replace(/\D/g, '').endsWith(userPhoneDigits)) return true;
@@ -153,7 +162,7 @@ export default function PrivacyDataTab({ profile, myOrders = [], isHindi }) {
               <User className="h-3.5 w-3.5 text-slate-400" />
               <span>{isHindi ? 'उपयोगकर्ता प्रोफ़ाइल' : 'Account Name'}</span>
             </div>
-            <p className="text-sm font-black text-slate-800">{profile?.name || 'Not provided'}</p>
+            <p className="text-sm font-black text-slate-800">{resolvedName || 'Not provided'}</p>
           </div>
 
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
@@ -247,7 +256,7 @@ export default function PrivacyDataTab({ profile, myOrders = [], isHindi }) {
       <DataDeletionModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        userProfile={profile}
+        userProfile={{ ...profile, name: resolvedName, fullName: resolvedName }}
       />
     </div>
   );

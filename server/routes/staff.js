@@ -20,26 +20,6 @@ const initialStaff = [
   },
   {
     id: 2,
-    name: "Ramesh Sharma",
-    role: "Inventory & Stock Incharge",
-    role_id: 3,
-    mobile: "9812345670",
-    password: "staff",
-    permissions: ["products", "categories", "inventory"],
-    status: "Active"
-  },
-  {
-    id: 3,
-    name: "Pradeep Kumar",
-    role: "Senior Delivery Rider",
-    role_id: 4,
-    mobile: "9810120299",
-    password: "staff",
-    permissions: ["delivery", "orders"],
-    status: "Active"
-  },
-  {
-    id: 4,
     name: "Suresh Mehra",
     role: "Delivery Rider",
     role_id: 4,
@@ -49,13 +29,23 @@ const initialStaff = [
     status: "Active"
   },
   {
-    id: 5,
-    name: "Anita Gupta",
-    role: "Customer Support & Orders Desk",
-    role_id: 5,
-    mobile: "9823456789",
+    id: 3,
+    name: "Vikram Singh",
+    role: "Senior Delivery Rider",
+    role_id: 4,
+    mobile: "9876543210",
     password: "staff",
-    permissions: ["orders", "customers", "whatsapp"],
+    permissions: ["delivery", "orders"],
+    status: "Active"
+  },
+  {
+    id: 4,
+    name: "Rahul Verma",
+    role: "Delivery Rider",
+    role_id: 4,
+    mobile: "9898989898",
+    password: "staff",
+    permissions: ["delivery"],
     status: "Active"
   }
 ];

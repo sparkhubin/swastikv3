@@ -28,8 +28,8 @@ export default function MargIntegration() {
 
   // Simulator state
   const [simBillNumber, setSimBillNumber] = useState(`MRG-${Math.floor(100000 + Math.random() * 900000)}`);
-  const [simPhone, setSimPhone] = useState("9810120299");
-  const [simName, setSimName] = useState("Pradeep Kumar");
+  const [simPhone, setSimPhone] = useState("");
+  const [simName, setSimName] = useState("");
   const [simAmount, setSimAmount] = useState("1250");
   const [simItems, setSimItems] = useState("Long Grain Basmati Rice, Premium Gala Apples");
   const [simPayloadType, setSimPayloadType] = useState("json"); // "json" or "multipart"
@@ -396,7 +396,7 @@ export default function MargIntegration() {
                   value={simName}
                   onChange={(e) => setSimName(e.target.value)}
                   className="w-full bg-slate-950/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none"
-                  placeholder="e.g., Pradeep Kumar"
+                  placeholder="Enter Customer Name"
                 />
               </div>
 

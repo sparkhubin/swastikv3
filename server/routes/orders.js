@@ -620,6 +620,42 @@ router.put(["/orders/:id", "/orders/:id/transit"], async (req, res) => {
     const newStatus = (updateData.status || orderRec.status_label || "").toLowerCase();
     const newStep = updateData.step !== undefined ? Number(updateData.step) : (orderRec.step_level !== undefined ? Number(orderRec.step_level) : -1);
 
+    // Automatic Inventory Stock Restoration on Order Cancellation
+    try {
+      const wasCancelledBefore = oldStatus.includes("cancel") || oldStep === -1;
+      const isCancelledNow = newStatus.includes("cancel") || newStep === -1;
+
+      if (isCancelledNow && !wasCancelledBefore) {
+        // Order is now cancelled: return reserved quantities back into product stock_count
+        const orderItems = await db.query('SELECT product_id, qty FROM order_item WHERE order_id = ?', [id]);
+        for (const it of orderItems) {
+          const pId = Number(it.product_id);
+          const qty = Number(it.qty || 1);
+          if (pId > 0 && qty > 0) {
+            await db.execute(
+              'UPDATE product SET stock_count = COALESCE(stock_count, 0) + ? WHERE id = ?',
+              [qty, pId]
+            );
+          }
+        }
+      } else if (!isCancelledNow && wasCancelledBefore) {
+        // Order was previously cancelled and is now reactivated: re-deduct items from stock_count
+        const orderItems = await db.query('SELECT product_id, qty FROM order_item WHERE order_id = ?', [id]);
+        for (const it of orderItems) {
+          const pId = Number(it.product_id);
+          const qty = Number(it.qty || 1);
+          if (pId > 0 && qty > 0) {
+            await db.execute(
+              'UPDATE product SET stock_count = CASE WHEN stock_count - ? < 0 THEN 0 ELSE stock_count - ? END WHERE id = ?',
+              [qty, qty, pId]
+            );
+          }
+        }
+      }
+    } catch (stockRestoreErr) {
+      console.warn(`[Inventory Stock Restore Error on Order #${id}]:`, stockRestoreErr.message);
+    }
+
     // Dispatch Order Status In-App Notifications
     try {
       const statusLabel = updateData.status || orderRec.status_label || "Updated";
@@ -737,6 +773,28 @@ router.delete("/orders", async (req, res) => {
 router.delete("/orders/:id", async (req, res) => {
   const id = req.params.id;
   try {
+    // If order was not cancelled, return its items back to stock
+    try {
+      const existing = await db.query('SELECT status_label, step_level FROM "order" WHERE id = ?', [id]);
+      const curr = existing[0] || {};
+      const isCancelled = (curr.status_label || "").toLowerCase().includes("cancel") || curr.step_level === -1;
+      if (!isCancelled) {
+        const orderItems = await db.query('SELECT product_id, qty FROM order_item WHERE order_id = ?', [id]);
+        for (const it of orderItems) {
+          const pId = Number(it.product_id);
+          const qty = Number(it.qty || 1);
+          if (pId > 0 && qty > 0) {
+            await db.execute(
+              'UPDATE product SET stock_count = COALESCE(stock_count, 0) + ? WHERE id = ?',
+              [qty, pId]
+            );
+          }
+        }
+      }
+    } catch (stkErr) {
+      console.warn(`Could not restore stock before deleting order #${id}:`, stkErr.message);
+    }
+
     await db.execute("DELETE FROM order_item WHERE order_id = ?", [id]);
     await db.execute('DELETE FROM "order" WHERE id = ?', [id]);
     try {

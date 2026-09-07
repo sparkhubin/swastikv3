@@ -126,11 +126,13 @@ const CartItemImage = ({ product, r2PublicUrl, className }) => {
 
 export default function CartCheckout({ onViewChange }) {
   const { t, language, isHindi } = useLanguage();
-  const { orders, addOrder, offers, contactSettings, products, setProducts, referralSettings, locationGroups, celebrationSettings, customers, addCustomer, upsertCustomer, updateCustomer, r2PublicUrl, paymentEnabled, paymentEnvironment, fetchProducts, fetchCustomers } = useData();
+  const { orders, addOrder, offers, contactSettings, products, setProducts, referralSettings, locationGroups, celebrationSettings, customers, addCustomer, upsertCustomer, updateCustomer, r2PublicUrl, paymentEnabled, paymentEnvironment, fetchProducts, fetchCustomers, staff, fetchStaff } = useData();
 
   useEffect(() => {
     fetchProducts();
-  }, [fetchProducts]);
+    if (fetchCustomers) fetchCustomers();
+    if (fetchStaff) fetchStaff();
+  }, [fetchProducts, fetchCustomers, fetchStaff]);
 
   const {
     cartItems,
@@ -589,7 +591,14 @@ export default function CartCheckout({ onViewChange }) {
   const [selectedLocationGroupId, setSelectedLocationGroupId] = useState("");
   const [selectedSubLocation, setSelectedSubLocation] = useState("");
   const selectedLocationGroup = locationGroups ? locationGroups.find(g => String(g.id) === String(selectedLocationGroupId)) : null;
-  const databaseCust = (customers || []).find(c => c.phone === profile?.phone || c.email === profile?.email);
+  const profilePhoneDigits = (profile?.phone || profile?.mobile || '').replace(/\D/g, '').slice(-10);
+  const databaseCust = (customers || []).find(c => {
+    if (profile?.id && Number(c.id) === Number(profile.id)) return true;
+    const cPhoneDigits = (c.phone || c.mobile || '').replace(/\D/g, '').slice(-10);
+    if (profilePhoneDigits && cPhoneDigits && cPhoneDigits === profilePhoneDigits) return true;
+    if (profile?.email && c.email && c.email.toLowerCase().trim() === profile.email.toLowerCase().trim()) return true;
+    return false;
+  });
   const isPrime = databaseCust ? (databaseCust.isPrimeActive === true) : (profile?.isPrimeActive === true);
 
   const minFreeDeliveryAmount = selectedLocationGroup 
@@ -1069,12 +1078,14 @@ export default function CartCheckout({ onViewChange }) {
 
     const orderId = "SW-" + Math.floor(1000 + Math.random() * 9000);
     const effectiveUserId = (databaseCust && databaseCust.id) || (profile && profile.id) || null;
-    const finalCustName = shippingInfo.fullName || profile?.fullName || profile?.name || "Customer";
-    const finalCustPhone = shippingInfo.phoneNumber || profile?.phone || profile?.mobile || "";
+    const finalCustName = shippingInfo.fullName || (databaseCust && databaseCust.name) || profile?.fullName || profile?.name || "Customer";
+    const finalCustPhone = shippingInfo.phoneNumber || (databaseCust && databaseCust.phone) || profile?.phone || profile?.mobile || "";
+    const activeRider = staff?.find(s => s.role_id === 4 || s.role?.toLowerCase().includes('delivery') || s.role?.toLowerCase().includes('rider')) || null;
 
     const newOrder = {
       id: orderId,
       userId: effectiveUserId,
+      customerId: effectiveUserId,
       orderDate: new Date().toISOString(),
       date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
       status: isOnline ? "Pending Payment" : "Confirmed",
@@ -1092,8 +1103,9 @@ export default function CartCheckout({ onViewChange }) {
       celebrationDiscount: Number(celebrationDiscountValue),
       celebrationOfferName: appliedCelebrationOfferName,
       total: Number(finalGrandTotal),
-      deliveryPartnerName: "Pradeep Kumar",
-      deliveryPartnerPhone: "+91 98101 20299",
+      deliveryStaffId: activeRider ? activeRider.id : null,
+      deliveryPartnerName: activeRider ? activeRider.name : "",
+      deliveryPartnerPhone: activeRider ? (activeRider.mobile || activeRider.phone || "") : "",
       hubName: selectedLocationGroup ? `${selectedLocationGroup.name} Hub` : "Alpha Hub, Sector 12",
       eta: "15 Mins",
       shippingAddress: `[${selectedLocationGroup ? selectedLocationGroup.name : 'General Location'}${selectedSubLocation ? ` - ${selectedSubLocation}` : ''}] ${shippingInfo.address || "Sector 15, Noida, UP"}`,
@@ -1142,8 +1154,8 @@ export default function CartCheckout({ onViewChange }) {
           body: JSON.stringify({
             orderId: orderId,
             amount: finalGrandTotal,
-            customerName: shippingInfo.fullName || "Swastik Customer",
-            customerPhone: shippingInfo.phoneNumber || "+91 99999 88888",
+            customerName: finalCustName || "Customer",
+            customerPhone: finalCustPhone || "+91 99999 88888",
             customerEmail: customerEmail
           })
         });
@@ -1267,8 +1279,8 @@ export default function CartCheckout({ onViewChange }) {
           body: JSON.stringify({
             orderId: orderId,
             amount: finalGrandTotal,
-            customerName: shippingInfo.fullName || "Swastik Shopper",
-            customerPhone: shippingInfo.phoneNumber || "+91 99999 88888",
+            customerName: finalCustName || "Customer",
+            customerPhone: finalCustPhone || "+91 99999 88888",
             customerEmail: customerEmail
           })
         });
@@ -2005,9 +2017,14 @@ export default function CartCheckout({ onViewChange }) {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-sm">🪙</span>
-                  <h3 className="font-extrabold text-xs uppercase tracking-wider text-amber-900">
-                    {language === 'hi' ? 'रेफ़र और कमाएं पॉइंट्स' : 'Referral Points Reward'}
-                  </h3>
+                  <div>
+                    <h3 className="font-extrabold text-xs uppercase tracking-wider text-amber-900">
+                      {language === 'hi' ? 'लॉयल्टी और रिवॉर्ड पॉइंट्स' : 'Loyalty & Reward Points'}
+                    </h3>
+                    <p className="text-[9px] text-amber-700/80 font-medium">
+                      {language === 'hi' ? 'स्वागत बोनस (Welcome Gift) और रेफ़रल अंक' : 'Includes Welcome Bonus & Referral rewards'}
+                    </p>
+                  </div>
                 </div>
                 <span className="text-[9px] bg-amber-200 text-amber-900 border border-amber-300 font-black px-2 py-0.5 rounded uppercase">
                   {userPointsAvailable} PTS Available

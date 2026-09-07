@@ -18,17 +18,41 @@ import {
 export default function DataDeletionModal({ isOpen, onClose, userProfile = null, onSuccess }) {
   const { language } = useLanguage();
   const isHindi = language === 'hi';
-  const { addDataDeletionRequest, dataDeletionRequests } = useData();
+  const { addDataDeletionRequest, dataDeletionRequests, customers } = useData();
 
-  const [name, setName] = useState(userProfile?.name || '');
-  const [phone, setPhone] = useState(userProfile?.phone || '');
-  const [email, setEmail] = useState(userProfile?.email || '');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [reason, setReason] = useState('Privacy and data concerns');
   const [notes, setNotes] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submittedRequest, setSubmittedRequest] = useState(null);
   const [error, setError] = useState('');
+
+  React.useEffect(() => {
+    if (isOpen) {
+      const pPhone = userProfile?.phone || userProfile?.mobile || '';
+      const pEmail = userProfile?.email || '';
+      let pName = userProfile?.fullName || userProfile?.name || '';
+
+      if (!pName && (pPhone || pEmail)) {
+        const cleanP = pPhone ? String(pPhone).replace(/\D/g, '').slice(-10) : '';
+        const match = customers?.find(c => 
+          (cleanP && (c.phone || '').replace(/\D/g, '').endsWith(cleanP)) ||
+          (pEmail && c.email && c.email.toLowerCase().trim() === pEmail.toLowerCase().trim())
+        );
+        if (match?.name) pName = match.name;
+      }
+
+      setName(pName);
+      setPhone(pPhone);
+      setEmail(pEmail);
+      setConfirmed(false);
+      setError('');
+      setSubmittedRequest(null);
+    }
+  }, [isOpen, userProfile, customers]);
 
   if (!isOpen) return null;
 
@@ -48,11 +72,20 @@ export default function DataDeletionModal({ isOpen, onClose, userProfile = null,
 
     setSubmitting(true);
     try {
+      const cleanP = phone ? String(phone).replace(/\D/g, '').slice(-10) : '';
+      const matchedCust = customers?.find(c => 
+        (cleanP && (c.phone || '').replace(/\D/g, '').endsWith(cleanP)) ||
+        (email && c.email && c.email.toLowerCase().trim() === email.toLowerCase().trim()) ||
+        (userProfile?.id && Number(c.id) === Number(userProfile.id))
+      );
+
+      const finalName = (name || '').trim() || userProfile?.fullName || userProfile?.name || matchedCust?.name || '';
+
       const created = await addDataDeletionRequest({
-        customerId: userProfile?.id || null,
-        name: name || userProfile?.name || 'Customer',
-        phone: phone || userProfile?.phone || '',
-        email: email || userProfile?.email || '',
+        customerId: userProfile?.id || matchedCust?.id || null,
+        name: finalName,
+        phone: phone || matchedCust?.phone || userProfile?.phone || '',
+        email: email || matchedCust?.email || userProfile?.email || '',
         reason,
         notes
       });

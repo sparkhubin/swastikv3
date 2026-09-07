@@ -48,8 +48,9 @@ export default function DeliveryDashboard({ userRole, onNavigateToReports }) {
   const [copyFeedback, setCopyFeedback] = useState(null);
 
   // Active rider identity details
-  const currentRiderName = loggedInStaff?.name || (userRole === 'delivery' ? '' : "Pradeep Kumar");
-  const currentRiderPhone = loggedInStaff?.mobile || (userRole === 'delivery' ? '' : "+91 95400 12099");
+  const defaultRider = staff?.find(s => s.role_id === 4 || s.role?.toLowerCase().includes('delivery') || s.role?.toLowerCase().includes('rider')) || null;
+  const currentRiderName = loggedInStaff?.name || (userRole === 'delivery' ? '' : (defaultRider?.name || ''));
+  const currentRiderPhone = loggedInStaff?.mobile || (userRole === 'delivery' ? '' : (defaultRider?.mobile || ''));
 
   // Filter orders based on assigned rider and view scope
   const riderOrders = useMemo(() => {

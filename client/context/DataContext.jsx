@@ -28,11 +28,12 @@ const initialContactMessages = [
 
 // In-app directory for customers database
 const initialCustomers = [
-  { id: 101, name: 'Amit Sharma', phone: '+91 98765 12345', email: 'amit@gmail.com', registeredAt: '2026-01-10', orderCount: 14, totalSpent: 6720, status: 'Active', dob: '1990-07-14', anniversary: '2018-12-25' },
-  { id: 102, name: 'Pooja Patel', phone: '+91 91234 56789', email: 'pooja.patel@yahoo.com', registeredAt: '2026-02-14', orderCount: 22, totalSpent: 11450, status: 'Active', dob: '1993-05-10', anniversary: '2015-07-14' },
-  { id: 103, name: 'Vikram Malhotra', phone: '+91 99887 76655', email: 'vikram10@outlook.com', registeredAt: '2026-03-20', orderCount: 8, totalSpent: 4210, status: 'Active', dob: '1994-11-20', anniversary: '2020-05-18' },
-  { id: 104, name: 'Sanjay Dutt', phone: '+91 98101 23456', email: 'sanjay.dutt@gmail.com', registeredAt: '2026-04-18', orderCount: 1, totalSpent: 850, status: 'Active', dob: '1985-07-14', anniversary: '' },
-  { id: 105, name: 'Rajesh G', phone: '+91 94451 00010', email: 'rajesh.farm@yahoo.com', registeredAt: '2026-05-02', orderCount: 0, totalSpent: 0, status: 'Inactive', dob: '', anniversary: '' }
+  { id: 101, name: 'Balram Patidar', phone: '+91 99999 88888', email: 'balram@swastik.local', registeredAt: '2026-01-10', orderCount: 1, totalSpent: 450, status: 'Active', dob: '', anniversary: '' },
+  { id: 102, name: 'Rahul Sharma', phone: '+91 98765 43210', email: 'rahul.sharma@gmail.com', registeredAt: '2026-02-14', orderCount: 2, totalSpent: 1140, status: 'Active', dob: '1993-05-10', anniversary: '2015-07-14' },
+  { id: 103, name: 'Priya Patel', phone: '+91 91234 56789', email: 'priya.p@yahoo.com', registeredAt: '2026-02-10', orderCount: 1, totalSpent: 420, status: 'Active', dob: '', anniversary: '' },
+  { id: 104, name: 'Amit Verma', phone: '+91 98111 22334', email: 'amit.verma@outlook.com', registeredAt: '2026-02-18', orderCount: 3, totalSpent: 1200, status: 'Active', dob: '1990-07-14', anniversary: '' },
+  { id: 105, name: 'main suwastik', phone: '+91 99999 99999', email: 'simulatedcustomer@example.com', registeredAt: '2026-03-01', orderCount: 2, totalSpent: 850, status: 'Active', dob: '', anniversary: '' },
+  { id: 106, name: 'Balram Patidar', phone: '+91 7000165361', email: 'bilspatidar@gmail.com', registeredAt: '2026-03-05', orderCount: 2, totalSpent: 1250, status: 'Active', dob: '', anniversary: '' }
 ];
 
 // Environment-driven dynamic store settings
@@ -148,12 +149,12 @@ const initialOrders = [
     gst: 81,
     total: 530,
     deliveryStaffId: 3,
-    deliveryPartnerName: "Pradeep Kumar",
-    deliveryPartnerPhone: "+91 98101 20299",
+    deliveryPartnerName: "Vikram Singh",
+    deliveryPartnerPhone: "+91 98765 43210",
     hubName: "Alpha Hub, Sector 12",
     eta: "15 Mins",
-    customerName: "Amit Sharma",
-    customerPhone: "+91 98765 12345",
+    customerName: "Balram Patidar",
+    customerPhone: "+91 99999 88888",
     items: [
       { id: 3, nameEn: "Long Grain Basmati Rice (5kg)", nameHi: "लॉन्ग ग्रेन बासमती चावल (5 किलो)", price: 449, qty: 1, weight: "5kg" }
     ]
@@ -169,8 +170,8 @@ const initialOrders = [
     gst: 63,
     total: 453,
     deliveryStaffId: 4,
-    deliveryPartnerName: "Suresh Mehra",
-    deliveryPartnerPhone: "+91 98111 22334",
+    deliveryPartnerName: "Rahul Verma",
+    deliveryPartnerPhone: "+91 98989 89898",
     hubName: "Alpha Hub, Sector 12",
     eta: "Delivered",
     customerName: "Pooja Patel",
@@ -325,26 +326,6 @@ const initialStaff = [
   },
   {
     id: 2,
-    name: "Ramesh Sharma",
-    role: "Inventory & Stock Incharge",
-    role_id: 3,
-    mobile: "9812345670",
-    password: "staff",
-    permissions: ["products", "categories", "inventory"],
-    status: "Active"
-  },
-  {
-    id: 3,
-    name: "Pradeep Kumar",
-    role: "Senior Delivery Rider",
-    role_id: 4,
-    mobile: "9810120299",
-    password: "staff",
-    permissions: ["delivery", "orders"],
-    status: "Active"
-  },
-  {
-    id: 4,
     name: "Suresh Mehra",
     role: "Delivery Rider",
     role_id: 4,
@@ -354,13 +335,23 @@ const initialStaff = [
     status: "Active"
   },
   {
-    id: 5,
-    name: "Anita Gupta",
-    role: "Customer Support & Orders Desk",
-    role_id: 5,
-    mobile: "9823456789",
+    id: 3,
+    name: "Vikram Singh",
+    role: "Senior Delivery Rider",
+    role_id: 4,
+    mobile: "9876543210",
     password: "staff",
-    permissions: ["orders", "customers", "whatsapp"],
+    permissions: ["delivery", "orders"],
+    status: "Active"
+  },
+  {
+    id: 4,
+    name: "Rahul Verma",
+    role: "Delivery Rider",
+    role_id: 4,
+    mobile: "9898989898",
+    password: "staff",
+    permissions: ["delivery"],
     status: "Active"
   }
 ];
@@ -455,7 +446,17 @@ export function DataProvider({ children }) {
   });
 
   const [staff, setStaff] = useState(() => {
-    return safeJsonParse('swastik_staff', initialStaff);
+    try {
+      const saved = localStorage.getItem('swastik_staff');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const hasLegacy = parsed.some(s => s.name === 'Ramesh Sharma' || s.name === 'Anita Gupta' || parsed.length > 4);
+          if (!hasLegacy) return parsed;
+        }
+      }
+    } catch (_) {}
+    return initialStaff;
   });
 
   useEffect(() => {
@@ -464,21 +465,7 @@ export function DataProvider({ children }) {
 
   // Data Deletion Requests State (User Requests for Account / Data Erasure)
   const [dataDeletionRequests, setDataDeletionRequests] = useState(() => {
-    return safeJsonParse('swastik_data_deletion_requests', [
-      {
-        id: 'DEL-849102-101',
-        customerId: 104,
-        name: 'Sanjay Dutt',
-        phone: '+91 98101 23456',
-        email: 'sanjay.dutt@gmail.com',
-        reason: 'No longer residing in operational delivery area',
-        notes: 'Please delete my profile, saved cards, and address history.',
-        status: 'Pending',
-        requestedAt: '2026-08-28T10:15:00.000Z',
-        processedAt: null,
-        adminNotes: ''
-      }
-    ]);
+    return safeJsonParse('swastik_data_deletion_requests', []);
   });
 
   const [aboutSettings, setAboutSettings] = useState(() => {
@@ -855,7 +842,7 @@ export function DataProvider({ children }) {
         const partnerRes = await fetch('/api/partners');
         if (partnerRes.ok) {
           const data = await partnerRes.json();
-          if (Array.isArray(data) && data.length > 0) {
+          if (Array.isArray(data)) {
             setPartners(data);
             loadedMap.current.partners = true;
             return data;
@@ -907,7 +894,7 @@ export function DataProvider({ children }) {
         const delReqRes = await fetch('/api/data-deletion-requests');
         if (delReqRes.ok) {
           const delReqData = await delReqRes.json();
-          if (Array.isArray(delReqData) && delReqData.length > 0) {
+          if (Array.isArray(delReqData)) {
             setDataDeletionRequests(delReqData);
             loadedMap.current.deletionRequests = true;
             try { localStorage.setItem('swastik_data_deletion_requests', JSON.stringify(delReqData)); } catch (_) {}
@@ -929,15 +916,21 @@ export function DataProvider({ children }) {
     await Promise.all([
       fetchConfig(true),
       fetchSettings(true),
-      fetchProducts(true)
+      fetchProducts(true),
+      fetchCustomers(true),
+      fetchStaff(true),
+      fetchDataDeletionRequests(true)
     ]);
-  }, [fetchConfig, fetchSettings, fetchProducts]);
+  }, [fetchConfig, fetchSettings, fetchProducts, fetchCustomers, fetchStaff, fetchDataDeletionRequests]);
 
-  // Initial App Mount: ONLY load lightweight config and settings (NO heavy tables)
+  // Initial App Mount: load core config, settings, customers, and staff from real database
   useEffect(() => {
     fetchConfig();
     fetchSettings();
-  }, [fetchConfig, fetchSettings]);
+    fetchCustomers();
+    fetchStaff();
+    fetchDataDeletionRequests();
+  }, [fetchConfig, fetchSettings, fetchCustomers, fetchStaff, fetchDataDeletionRequests]);
 
   useEffect(() => {
     localStorage.setItem('swastik_user_role', userRole);
@@ -1012,6 +1005,60 @@ export function DataProvider({ children }) {
     return true;
   };
 
+  const bulkUploadProducts = async (items, options = {}) => {
+    try {
+      const res = await fetch('/api/products/bulk-upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items,
+          mode: options.mode || 'update_existing',
+          defaultCategory: options.defaultCategory || 'vegetables'
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.products && Array.isArray(data.products)) {
+          setProducts(data.products);
+        } else {
+          await fetchProducts();
+        }
+        return data;
+      } else {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to bulk upload products");
+      }
+    } catch (e) {
+      console.error("bulkUploadProducts error:", e);
+      throw e;
+    }
+  };
+
+  const bulkUpdateStock = async (payload) => {
+    try {
+      const res = await fetch('/api/products/bulk-stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.products && Array.isArray(data.products)) {
+          setProducts(data.products);
+        } else {
+          await fetchProducts();
+        }
+        return data;
+      } else {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to update bulk stock");
+      }
+    } catch (e) {
+      console.error("bulkUpdateStock error:", e);
+      throw e;
+    }
+  };
+
   // CRUD actions for partners via GORM REST API
   const addPartner = async (par) => {
     try {
@@ -1034,8 +1081,26 @@ export function DataProvider({ children }) {
     }
   };
 
-  const updatePartner = (id, updated) => {
-    setPartners(prev => prev.map(p => p.id === Number(id) ? { ...p, ...updated } : p));
+  const updatePartner = async (id, updated) => {
+    try {
+      const res = await fetch(`/api/partners/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+      if (res.ok) {
+        const returned = await res.json();
+        setPartners(prev => prev.map(p => p.id === Number(id) ? { ...p, ...returned } : p));
+        return returned;
+      } else {
+        setPartners(prev => prev.map(p => p.id === Number(id) ? { ...p, ...updated } : p));
+        return { id: Number(id), ...updated };
+      }
+    } catch (e) {
+      console.error("Failed to update partner:", e);
+      setPartners(prev => prev.map(p => p.id === Number(id) ? { ...p, ...updated } : p));
+      return { id: Number(id), ...updated };
+    }
   };
 
   const deletePartner = async (id) => {
@@ -1209,6 +1274,41 @@ export function DataProvider({ children }) {
         }
       }
 
+      // Automatically update local product stock if order status transitions to or from Cancelled
+      if (existingOrder && Array.isArray(existingOrder.items) && existingOrder.items.length > 0) {
+        const wasCancelled = (existingOrder.status || "").toLowerCase().includes("cancel") || existingOrder.step === -1;
+        const isNowCancelled = (updated.status || "").toLowerCase().includes("cancel") || updated.step === -1;
+
+        if (isNowCancelled && !wasCancelled) {
+          // Restore stock locally
+          setProducts(prevProducts => {
+            return prevProducts.map(p => {
+              const matchedItem = existingOrder.items.find(it => Number(it.productId || it.id) === Number(p.id));
+              if (matchedItem) {
+                const qtyToAdd = Number(matchedItem.quantity || matchedItem.qty || 1);
+                const currentStock = Number(p.stockCount !== undefined ? p.stockCount : (p.stock_count || 0));
+                return { ...p, stockCount: currentStock + qtyToAdd, stock_count: currentStock + qtyToAdd };
+              }
+              return p;
+            });
+          });
+        } else if (!isNowCancelled && wasCancelled) {
+          // Re-deduct stock locally if uncancelled
+          setProducts(prevProducts => {
+            return prevProducts.map(p => {
+              const matchedItem = existingOrder.items.find(it => Number(it.productId || it.id) === Number(p.id));
+              if (matchedItem) {
+                const qtyToSub = Number(matchedItem.quantity || matchedItem.qty || 1);
+                const currentStock = Number(p.stockCount !== undefined ? p.stockCount : (p.stock_count || 0));
+                const newStock = Math.max(0, currentStock - qtyToSub);
+                return { ...p, stockCount: newStock, stock_count: newStock };
+              }
+              return p;
+            });
+          });
+        }
+      }
+
       const res = await fetch(`/api/orders/${id}/transit`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -1235,6 +1335,22 @@ export function DataProvider({ children }) {
             }
             return c;
           }));
+        }
+
+        // Restore product stock if the deleted order was not cancelled
+        const isCancelled = (target.status || "").toLowerCase().includes("cancel") || target.step === -1;
+        if (!isCancelled && Array.isArray(target.items) && target.items.length > 0) {
+          setProducts(prevProducts => {
+            return prevProducts.map(p => {
+              const matchedItem = target.items.find(it => Number(it.productId || it.id) === Number(p.id));
+              if (matchedItem) {
+                const qtyToAdd = Number(matchedItem.quantity || matchedItem.qty || 1);
+                const currentStock = Number(p.stockCount !== undefined ? p.stockCount : (p.stock_count || 0));
+                return { ...p, stockCount: currentStock + qtyToAdd, stock_count: currentStock + qtyToAdd };
+              }
+              return p;
+            });
+          });
         }
       }
 
@@ -1718,6 +1834,8 @@ export function DataProvider({ children }) {
       updateProduct,
       deleteProduct,
       clearAllProducts,
+      bulkUploadProducts,
+      bulkUpdateStock,
       r2PublicUrl,
       setR2PublicUrl,
       paymentEnabled,

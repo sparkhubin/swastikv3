@@ -26,7 +26,10 @@ import {
   Save,
   Lock,
   XCircle,
-  Ban
+  Ban,
+  AlertTriangle,
+  CreditCard,
+  CheckCircle2
 } from 'lucide-react';
 import R2ImageUploader from './R2ImageUploader';
 import NotificationCenter from '../../components/NotificationCenter';
@@ -44,7 +47,7 @@ export default function OrdersManager({ userRole }) {
 
   // Relational resolution helpers: Resolve customer details dynamically from customer ID / phone
   const getCustName = React.useCallback((ord) => {
-    if (!ord) return "Valued Customer";
+    if (!ord) return "Customer";
     const ordCustId = Number(ord.customerId || ord.userId);
     if (ordCustId) {
       const matched = customers?.find(c => Number(c.id) === ordCustId);
@@ -55,7 +58,12 @@ export default function OrdersManager({ userRole }) {
       const matched = customers?.find(c => String(c.phone || "").replace(/\D/g, "").slice(-10) === cleanP);
       if (matched && matched.name) return matched.name;
     }
-    return ord.customerName || ord.name || "Valued Customer";
+    const cleanEmail = String(ord.customerEmail || ord.email || "").trim().toLowerCase();
+    if (cleanEmail) {
+      const matched = customers?.find(c => String(c.email || "").trim().toLowerCase() === cleanEmail);
+      if (matched && matched.name) return matched.name;
+    }
+    return ord.customerName || ord.name || "Customer";
   }, [customers]);
 
   const getCustPhone = React.useCallback((ord) => {
@@ -67,6 +75,35 @@ export default function OrdersManager({ userRole }) {
     }
     return ord.customerPhone || ord.customerMobile || ord.phone || "N/A";
   }, [customers]);
+
+  const getCustAddress = React.useCallback((ord) => {
+    if (!ord) return "Address not specified";
+    if (ord.address && typeof ord.address === 'string' && ord.address.trim()) return ord.address;
+    if (ord.deliveryAddress && typeof ord.deliveryAddress === 'string' && ord.deliveryAddress.trim()) return ord.deliveryAddress;
+    if (ord.customerAddress && typeof ord.customerAddress === 'string' && ord.customerAddress.trim()) return ord.customerAddress;
+    const ordCustId = Number(ord.customerId || ord.userId);
+    if (ordCustId) {
+      const matched = customers?.find(c => Number(c.id) === ordCustId);
+      if (matched && matched.address) return matched.address;
+    }
+    const cleanP = String(ord.customerPhone || ord.customerMobile || ord.phone || "").replace(/\D/g, "").slice(-10);
+    if (cleanP) {
+      const matched = customers?.find(c => String(c.phone || "").replace(/\D/g, "").slice(-10) === cleanP);
+      if (matched && matched.address) return matched.address;
+    }
+    return "Store Pickup / Counter Sale";
+  }, [customers]);
+
+  // Real delivery riders filter (strictly delivery personnel)
+  const deliveryStaffList = React.useMemo(() => {
+    return (staff || []).filter(s => 
+      s.role_id === 4 ||
+      s.role_code === 'rider' ||
+      s.permissions?.includes('delivery') ||
+      (s.role && String(s.role).toLowerCase().includes('rider')) ||
+      (s.role && String(s.role).toLowerCase().includes('delivery'))
+    );
+  }, [staff]);
 
   const activeStaff = React.useMemo(() => {
     try {
@@ -820,13 +857,15 @@ export default function OrdersManager({ userRole }) {
     // Generate unique order ID
     const randomSuffix = Math.floor(10000 + Math.random() * 90000);
     const newId = `SW-${randomSuffix}`;
+    const defaultRider = staff?.find(s => s.role_id === 4 || s.role?.toLowerCase().includes('delivery') || s.role?.toLowerCase().includes('rider')) || null;
 
     const orderPayload = {
       id: newId,
       customerName: newOrderName,
       customerPhone: newOrderPhone,
-      deliveryPartnerName: newOrderPilotName || "Pradeep Kumar",
-      deliveryPartnerPhone: newOrderPilotPhone || "+91 98101 20299",
+      deliveryStaffId: defaultRider ? defaultRider.id : null,
+      deliveryPartnerName: newOrderPilotName || (defaultRider ? defaultRider.name : ""),
+      deliveryPartnerPhone: newOrderPilotPhone || (defaultRider ? defaultRider.mobile : ""),
       shippingAddress: newOrderAddress,
       orderDate: new Date().toISOString().split('T')[0],
       items: newOrderItems,
@@ -911,7 +950,11 @@ export default function OrdersManager({ userRole }) {
       setDeliveryVerifyMethod(isCod ? 'cod' : (ord.paymentMethod || 'upi'));
       setDeliveryVerifyPaymentStatus(ord.paymentStatus === 'PAID' ? 'PAID' : 'PAID');
       setDeliveryVerifyRiderCash(true);
-      setDeliveryVerifyStaffId(ord.deliveryStaffId ? String(ord.deliveryStaffId) : '');
+      const matchedRider = deliveryStaffList.find(s => 
+        (ord.deliveryStaffId && String(s.id) === String(ord.deliveryStaffId)) ||
+        (ord.deliveryPartnerName && s.name.toLowerCase().trim() === ord.deliveryPartnerName.toLowerCase().trim())
+      ) || deliveryStaffList[0];
+      setDeliveryVerifyStaffId(matchedRider ? String(matchedRider.id) : (ord.deliveryStaffId ? String(ord.deliveryStaffId) : ''));
       return;
     }
 
@@ -923,7 +966,11 @@ export default function OrdersManager({ userRole }) {
       setDeliveryVerifyMethod(isCod ? 'cod' : (ord.paymentMethod || 'upi'));
       setDeliveryVerifyPaymentStatus(ord.paymentStatus || (isCod ? 'PENDING' : 'PAID'));
       setDeliveryVerifyRiderCash(false);
-      setDeliveryVerifyStaffId(ord.deliveryStaffId ? String(ord.deliveryStaffId) : '');
+      const matchedRider = deliveryStaffList.find(s => 
+        (ord.deliveryStaffId && String(s.id) === String(ord.deliveryStaffId)) ||
+        (ord.deliveryPartnerName && s.name.toLowerCase().trim() === ord.deliveryPartnerName.toLowerCase().trim())
+      ) || deliveryStaffList[0];
+      setDeliveryVerifyStaffId(matchedRider ? String(matchedRider.id) : (ord.deliveryStaffId ? String(ord.deliveryStaffId) : ''));
       return;
     }
 
@@ -977,13 +1024,14 @@ export default function OrdersManager({ userRole }) {
     const isDeliveredTarget = deliveryPaymentStepTarget === 2;
     const isCod = deliveryVerifyMethod === 'cod';
 
-    const chosenStaff = staff?.find(s => String(s.id) === String(deliveryVerifyStaffId));
+    const chosenStaff = deliveryStaffList.find(s => String(s.id) === String(deliveryVerifyStaffId)) ||
+                        staff?.find(s => String(s.id) === String(deliveryVerifyStaffId));
 
     const extraFields = {
       paymentMethod: deliveryVerifyMethod,
-      deliveryStaffId: deliveryVerifyStaffId ? Number(deliveryVerifyStaffId) : ord.deliveryStaffId,
-      deliveryPartnerName: chosenStaff ? chosenStaff.name : (ord.deliveryPartnerName || 'Pradeep Kumar'),
-      deliveryPartnerPhone: chosenStaff ? chosenStaff.mobile : (ord.deliveryPartnerPhone || '+91 95400 12099')
+      deliveryStaffId: chosenStaff ? Number(chosenStaff.id) : (deliveryVerifyStaffId ? Number(deliveryVerifyStaffId) : ord.deliveryStaffId),
+      deliveryPartnerName: chosenStaff ? chosenStaff.name : (ord.deliveryPartnerName || (deliveryStaffList[0]?.name || '')),
+      deliveryPartnerPhone: chosenStaff ? chosenStaff.mobile : (ord.deliveryPartnerPhone || (deliveryStaffList[0]?.mobile || ''))
     };
 
     if (isDeliveredTarget) {
@@ -2127,7 +2175,7 @@ export default function OrdersManager({ userRole }) {
                         value={selectedOrder.deliveryPartnerName || ''}
                         onChange={(e) => handleAgentDetailsChange('deliveryPartnerName', e.target.value)}
                         disabled={userRole === 'customer'}
-                        placeholder="Pradeep Kumar"
+                        placeholder="Rider / Delivery Agent Name"
                         className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white"
                       />
                     </div>
@@ -2854,17 +2902,17 @@ export default function OrdersManager({ userRole }) {
               {/* Delivery Staff Assigned */}
               <div>
                 <label className="text-[9px] font-black uppercase text-slate-300 block mb-1">
-                  {isHindi ? 'डिलीवरी बॉय / स्टाफ चुनें' : 'Assigned Delivery Staff'}
+                  {isHindi ? 'डिलीवरी राइडर चुनें' : 'Assigned Delivery Rider'}
                 </label>
                 <select
                   value={deliveryVerifyStaffId}
                   onChange={(e) => setDeliveryVerifyStaffId(e.target.value)}
-                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-400"
+                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-400 cursor-pointer"
                 >
-                  <option value="">{deliveryPaymentModalOrder.deliveryPartnerName || 'Pradeep Kumar (Default)'}</option>
-                  {staff?.map(s => (
+                  <option value="">{isHindi ? 'डिलीवरी राइडर चुनें...' : 'Select Delivery Rider...'}</option>
+                  {deliveryStaffList.map(s => (
                     <option key={s.id} value={s.id}>
-                      {s.name} ({s.role} - {s.mobile || 'No Phone'})
+                      {s.name} ({s.role || 'Delivery Rider'} • {s.mobile || 'No Mobile'})
                     </option>
                   ))}
                 </select>

@@ -51,14 +51,28 @@ router.get("/customers", async (req, res) => {
   try {
     let customerList = await getStoredCustomers();
 
-    // Default seed if completely empty
+    // Seed from real customer table if empty
     if (customerList.length === 0) {
-      customerList = [
-        { id: 101, name: 'Amit Sharma', phone: '+91 98765 12345', email: 'amit@gmail.com', registeredAt: '2026-01-10', orderCount: 14, totalSpent: 6720, status: 'Active', dob: '1990-07-14', anniversary: '2018-12-25', points: 120, isPrimeActive: true, primeMembershipNo: 'SP-VIP-101-2345' },
-        { id: 102, name: 'Pooja Patel', phone: '+91 91234 56789', email: 'pooja.patel@yahoo.com', registeredAt: '2026-02-14', orderCount: 22, totalSpent: 11450, status: 'Active', dob: '1993-05-10', anniversary: '2015-07-14', points: 280, isPrimeActive: true, primeMembershipNo: 'SP-VIP-102-6789' },
-        { id: 103, name: 'Vikram Malhotra', phone: '+91 99887 76655', email: 'vikram10@outlook.com', registeredAt: '2026-03-20', orderCount: 8, totalSpent: 4210, status: 'Active', dob: '1994-11-20', anniversary: '2020-05-18', points: 45, isPrimeActive: false },
-        { id: 104, name: 'Sanjay Dutt', phone: '+91 98101 23456', email: 'sanjay.dutt@gmail.com', registeredAt: '2026-04-18', orderCount: 1, totalSpent: 850, status: 'Active', dob: '1985-07-14', anniversary: '', points: 100, isPrimeActive: false }
-      ];
+      try {
+        const dbCusts = await db.query('SELECT * FROM customer');
+        if (Array.isArray(dbCusts) && dbCusts.length > 0) {
+          customerList = dbCusts.map(c => ({
+            id: c.id,
+            name: c.name,
+            phone: c.phone,
+            email: c.email,
+            address: c.address || '',
+            status: c.status || 'Active',
+            registeredAt: c.created_at ? String(c.created_at).split('T')[0] : '2026-01-10',
+            orderCount: 0,
+            totalSpent: 0,
+            points: 100,
+            isPrimeActive: false,
+            dob: '',
+            anniversary: ''
+          }));
+        }
+      } catch (err) {}
     }
 
     // Auto-discover customers from order history
@@ -482,6 +496,40 @@ async function saveStoredDeletionRequests(requests) {
 router.get("/data-deletion-requests", async (req, res) => {
   try {
     const requests = await getStoredDeletionRequests();
+    // Dynamically resolve real customer name and details from customer table
+    for (const r of requests) {
+      try {
+        let matched = null;
+        if (r.customerId) {
+          const rows = await db.query('SELECT id, name, phone, email FROM customer WHERE id = ? LIMIT 1', [r.customerId]);
+          if (rows && rows.length > 0) matched = rows[0];
+        }
+        if (!matched && r.phone) {
+          const cleanP = cleanPhone(r.phone);
+          if (cleanP) {
+            const rows = await db.query(
+              "SELECT id, name, phone, email FROM customer WHERE REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '+', '') LIKE ? OR phone = ? LIMIT 1",
+              [`%${cleanP.slice(-10)}%`, r.phone]
+            );
+            if (rows && rows.length > 0) matched = rows[0];
+          }
+        }
+        if (!matched && r.email) {
+          const rows = await db.query("SELECT id, name, phone, email FROM customer WHERE LOWER(email) = ? LIMIT 1", [r.email.toLowerCase().trim()]);
+          if (rows && rows.length > 0) matched = rows[0];
+        }
+
+        if (matched) {
+          if (!r.customerId) r.customerId = Number(matched.id);
+          // If request name is empty, generic, or mismatched with real customer
+          if (!r.name || r.name === 'Customer' || r.name === 'Guest User' || r.name === 'Not provided' || (r.name === 'Sanjay Dutt' && matched.name !== 'Sanjay Dutt')) {
+            r.name = matched.name;
+          }
+          if (!r.phone) r.phone = matched.phone;
+          if (!r.email) r.email = matched.email;
+        }
+      } catch (e) {}
+    }
     res.json(requests);
   } catch (err) {
     console.error("Error in GET /api/data-deletion-requests:", err);
@@ -499,6 +547,40 @@ router.post("/data-deletion-requests", async (req, res) => {
 
     const requests = await getStoredDeletionRequests();
     const cleanPhoneDigits = cleanPhone(phone);
+
+    // Look up real customer from database to ensure genuine name and id
+    let resolvedCustId = customerId ? Number(customerId) : null;
+    let resolvedName = (name || '').trim();
+
+    try {
+      let matchedCust = null;
+      if (resolvedCustId) {
+        const rows = await db.query('SELECT id, name, phone, email FROM customer WHERE id = ? LIMIT 1', [resolvedCustId]);
+        if (rows && rows.length > 0) matchedCust = rows[0];
+      }
+      if (!matchedCust && cleanPhoneDigits) {
+        const rows = await db.query(
+          "SELECT id, name, phone, email FROM customer WHERE REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '+', '') LIKE ? OR phone = ? LIMIT 1",
+          [`%${cleanPhoneDigits.slice(-10)}%`, phone]
+        );
+        if (rows && rows.length > 0) matchedCust = rows[0];
+      }
+      if (!matchedCust && email) {
+        const rows = await db.query("SELECT id, name, phone, email FROM customer WHERE LOWER(email) = ? LIMIT 1", [email.toLowerCase().trim()]);
+        if (rows && rows.length > 0) matchedCust = rows[0];
+      }
+
+      if (matchedCust) {
+        resolvedCustId = Number(matchedCust.id);
+        if (!resolvedName || resolvedName === 'Customer' || resolvedName === 'Guest User' || resolvedName === 'Not provided') {
+          resolvedName = matchedCust.name;
+        }
+      }
+    } catch (e) {}
+
+    if (!resolvedName) {
+      resolvedName = 'Customer';
+    }
 
     // Check if there is already an active pending request for this phone/email
     const existingPending = requests.find(r => 
@@ -520,8 +602,8 @@ router.post("/data-deletion-requests", async (req, res) => {
     const newRequestId = `DEL-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
     const newRequest = {
       id: newRequestId,
-      customerId: customerId ? Number(customerId) : null,
-      name: (name || 'Customer').trim(),
+      customerId: resolvedCustId,
+      name: resolvedName,
       phone: phone || '',
       email: (email || '').trim(),
       reason: reason || 'Account & Personal Data Erasure',

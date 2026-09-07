@@ -818,14 +818,61 @@ export default function Account({ onViewChange }) {
 
   // Synchronise the local profile state with updates to the customers database
   useEffect(() => {
-    const databaseCust = (customers || []).find(c => c.phone === profile?.phone || c.email === profile?.email);
-    if (databaseCust && databaseCust.isPrimeActive !== profile.isPrimeActive) {
-      setProfile(prev => ({
-        ...prev,
-        isPrimeActive: databaseCust.isPrimeActive
-      }));
+    if (!customers || customers.length === 0) return;
+    const cleanDigits = (ph) => ph ? String(ph).replace(/\D/g, "") : "";
+    const pDigits = cleanDigits(profile?.phone);
+    const databaseCust = customers.find(c => {
+      if (profile?.id && Number(c.id) === Number(profile.id)) return true;
+      const cDigits = cleanDigits(c.phone);
+      if (pDigits && cDigits && (cDigits.endsWith(pDigits.slice(-10)) || pDigits.endsWith(cDigits.slice(-10)))) return true;
+      if (profile?.email && c.email && c.email.toLowerCase().trim() === profile.email.toLowerCase().trim()) return true;
+      return false;
+    });
+
+    if (databaseCust) {
+      setProfile(prev => {
+        let changed = false;
+        const updated = { ...prev };
+        if (databaseCust.id && prev.id !== databaseCust.id) {
+          updated.id = databaseCust.id;
+          changed = true;
+        }
+        if (databaseCust.name && databaseCust.name !== prev.fullName) {
+          updated.fullName = databaseCust.name;
+          changed = true;
+        }
+        if (databaseCust.email && databaseCust.email !== prev.email && prev.email.includes('example.com')) {
+          updated.email = databaseCust.email;
+          changed = true;
+        }
+        if (databaseCust.phone && databaseCust.phone !== prev.phone && (!prev.phone || prev.phone.includes('43210'))) {
+          updated.phone = databaseCust.phone;
+          changed = true;
+        }
+        if (databaseCust.address && databaseCust.address !== prev.address && !prev.address) {
+          updated.address = databaseCust.address;
+          changed = true;
+        }
+        if (databaseCust.isPrimeActive !== undefined && databaseCust.isPrimeActive !== prev.isPrimeActive) {
+          updated.isPrimeActive = databaseCust.isPrimeActive;
+          changed = true;
+        }
+        if (databaseCust.points !== undefined && databaseCust.points !== prev.points) {
+          updated.points = databaseCust.points;
+          changed = true;
+        }
+        if (databaseCust.dob && databaseCust.dob !== prev.dob && !prev.dob) {
+          updated.dob = databaseCust.dob;
+          changed = true;
+        }
+        if (databaseCust.anniversary && databaseCust.anniversary !== prev.anniversary && !prev.anniversary) {
+          updated.anniversary = databaseCust.anniversary;
+          changed = true;
+        }
+        return changed ? updated : prev;
+      });
     }
-  }, [customers, profile?.phone, profile?.email, profile.isPrimeActive]);
+  }, [customers, profile?.id, profile?.phone, profile?.email]);
 
   useEffect(() => {
     const handleStorageUpdate = () => {
@@ -1535,13 +1582,24 @@ export default function Account({ onViewChange }) {
       const cleanPhone = (ph) => ph ? ph.replace(/[^0-9]/g, "") : "";
       const targetClean = cleanPhone(profile.phone);
       const existingCust = (customers || []).find(c => {
+        if (profile.id && Number(c.id) === Number(profile.id)) return true;
         const cPhone = c.phone || "";
-        return cleanPhone(cPhone).endsWith(targetClean.slice(-10));
+        return targetClean && cleanPhone(cPhone).endsWith(targetClean.slice(-10));
       });
       if (existingCust) {
         updateCustomer(existingCust.id, {
           ...existingCust,
           name: profile.fullName,
+          email: profile.email,
+          phone: profile.phone,
+          address: profile.address,
+          dob: profile.dob,
+          anniversary: profile.anniversary
+        });
+      } else {
+        upsertCustomer({
+          name: profile.fullName,
+          phone: profile.phone,
           email: profile.email,
           address: profile.address,
           dob: profile.dob,

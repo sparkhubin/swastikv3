@@ -42,7 +42,8 @@ import {
   Database,
   CreditCard,
   Bike,
-  Crown
+  Crown,
+  Layers
 } from 'lucide-react';
 
 // Modular child subtab managers
@@ -412,16 +413,19 @@ export default function AdminDashboard({ onViewChange }) {
     )
   );
 
-  const allAdminTabs = ["dashboard", "products", "categories", "orders", "offers", "membership", "customers", "partners", "reviews", "pages", "staff", "delivery", "payment-reports", "gst-reports", "sliders", "locations", "marg-billing", "payment-settings"];
+  const allAdminTabs = ["dashboard", "products", "bulk-stock", "categories", "orders", "offers", "membership", "customers", "partners", "reviews", "pages", "staff", "delivery", "payment-reports", "gst-reports", "sliders", "locations", "marg-billing", "payment-settings"];
 
   // Strictly enforce granted permissions per staff member
-  const authorizedTabs = userRole === 'delivery'
+  const baseAuthorized = userRole === 'delivery'
     ? ['delivery']
     : (isRootAdmin
         ? allAdminTabs
         : (loggedInStaff?.permissions && Array.isArray(loggedInStaff.permissions) && loggedInStaff.permissions.length > 0
             ? loggedInStaff.permissions
             : ['orders']));
+  const authorizedTabs = (baseAuthorized.includes('products') && !baseAuthorized.includes('bulk-stock'))
+    ? [...baseAuthorized, 'bulk-stock']
+    : baseAuthorized;
 
   // Automatically clamp activeTab if current tab is unauthorized for logged in staff member
   useEffect(() => {
@@ -853,6 +857,20 @@ export default function AdminDashboard({ onViewChange }) {
                       >
                         <span className="flex items-center gap-2"><Package className="h-3.5 w-3.5 text-emerald-500" /> {isHindi ? "प्रोडक्ट्स (Products)" : "Products"}</span>
                         <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isAdminDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>{products.length}</span>
+                      </button>
+                    )}
+                    {authorizedTabs.includes('bulk-stock') && (
+                      <button
+                        type="button"
+                        onClick={() => { setActiveTab('bulk-stock'); setOpenMenuId(null); setIsAdminMenuOpen(false); }}
+                        className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between text-[11px] font-bold cursor-pointer ${
+                          activeTab === 'bulk-stock'
+                            ? (isAdminDark ? 'bg-amber-500/20 text-amber-300 font-black' : 'bg-amber-100 text-amber-900 font-black')
+                            : (isAdminDark ? 'text-slate-300 hover:bg-slate-800/60 hover:text-white' : 'text-slate-700 hover:bg-slate-100')
+                        }`}
+                      >
+                        <span className="flex items-center gap-2"><Layers className="h-3.5 w-3.5 text-amber-400" /> {isHindi ? "थोक स्टॉक अपडेट (Bulk Stock)" : "Bulk Stock Manager"}</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-black uppercase tracking-wider">⚡ Quick</span>
                       </button>
                     )}
                     {authorizedTabs.includes('categories') && (
@@ -1606,8 +1624,9 @@ export default function AdminDashboard({ onViewChange }) {
               </div>
             )}
 
-            {activeTab === 'products' && (
+            {(activeTab === 'products' || activeTab === 'bulk-stock') && (
               <ProductsManager 
+                initialView={activeTab === 'bulk-stock' ? 'bulk-stock' : 'catalog'}
                 searchQuery={searchQuery}
                 setSearchQuery={setSearchQuery}
                 userRole={userRole}
@@ -1915,8 +1934,8 @@ export default function AdminDashboard({ onViewChange }) {
                     <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
                       {staff.map((s) => {
                         const perms = Array.isArray(s.permissions) ? s.permissions : [];
-                        const isSuper = s.id === 1 || s.isMasterAdmin || perms.length >= 17;
-                        const isDeliveryOnly = perms.length === 1 && perms.includes('delivery');
+                        const isSuper = s.id === 1 || s.isMasterAdmin || perms.length >= 12;
+                        const isDeliveryOnly = s.role_id === 4 || s.role_code === 'rider' || (s.role && String(s.role).toLowerCase().includes('rider')) || (!isSuper && perms.includes('delivery') && perms.length <= 3);
                         
                         return (
                           <div key={s.id} className="bg-slate-900 border border-white/10 p-4 rounded-2xl space-y-2 flex justify-between items-start">

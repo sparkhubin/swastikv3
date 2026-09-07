@@ -81,12 +81,16 @@ export default function DataDeletionRequestsManager() {
         const phoneMatch = (r.phone || '').includes(q);
         const emailMatch = (r.email || '').toLowerCase().includes(q);
         const reasonMatch = (r.reason || '').toLowerCase().includes(q);
-        return idMatch || nameMatch || phoneMatch || emailMatch || reasonMatch;
+        const customerMatch = customers.some(c => {
+          const cleanP = (r.phone || '').replace(/\D/g, '').slice(-10);
+          return (cleanP && (c.phone || '').replace(/\D/g, '').endsWith(cleanP) && (c.name || '').toLowerCase().includes(q));
+        });
+        return idMatch || nameMatch || phoneMatch || emailMatch || reasonMatch || customerMatch;
       }
 
       return true;
     });
-  }, [dataDeletionRequests, statusFilter, searchTerm]);
+  }, [dataDeletionRequests, statusFilter, searchTerm, customers]);
 
   // Helper to match customer record from database
   const getCustomerStats = (req) => {
@@ -99,14 +103,16 @@ export default function DataDeletionRequestsManager() {
     });
 
     const custOrders = orders.filter(o => {
-      const oPhoneDigits = (o.customer_phone || '').replace(/\D/g, '').slice(-10);
+      const oPhoneDigits = (o.customer_phone || o.customerPhone || o.customerMobile || '').replace(/\D/g, '').slice(-10);
+      const oCustId = o.customer_id || o.customerId || o.user_id || o.userId;
+      if (matchedCust?.id && oCustId && Number(oCustId) === Number(matchedCust.id)) return true;
       return phoneDigits && oPhoneDigits && oPhoneDigits.endsWith(phoneDigits);
     });
 
     return {
       customer: matchedCust,
       orderCount: custOrders.length || matchedCust?.orderCount || 0,
-      totalSpent: custOrders.reduce((acc, o) => acc + (Number(o.grand_total) || 0), 0) || matchedCust?.totalSpent || 0,
+      totalSpent: custOrders.reduce((acc, o) => acc + (Number(o.grand_total || o.total) || 0), 0) || matchedCust?.totalSpent || 0,
       points: matchedCust?.points || 0
     };
   };
@@ -393,7 +399,7 @@ export default function DataDeletionRequestsManager() {
                       </div>
 
                       <h3 className="text-base sm:text-lg font-black text-white mt-1 flex items-center gap-2">
-                        <span>{req.name}</span>
+                        <span>{req.name && req.name !== 'Customer' && req.name !== 'Guest User' && req.name !== 'Not provided' ? req.name : (stats.customer?.name || req.name || 'Customer')}</span>
                         {stats.customer?.isPrimeActive && (
                           <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[10px] rounded font-mono font-bold">
                             PRIME VIP
@@ -559,7 +565,11 @@ export default function DataDeletionRequestsManager() {
 
             <div className="p-5 space-y-4 text-xs">
               <div className="p-3 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-1">
-                <p className="font-bold text-white text-sm">{selectedRequest.name}</p>
+                <p className="font-bold text-white text-sm">
+                  {selectedRequest.name && selectedRequest.name !== 'Customer' && selectedRequest.name !== 'Guest User' && selectedRequest.name !== 'Not provided'
+                    ? selectedRequest.name
+                    : (getCustomerStats(selectedRequest).customer?.name || selectedRequest.name || 'Customer')}
+                </p>
                 <p className="text-slate-400 font-mono">{selectedRequest.phone || selectedRequest.email}</p>
                 <p className="text-slate-400 text-[11px] pt-1">
                   <strong>Ref ID:</strong> {selectedRequest.id}

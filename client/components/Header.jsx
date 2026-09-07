@@ -139,7 +139,8 @@ export default function Header({ onMenuClick, onSearchClick, currentView, onView
                 const staffStr = localStorage.getItem('swastik_logged_in_staff');
                 if (staffStr) {
                   const s = JSON.parse(staffStr);
-                  if (s.permissions?.length === 1 && s.permissions[0] === 'delivery') return 'delivery';
+                  const isRider = s.role_id === 4 || s.role_code === 'rider' || (s.role && String(s.role).toLowerCase().includes('rider')) || (s.permissions?.includes('delivery') && !s.isMasterAdmin && s.id !== 1);
+                  if (isRider) return 'delivery';
                   return 'admin';
                 }
               } catch(e) {}

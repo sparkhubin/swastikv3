@@ -296,8 +296,8 @@ export let fallbackOrders = [
     deliveryFee: 0,
     gst: 81,
     total: 530,
-    deliveryPartnerName: "Pradeep Kumar (Swastik Rider)",
-    deliveryPartnerPhone: "+91 95400 12099",
+    deliveryPartnerName: "Vikram Singh (Swastik Rider)",
+    deliveryPartnerPhone: "+91 98765 43210",
     hubName: "Alpha Hub, Sector 12",
     eta: "15 Mins",
     shippingAddress: "Sector 15, Noida, UP",
@@ -316,8 +316,8 @@ export let fallbackOrders = [
     gst: 63,
     total: 453,
     deliveryStaffId: 4,
-    deliveryPartnerName: "Suresh Mehra",
-    deliveryPartnerPhone: "+91 98111 22334",
+    deliveryPartnerName: "Rahul Verma",
+    deliveryPartnerPhone: "+91 98989 89898",
     hubName: "Alpha Hub, Sector 12",
     eta: "Delivered",
     shippingAddress: "Preet Vihar Road, New Delhi",
@@ -342,6 +342,7 @@ export function mapProduct(p) {
     price: Number(p.price),
     originalPrice: p.original_price ? Number(p.original_price) : undefined,
     discountTag: p.discount_tag || "",
+    discount: p.discount_tag || "",
     imageUrl: p.image_url,
     image: p.image_url,
     stockCount: p.stock_count,
@@ -458,19 +459,19 @@ export async function mapOrder(o) {
       const riderRows = await db.query('SELECT * FROM "user" WHERE LOWER(full_name) = ? OR LOWER(full_name) LIKE ? LIMIT 1', [dynamicRiderName.toLowerCase(), `%${dynamicRiderName.toLowerCase()}%`]);
       if (riderRows && riderRows.length > 0) matchedRider = riderRows[0];
     }
+    if (!matchedRider) {
+      const activeRiderRows = await db.query('SELECT * FROM "user" WHERE role_id = 4 LIMIT 1');
+      if (activeRiderRows && activeRiderRows.length > 0) {
+        matchedRider = activeRiderRows[0];
+      }
+    }
+
     if (matchedRider) {
       dynamicRiderId = Number(matchedRider.id);
       dynamicRiderName = matchedRider.full_name;
       dynamicRiderPhone = matchedRider.phone_number;
     }
   } catch (rErr) {}
-
-  // Fallback: If invalid rider name like Arun Dev, remap to registered rider
-  if (dynamicRiderName && dynamicRiderName.toLowerCase().includes('arun dev')) {
-    dynamicRiderId = 4;
-    dynamicRiderName = "Suresh Mehra";
-    dynamicRiderPhone = "+91 98111 22334";
-  }
 
   return {
     id: o.id,

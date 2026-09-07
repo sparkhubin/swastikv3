@@ -12,6 +12,12 @@ export default function NotificationCenter({ role = 'customer', phone = '', clas
   const prevUnreadRef = useRef(0);
 
   const fetchNotifications = async () => {
+    // For customers, only fetch if they are logged in with a phone number (strict privacy)
+    if (role === 'customer' && !phone) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
     try {
       let url = `/api/notifications?role=${role}`;
       if (phone) url += `&phone=${encodeURIComponent(phone)}`;
@@ -40,7 +46,11 @@ export default function NotificationCenter({ role = 'customer', phone = '', clas
 
   useEffect(() => {
     // For customers, only poll if they are logged in with a phone number
-    if (role === 'customer' && !phone) return;
+    if (role === 'customer' && !phone) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
 
     fetchNotifications();
     const interval = setInterval(() => {
@@ -157,7 +167,17 @@ export default function NotificationCenter({ role = 'customer', phone = '', clas
 
           {/* Notifications List Body */}
           <div className="max-h-80 overflow-y-auto divide-y divide-slate-800/80 p-2 space-y-1.5">
-            {notifications.length === 0 ? (
+            {role === 'customer' && !phone ? (
+              <div className="py-8 px-4 text-center space-y-2">
+                <Info className="h-8 w-8 text-amber-400 mx-auto" />
+                <p className="text-xs text-slate-200 font-bold">
+                  {isHindi ? "अपनी व्यक्तिगत सूचनाएं देखने के लिए कृपया लॉगिन करें।" : "Please log in to view your order notifications."}
+                </p>
+                <p className="text-[10px] text-slate-400">
+                  {isHindi ? "सुरक्षा कारणों से केवल अधिकृत ग्राहक ही अपने ऑर्डर की सूचनाएं देख सकते हैं।" : "For your privacy, only authenticated users can view personal order updates."}
+                </p>
+              </div>
+            ) : notifications.length === 0 ? (
               <div className="py-8 text-center space-y-2">
                 <Info className="h-8 w-8 text-slate-500 mx-auto" />
                 <p className="text-xs text-slate-400 font-semibold">

@@ -22,8 +22,19 @@ import {
   ChevronsUpDown,
   Filter,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  Download,
+  Upload,
+  Check,
+  RefreshCw,
+  X,
+  ShieldCheck,
+  Sparkles,
+  FileText,
+  HelpCircle,
+  Eye
 } from 'lucide-react';
+import BulkStockManager from './BulkStockManager';
 
 const ListProductImage = ({ p, r2PublicUrl }) => {
   const [imgSrc, setImgSrc] = useState(() => resolveProductImage(p, r2PublicUrl, 120));
@@ -65,13 +76,46 @@ const ListProductImage = ({ p, r2PublicUrl }) => {
   );
 };
 
-export default function ProductsManager({ searchQuery, setSearchQuery, userRole }) {
+export default function ProductsManager({ searchQuery, setSearchQuery, userRole, initialView = 'catalog' }) {
   const { isHindi } = useLanguage();
-  const { products, addProduct, updateProduct, deleteProduct, clearAllProducts, categories, r2PublicUrl, contactSettings, setContactSettings, fetchProducts } = useData();
+  const { 
+    products, 
+    addProduct, 
+    updateProduct, 
+    deleteProduct, 
+    clearAllProducts, 
+    bulkUploadProducts,
+    bulkUpdateStock,
+    categories, 
+    r2PublicUrl, 
+    contactSettings, 
+    setContactSettings, 
+    fetchProducts 
+  } = useData();
 
   useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
+
+  // Subview state: 'catalog' | 'bulk-stock' | 'bulk-import'
+  const [activeSubView, setActiveSubView] = useState(initialView || 'catalog');
+
+  useEffect(() => {
+    if (initialView) {
+      setActiveSubView(initialView);
+    }
+  }, [initialView]);
+
+  // Bulk Upload & Validation states
+  const [importMode, setImportMode] = useState('update_existing'); // 'update_existing' | 'skip_existing'
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState(null);
+  const [showResultModal, setShowResultModal] = useState(false);
+
+  // View & Quick Edit Modal states (Responsive & Scrollable)
+  const [viewingProduct, setViewingProduct] = useState(null);
+  const [quickEditProduct, setQuickEditProduct] = useState(null);
+  const [isSavingQuickEdit, setIsSavingQuickEdit] = useState(false);
 
   // Selected edit ID state
   const [editingProdId, setEditingProdId] = useState(null);
@@ -157,59 +201,157 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
     setCurrentPage(1);
   }, [searchQuery, filterCategory, filterPromoStatus, filterBrand, filterImageStatus, filterStockStatus, itemsPerPage]);
 
-  const downloadSampleProductsExcel = () => {
-    const sampleData = [
-      {
-        "Name": "Basmati Premium Rice",
-        "Price": "120",
-        "OriginalPrice": "150",
-        "Discount": "20% OFF",
-        "GST (%)": "5",
-        "Unit": "1kg, 2kg, 5kg",
-        "UnitPrices": "120, 230, 550",
-        "Brand": "India Gate",
-        "Image": "https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&q=80&w=400"
-      },
-      {
-        "Name": "Fresh Mustard Oil",
-        "Price": "175",
-        "OriginalPrice": "195",
-        "Discount": "₹20 OFF",
-        "GST (%)": "5",
-        "Unit": "1L, 2L, 5L",
-        "UnitPrices": "175, 340, 820",
-        "Brand": "Fortune",
-        "Image": "https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&q=80&w=400"
-      },
-      {
-        "Name": "Dark Chocolate Slab",
-        "Price": "90",
-        "OriginalPrice": "100",
-        "Discount": "10% OFF",
-        "GST (%)": "18",
-        "Unit": "1 Unit",
-        "UnitPrices": "1 Unit:90",
-        "Brand": "Cadbury",
-        "Image": "https://images.unsplash.com/photo-1548907040-4d42b52125ca?auto=format&fit=crop&q=80&w=400"
-      }
-    ];
+  // 11 requested fields standard structure
+  const sample11FieldsProducts = [
+    {
+      "Product Display Name": "Premium Alphonso Mango (Devgad)",
+      "Brand / Segment Tag": "Ratnagiri Farms",
+      "Product Department Category": "fruits",
+      "Available Weight / Product Units": "1 Dozen, 6 Pcs",
+      "Base Price / Default rate (₹)": 650,
+      "Original Price crossed out (₹)": 800,
+      "Discount ribbon label text": "18% OFF",
+      "Physical Stock Count (Qty)": 50,
+      "Unique Product Code (e.g. SP000001)": "SP000001",
+      "GST Rate (%) / जीएसटी दर": 0,
+      "Product Illustration Image URL": "https://images.unsplash.com/photo-1553279768-865429fa0078?auto=format&fit=crop&q=80&w=400"
+    },
+    {
+      "Product Display Name": "Daawat Rozana Super Basmati Rice",
+      "Brand / Segment Tag": "Daawat",
+      "Product Department Category": "grocery",
+      "Available Weight / Product Units": "1kg, 5kg",
+      "Base Price / Default rate (₹)": 115,
+      "Original Price crossed out (₹)": 140,
+      "Discount ribbon label text": "₹25 OFF",
+      "Physical Stock Count (Qty)": 120,
+      "Unique Product Code (e.g. SP000001)": "SP000002",
+      "GST Rate (%) / जीएसटी दर": 5,
+      "Product Illustration Image URL": "https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&q=80&w=400"
+    },
+    {
+      "Product Display Name": "Fortune Sunlite Refined Sunflower Oil",
+      "Brand / Segment Tag": "Fortune",
+      "Product Department Category": "grocery",
+      "Available Weight / Product Units": "1L, 5L",
+      "Base Price / Default rate (₹)": 155,
+      "Original Price crossed out (₹)": 180,
+      "Discount ribbon label text": "Save ₹25",
+      "Physical Stock Count (Qty)": 80,
+      "Unique Product Code (e.g. SP000001)": "SP000003",
+      "GST Rate (%) / जीएसटी दर": 5,
+      "Product Illustration Image URL": "https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&q=80&w=400"
+    },
+    {
+      "Product Display Name": "Cadbury Dairy Milk Silk Hazelnut",
+      "Brand / Segment Tag": "Cadbury",
+      "Product Department Category": "chocolate",
+      "Available Weight / Product Units": "143g Bar",
+      "Base Price / Default rate (₹)": 175,
+      "Original Price crossed out (₹)": 195,
+      "Discount ribbon label text": "10% OFF",
+      "Physical Stock Count (Qty)": 45,
+      "Unique Product Code (e.g. SP000001)": "SP000004",
+      "GST Rate (%) / जीएसटी दर": 18,
+      "Product Illustration Image URL": "https://images.unsplash.com/photo-1548907040-4d42b52125ca?auto=format&fit=crop&q=80&w=400"
+    },
+    {
+      "Product Display Name": "Pampers All Round Protection Baby Pants (L)",
+      "Brand / Segment Tag": "Pampers",
+      "Product Department Category": "babycare",
+      "Available Weight / Product Units": "34 Diapers Pack",
+      "Base Price / Default rate (₹)": 599,
+      "Original Price crossed out (₹)": 749,
+      "Discount ribbon label text": "20% OFF",
+      "Physical Stock Count (Qty)": 30,
+      "Unique Product Code (e.g. SP000001)": "SP000005",
+      "GST Rate (%) / जीएसटी दर": 12,
+      "Product Illustration Image URL": "https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&q=80&w=400"
+    }
+  ];
 
+  // Download Sample Excel Template
+  const downloadSampleProductsExcel = () => {
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(sampleData);
-    XLSX.utils.book_append_sheet(wb, ws, "Products Sample");
-    XLSX.writeFile(wb, "swastik_products_sample.xlsx");
+    const ws = XLSX.utils.json_to_sheet(sample11FieldsProducts);
+    XLSX.utils.book_append_sheet(wb, ws, "Catalog Products (11 Fields)");
+    XLSX.writeFile(wb, "swastik_products_sample_11fields.xlsx");
   };
 
-  // Bulk Excel State
+  // Download Sample JSON Template
+  const downloadSampleProductsJson = () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(sample11FieldsProducts, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", "swastik_products_sample_11fields.json");
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
+  // Export Current Live Catalog to Excel
+  const exportCatalogToExcel = () => {
+    const exportRows = products.map((p, idx) => ({
+      "Product Display Name": p.nameEn || p.name || "",
+      "Brand / Segment Tag": p.brand || p.subEn || "General",
+      "Product Department Category": p.category || "vegetables",
+      "Available Weight / Product Units": p.unit || "1 Unit",
+      "Base Price / Default rate (₹)": p.price || 0,
+      "Original Price crossed out (₹)": p.originalPrice || "",
+      "Discount ribbon label text": p.discount || p.discount_tag || "",
+      "Physical Stock Count (Qty)": getStockCount(p),
+      "Unique Product Code (e.g. SP000001)": p.code || `SP${String(idx + 1).padStart(6, '0')}`,
+      "GST Rate (%) / जीएसटी दर": p.gstPercent !== undefined ? p.gstPercent : (p.gst_percent !== undefined ? p.gst_percent : 5),
+      "Product Illustration Image URL": p.image || p.image_url || ""
+    }));
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(exportRows);
+    XLSX.utils.book_append_sheet(wb, ws, "Catalog Export");
+    XLSX.writeFile(wb, `swastik_catalog_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  // Export Current Live Catalog to JSON
+  const exportCatalogToJson = () => {
+    const exportRows = products.map((p, idx) => ({
+      "Product Display Name": p.nameEn || p.name || "",
+      "Brand / Segment Tag": p.brand || p.subEn || "General",
+      "Product Department Category": p.category || "vegetables",
+      "Available Weight / Product Units": p.unit || "1 Unit",
+      "Base Price / Default rate (₹)": p.price || 0,
+      "Original Price crossed out (₹)": p.originalPrice || null,
+      "Discount ribbon label text": p.discount || p.discount_tag || "",
+      "Physical Stock Count (Qty)": getStockCount(p),
+      "Unique Product Code (e.g. SP000001)": p.code || `SP${String(idx + 1).padStart(6, '0')}`,
+      "GST Rate (%) / जीएसटी दर": p.gstPercent !== undefined ? p.gstPercent : (p.gst_percent !== undefined ? p.gst_percent : 5),
+      "Product Illustration Image URL": p.image || p.image_url || ""
+    }));
+
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportRows, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `swastik_catalog_export_${new Date().toISOString().slice(0, 10)}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
+  // Bulk Import Destination Category
   const [bulkCategory, setBulkCategory] = useState('vegetables');
 
+  // Submit Single Product Form (Register or Modify)
   const handleProductSubmit = async (e) => {
     e.preventDefault();
     if (!productForm.name || !productForm.price) return;
 
+    const existing = editingProdId ? products.find(p => p.id === editingProdId) : null;
+    const finalCode = (productForm.code && productForm.code.trim()) 
+      ? productForm.code.trim() 
+      : (existing && existing.code ? existing.code : '');
+
     const payload = {
-      nameEn: productForm.name,
-      nameHi: productForm.name,
+      nameEn: productForm.name.trim(),
+      nameHi: productForm.name.trim(),
       category: productForm.category,
       brand: productForm.brandTag || 'Fresh',
       subEn: productForm.brandTag || 'Fresh',
@@ -223,15 +365,15 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
       packHi: productForm.unit ? productForm.unit.split(',')[0].trim() : '1 Unit',
       image: productForm.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400',
       stockCount: productForm.stockCount !== '' ? Number(productForm.stockCount) : 100,
-      code: productForm.code || '',
+      code: finalCode,
       gstPercent: productForm.gstPercent !== '' ? Number(productForm.gstPercent) : 5
     };
 
     if (editingProdId) {
-      updateProduct(editingProdId, payload);
+      await updateProduct(editingProdId, payload);
       setEditingProdId(null);
     } else {
-      addProduct(payload);
+      await addProduct(payload);
     }
 
     // Reset Form
@@ -254,16 +396,16 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
   const startEditProduct = (prod) => {
     setEditingProdId(prod.id);
     setProductForm({
-      name: prod.nameEn || prod.nameHi || '',
+      name: prod.nameEn || prod.nameHi || prod.name || '',
       category: prod.category || 'vegetables',
-      brandTag: prod.subEn || prod.subHi || '',
-      price: prod.price || '',
-      originalPrice: prod.originalPrice || '',
-      discount: prod.discount || '',
+      brandTag: prod.brand || prod.subEn || prod.subHi || '',
+      price: prod.price !== undefined ? prod.price : '',
+      originalPrice: prod.originalPrice !== undefined && prod.originalPrice !== null ? prod.originalPrice : '',
+      discount: prod.discount || prod.discount_tag || '',
       unit: prod.unit || '1 Unit',
       unitPrices: prod.unitPrices || '',
-      image: prod.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400',
-      stockCount: prod.stockCount !== undefined ? String(prod.stockCount) : '100',
+      image: prod.image || prod.image_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400',
+      stockCount: prod.stockCount !== undefined ? String(prod.stockCount) : (prod.stock_count !== undefined ? String(prod.stock_count) : '100'),
       code: prod.code || prod.Code || '',
       gstPercent: prod.gstPercent !== undefined ? String(prod.gstPercent) : (prod.gst_percent !== undefined ? String(prod.gst_percent) : '5')
     });
@@ -272,6 +414,65 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
     setTimeout(() => {
       document.getElementById('product-form-container')?.scrollIntoView({ behavior: 'smooth' });
     }, 150);
+  };
+
+  // Open responsive quick edit modal with all 11 fields
+  const openQuickEdit = (prod) => {
+    setQuickEditProduct({
+      id: prod.id,
+      name: prod.nameEn || prod.nameHi || prod.name || '',
+      category: prod.category || 'vegetables',
+      brandTag: prod.brand || prod.subEn || prod.subHi || 'General',
+      price: prod.price !== undefined ? prod.price : '',
+      originalPrice: prod.originalPrice !== undefined && prod.originalPrice !== null ? prod.originalPrice : '',
+      discount: prod.discount || prod.discount_tag || '',
+      unit: prod.unit || '1 Unit',
+      unitPrices: prod.unitPrices || '',
+      image: prod.image || prod.image_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400',
+      stockCount: prod.stockCount !== undefined ? String(prod.stockCount) : (prod.stock_count !== undefined ? String(prod.stock_count) : '100'),
+      code: prod.code || prod.Code || '',
+      gstPercent: prod.gstPercent !== undefined ? String(prod.gstPercent) : (prod.gst_percent !== undefined ? String(prod.gst_percent) : '5')
+    });
+  };
+
+  const handleQuickEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!quickEditProduct) return;
+    setIsSavingQuickEdit(true);
+    try {
+      const existing = products.find(p => p.id === quickEditProduct.id);
+      const finalCode = (quickEditProduct.code && String(quickEditProduct.code).trim())
+        ? String(quickEditProduct.code).trim()
+        : (existing && (existing.code || existing.Code) ? (existing.code || existing.Code) : '');
+
+      const payload = {
+        nameEn: String(quickEditProduct.name || '').trim(),
+        nameHi: String(quickEditProduct.name || '').trim(),
+        category: quickEditProduct.category,
+        brand: quickEditProduct.brandTag || 'Fresh',
+        subEn: quickEditProduct.brandTag || 'Fresh',
+        subHi: quickEditProduct.brandTag || 'ताजा',
+        price: Number(quickEditProduct.price),
+        originalPrice: quickEditProduct.originalPrice ? Number(quickEditProduct.originalPrice) : null,
+        discount: quickEditProduct.discount || null,
+        unit: quickEditProduct.unit || '1 Unit',
+        unitPrices: quickEditProduct.unitPrices || '',
+        packEn: quickEditProduct.unit ? quickEditProduct.unit.split(',')[0].trim() : '1 Unit',
+        packHi: quickEditProduct.unit ? quickEditProduct.unit.split(',')[0].trim() : '1 Unit',
+        image: quickEditProduct.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400',
+        stockCount: quickEditProduct.stockCount !== '' && quickEditProduct.stockCount !== undefined ? Number(quickEditProduct.stockCount) : 100,
+        code: finalCode,
+        gstPercent: quickEditProduct.gstPercent !== '' && quickEditProduct.gstPercent !== undefined ? Number(quickEditProduct.gstPercent) : 5
+      };
+
+      await updateProduct(quickEditProduct.id, payload);
+      setQuickEditProduct(null);
+    } catch (err) {
+      console.error("Error updating product:", err);
+      alert("Failed to update product: " + (err.message || "Unknown error"));
+    } finally {
+      setIsSavingQuickEdit(false);
+    }
   };
 
   const handleDelete = (id) => {
@@ -284,17 +485,14 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
     setProductForm(prev => ({ ...prev, image: imageUrl }));
   };
 
-  // Excel Upload Parser
-  const handleBulkExcelUpload = (e) => {
+  // Bulk Excel Upload Parser with 11 Fields Validation & Deduplication
+  const handleBulkExcelUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (!bulkCategory) {
-      alert("Please select a target category first.");
-      return;
-    }
 
+    setIsUploading(true);
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
         const bstr = evt.target.result;
         const wb = XLSX.read(bstr, { type: 'binary' });
@@ -302,208 +500,61 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
         const ws = wb.Sheets[wsname];
         const rows = XLSX.utils.sheet_to_json(ws);
 
-        let count = 0;
-        rows.forEach(row => {
-          const name = row.Name || row.name || '';
-          if (!name) return;
+        if (!Array.isArray(rows) || rows.length === 0) {
+          alert(isHindi ? "अपलोड की गई एक्सेल शीट खाली है।" : "Uploaded spreadsheet is empty.");
+          setIsUploading(false);
+          return;
+        }
 
-          const price = Number(row.Price || row.price || 0);
-          const originalPrice = row.OriginalPrice || row.originalPrice ? Number(row.OriginalPrice || row.originalPrice) : null;
-          const discount = row.Discount || row.discount || null;
-          const gstPercentRaw = row.GST || row.gst || row['GST (%)'] || row['GST%'] || row.GstPercent || row.gst_percent || 5;
-          const gstPercent = Number(String(gstPercentRaw).replace(/[^0-9.]/g, '')) || 5;
-          const unit = row.Unit || row.unit || '1 Unit';
-          const unitPrices = row.UnitPrices || row.unitPrices || '';
-          const brand = row.Brand || row.brand || row.BrandTag || row.brandTag || 'Fresh';
-          
-          let code = row.Code || row.code || row.ProductCode || row.product_code || '';
-          if (!code) {
-            const prefix = bulkCategory === 'babycare' ? 'SW-BY' : (bulkCategory === 'chocolate' ? 'SW-CF' : (bulkCategory === 'beverage' ? 'SW-BV' : 'SW-GEN'));
-            code = `${prefix}${String(Math.floor(1000 + Math.random() * 9000))}`;
-          } else if (!code.startsWith('SW-')) {
-            const prefix = bulkCategory === 'babycare' ? 'SW-BY' : (bulkCategory === 'chocolate' ? 'SW-CF' : (bulkCategory === 'beverage' ? 'SW-BV' : 'SW-GEN'));
-            code = `${prefix}${code}`;
-          }
-
-          let image = row.Image || row.image || '';
-          if (!image || image.includes('photo-1542838132-92c53300491e') || image === '') {
-            const lowerName = name.toLowerCase();
-            if (bulkCategory === 'babycare') {
-              image = 'https://images.unsplash.com/photo-1519689680058-324335c77ebe?auto=format&fit=crop&q=80&w=400';
-              if (lowerName.includes("pants") || lowerName.includes("huggies") || lowerName.includes("diaper")) {
-                image = "https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&q=80&w=400";
-              } else if (lowerName.includes("powder") || lowerName.includes("lotion") || lowerName.includes("cream") || lowerName.includes("oil") || lowerName.includes("tail")) {
-                image = "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400";
-              } else if (lowerName.includes("soap") || lowerName.includes("shampoo") || lowerName.includes("wipes")) {
-                image = "https://images.unsplash.com/photo-1546015720-b8b30df5aa27?auto=format&fit=crop&q=80&w=400";
-              }
-            } else if (bulkCategory === 'beverage') {
-              image = "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&q=80&w=400";
-              if (lowerName.includes("tea") || lowerName.includes("chai") || lowerName.includes("coffee") || lowerName.includes("nescafe")) {
-                image = "https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&q=80&w=400";
-              } else if (lowerName.includes("juice") || lowerName.includes("frooti") || lowerName.includes("maaza") || lowerName.includes("real") || lowerName.includes("fizz") || lowerName.includes("appy")) {
-                image = "https://images.unsplash.com/photo-1621506289937-a8e4df240d0b?auto=format&fit=crop&q=80&w=400";
-              } else if (lowerName.includes("coke") || lowerName.includes("cola") || lowerName.includes("limca") || lowerName.includes("sprite") || lowerName.includes("thums") || lowerName.includes("monster") || lowerName.includes("energy")) {
-                image = "https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&q=80&w=400";
-              } else if (lowerName.includes("water") || lowerName.includes("kinley") || lowerName.includes("coconut")) {
-                image = "https://images.unsplash.com/photo-1548839140-29a749e1cf4d?auto=format&fit=crop&q=80&w=400";
-              } else if (lowerName.includes("milk") || lowerName.includes("lassi") || lowerName.includes("buttermilk") || lowerName.includes("smoodh")) {
-                image = "https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&q=80&w=400";
-              } else if (lowerName.includes("bournvita") || lowerName.includes("complan") || lowerName.includes("glucoplus") || lowerName.includes("powder")) {
-                image = "https://images.unsplash.com/photo-1572490122747-3968b75cc699?auto=format&fit=crop&q=80&w=400";
-              }
-            } else if (bulkCategory === 'chocolate') {
-              image = "https://images.unsplash.com/photo-1581798459219-318e76aecc7b?auto=format&fit=crop&q=80&w=400";
-              if (lowerName.includes("star") || lowerName.includes("barone") || lowerName.includes("kit kat") || lowerName.includes("munch") || lowerName.includes("chocolate") || lowerName.includes("ferrero") || lowerName.includes("cdm") || lowerName.includes("choclairs")) {
-                image = "https://images.unsplash.com/photo-1549007994-cb92ca87df67?auto=format&fit=crop&q=80&w=400";
-              } else if (lowerName.includes("cone") || lowerName.includes("cup") || lowerName.includes("bites") || lowerName.includes("cremy") || lowerName.includes("vanilla") || lowerName.includes("mango double") || lowerName.startsWith("cb ")) {
-                image = "https://images.unsplash.com/photo-1501443762994-82bd5dace89a?auto=format&fit=crop&q=80&w=400";
-              } else if (lowerName.includes("candy") || lowerName.includes("alpenliebe") || lowerName.includes("chupa") || lowerName.includes("toffee") || lowerName.includes("kopiko") || lowerName.includes("mentos") || lowerName.includes("gum") || lowerName.includes("happydent")) {
-                image = "https://images.unsplash.com/photo-1581798459219-318e76aecc7b?auto=format&fit=crop&q=80&w=400";
-              }
-            } else {
-              image = "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400";
-            }
-          }
-
-          addProduct({
-            nameEn: name,
-            nameHi: name,
-            category: bulkCategory,
-            subEn: brand,
-            subHi: brand,
-            price,
-            originalPrice,
-            discount,
-            unit,
-            unitPrices,
-            packEn: unit.split(',')[0].trim(),
-            packHi: unit.split(',')[0].trim(),
-            image,
-            code,
-            stockCount: 100,
-            gstPercent: gstPercent
-          });
-          count++;
+        const result = await bulkUploadProducts(rows, {
+          mode: importMode,
+          defaultCategory: bulkCategory
         });
 
-        alert(`✓ Successfully imported ${count} items into the "${bulkCategory}" category!`);
-        e.target.value = ""; // reset file input
+        setUploadResult(result);
+        setShowResultModal(true);
+        e.target.value = "";
       } catch (err) {
-        console.error(err);
-        alert("Failed to parse spreadsheet file. Please check column headers (Name, Price, OriginalPrice, Discount, Unit, UnitPrices, Brand, Image, GST).");
+        console.error("Bulk Excel Upload Error:", err);
+        alert(err.message || "Failed to process Excel upload. Please verify file columns.");
+      } finally {
+        setIsUploading(false);
       }
     };
     reader.readAsBinaryString(file);
   };
 
-  // Bulk JSON Upload Parser
-  const handleBulkJsonUpload = (e) => {
+  // Bulk JSON Upload Parser with 11 Fields Validation & Deduplication
+  const handleBulkJsonUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (!bulkCategory) {
-      alert("Please select a target category first.");
-      return;
-    }
 
+    setIsUploading(true);
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
         const parsed = JSON.parse(evt.target.result);
         const arrayData = Array.isArray(parsed) ? parsed : [parsed];
 
-        let count = 0;
-        arrayData.forEach(item => {
-          const name = item.name || item.nameEn || item.nameHi || item.Name || '';
-          if (!name) return;
+        if (arrayData.length === 0) {
+          alert(isHindi ? "JSON फ़ाइल खाली है।" : "JSON file contains no products.");
+          setIsUploading(false);
+          return;
+        }
 
-          const price = Number(item.price || item.Price || 0);
-          const originalPrice = item.originalPrice || item.OriginalPrice ? Number(item.originalPrice || item.OriginalPrice) : null;
-          const discount = item.discount || item.Discount || null;
-          const gstPercentRaw = item.gstPercent || item.gst || item.gst_percent || item.GST || item.GstPercent || 5;
-          const gstPercent = Number(String(gstPercentRaw).replace(/[^0-9.]/g, '')) || 5;
-          const unit = item.unit || item.Unit || '1 Unit';
-          const unitPrices = item.unitPrices || item.UnitPrices || '';
-          const brand = item.brand || item.Brand || item.brandTag || 'Fresh';
-          
-          let code = item.code || item.Code || item.product_code || item.productCode || '';
-          if (!code) {
-            const prefix = bulkCategory === 'babycare' ? 'SW-BY' : (bulkCategory === 'chocolate' ? 'SW-CF' : (bulkCategory === 'beverage' ? 'SW-BV' : 'SW-GEN'));
-            code = `${prefix}${String(Math.floor(1000 + Math.random() * 9000))}`;
-          } else if (!code.startsWith('SW-')) {
-            const prefix = bulkCategory === 'babycare' ? 'SW-BY' : (bulkCategory === 'chocolate' ? 'SW-CF' : (bulkCategory === 'beverage' ? 'SW-BV' : 'SW-GEN'));
-            code = `${prefix}${code}`;
-          }
-
-          let image = item.image || item.Image || '';
-          if (!image || image.includes('photo-1542838132-92c53300491e') || image === '') {
-            const lowerName = name.toLowerCase();
-            if (bulkCategory === 'babycare') {
-              image = 'https://images.unsplash.com/photo-1519689680058-324335c77ebe?auto=format&fit=crop&q=80&w=400';
-              if (lowerName.includes("pants") || lowerName.includes("huggies") || lowerName.includes("diaper")) {
-                image = "https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&q=80&w=400";
-              } else if (lowerName.includes("powder") || lowerName.includes("lotion") || lowerName.includes("cream") || lowerName.includes("oil") || lowerName.includes("tail")) {
-                image = "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400";
-              } else if (lowerName.includes("soap") || lowerName.includes("shampoo") || lowerName.includes("wipes")) {
-                image = "https://images.unsplash.com/photo-1546015720-b8b30df5aa27?auto=format&fit=crop&q=80&w=400";
-              }
-            } else if (bulkCategory === 'beverage') {
-              image = "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&q=80&w=400";
-              if (lowerName.includes("tea") || lowerName.includes("chai") || lowerName.includes("coffee") || lowerName.includes("nescafe")) {
-                image = "https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&q=80&w=400";
-              } else if (lowerName.includes("juice") || lowerName.includes("frooti") || lowerName.includes("maaza") || lowerName.includes("real") || lowerName.includes("fizz") || lowerName.includes("appy")) {
-                image = "https://images.unsplash.com/photo-1621506289937-a8e4df240d0b?auto=format&fit=crop&q=80&w=400";
-              } else if (lowerName.includes("coke") || lowerName.includes("cola") || lowerName.includes("limca") || lowerName.includes("sprite") || lowerName.includes("thums") || lowerName.includes("monster") || lowerName.includes("energy")) {
-                image = "https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&q=80&w=400";
-              } else if (lowerName.includes("water") || lowerName.includes("kinley") || lowerName.includes("coconut")) {
-                image = "https://images.unsplash.com/photo-1548839140-29a749e1cf4d?auto=format&fit=crop&q=80&w=400";
-              } else if (lowerName.includes("milk") || lowerName.includes("lassi") || lowerName.includes("buttermilk") || lowerName.includes("smoodh")) {
-                image = "https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&q=80&w=400";
-              } else if (lowerName.includes("bournvita") || lowerName.includes("complan") || lowerName.includes("glucoplus") || lowerName.includes("powder")) {
-                image = "https://images.unsplash.com/photo-1572490122747-3968b75cc699?auto=format&fit=crop&q=80&w=400";
-              }
-            } else if (bulkCategory === 'chocolate') {
-              image = "https://images.unsplash.com/photo-1581798459219-318e76aecc7b?auto=format&fit=crop&q=80&w=400";
-              if (lowerName.includes("star") || lowerName.includes("barone") || lowerName.includes("kit kat") || lowerName.includes("munch") || lowerName.includes("chocolate") || lowerName.includes("ferrero") || lowerName.includes("cdm") || lowerName.includes("choclairs")) {
-                image = "https://images.unsplash.com/photo-1549007994-cb92ca87df67?auto=format&fit=crop&q=80&w=400";
-              } else if (lowerName.includes("cone") || lowerName.includes("cup") || lowerName.includes("bites") || lowerName.includes("cremy") || lowerName.includes("vanilla") || lowerName.includes("mango double") || lowerName.startsWith("cb ")) {
-                image = "https://images.unsplash.com/photo-1501443762994-82bd5dace89a?auto=format&fit=crop&q=80&w=400";
-              } else if (lowerName.includes("candy") || lowerName.includes("alpenliebe") || lowerName.includes("chupa") || lowerName.includes("toffee") || lowerName.includes("kopiko") || lowerName.includes("mentos") || lowerName.includes("gum") || lowerName.includes("happydent")) {
-                image = "https://images.unsplash.com/photo-1581798459219-318e76aecc7b?auto=format&fit=crop&q=80&w=400";
-              }
-            } else {
-              image = "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400";
-            }
-          }
-
-          const stockCount = item.stockCount !== undefined ? Number(item.stockCount) : 100;
-
-          addProduct({
-            nameEn: name,
-            nameHi: item.nameHi || name,
-            category: bulkCategory,
-            subEn: brand,
-            subHi: item.brandHi || brand,
-            price,
-            originalPrice,
-            discount,
-            unit,
-            unitPrices,
-            packEn: unit.split(',')[0].trim(),
-            packHi: unit.split(',')[0].trim(),
-            image,
-            code,
-            stockCount,
-            gstPercent: gstPercent
-          });
-          count++;
+        const result = await bulkUploadProducts(arrayData, {
+          mode: importMode,
+          defaultCategory: bulkCategory
         });
 
-        alert(`✓ Successfully loaded and registered ${count} catalog items from JSON into category "${bulkCategory}"!`);
-        e.target.value = ""; // reset file input
+        setUploadResult(result);
+        setShowResultModal(true);
+        e.target.value = "";
       } catch (err) {
-        console.error(err);
-        alert("❌ Failed to parse JSON file. Ensure it contains a valid array of products.");
+        console.error("Bulk JSON Upload Error:", err);
+        alert(err.message || "Failed to parse JSON file. Ensure it contains a valid array of product objects.");
+      } finally {
+        setIsUploading(false);
       }
     };
     reader.readAsText(file);
@@ -556,19 +607,423 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
   return (
     <div className="space-y-8 animate-fade-in text-white/90">
       
-      {/* 1. Catalog Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
-        <div className="space-y-0.5">
-          <h2 className="text-lg font-black text-white flex items-center gap-2">
-            <Package className="h-5 w-5 text-cyan-400" />
-            <span>Product Inventory Catalog</span>
-          </h2>
-          <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">
-            Register and manage supermarket grocery essentials & custom pack weights
-          </p>
+      {/* 1. Header & Navigation Sub-Tabs */}
+      <div className="space-y-4 border-b border-white/10 pb-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-0.5">
+            <h2 className="text-lg font-black text-white flex items-center gap-2">
+              <Package className="h-5 w-5 text-cyan-400" />
+              <span>{isHindi ? "उत्पाद एवं स्टॉक प्रबंधन" : "Product & Inventory Management"}</span>
+            </h2>
+            <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">
+              {isHindi 
+                ? "कैटलॉग, थोक स्टॉक त्वरित अपडेट, और 11-फील्ड एक्सेल/जेसन बल्क आयात" 
+                : "Catalog, bulk stock quick updater, and 11-field Excel/JSON bulk ingestion"}
+            </p>
+          </div>
+
+          {/* Quick Export & Sample Download Shortcuts */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={downloadSampleProductsExcel}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-amber-300 font-extrabold uppercase text-[10px] tracking-wider rounded-xl border border-amber-500/30 transition-all cursor-pointer shadow-sm active:scale-95"
+              title="Download standard 11-field Excel sample (.xlsx)"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span>Excel Sample (11 Fields)</span>
+            </button>
+            <button
+              type="button"
+              onClick={downloadSampleProductsJson}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-cyan-300 font-extrabold uppercase text-[10px] tracking-wider rounded-xl border border-cyan-500/30 transition-all cursor-pointer shadow-sm active:scale-95"
+              title="Download standard 11-field JSON sample (.json)"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span>JSON Sample</span>
+            </button>
+            <button
+              type="button"
+              onClick={exportCatalogToExcel}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-emerald-300 font-extrabold uppercase text-[10px] tracking-wider rounded-xl border border-emerald-500/30 transition-all cursor-pointer shadow-sm active:scale-95"
+              title="Export all current catalog products with all 11 fields"
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+              <span>Export Catalog ({products.length})</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Primary Sub-Tabs Navigation Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-950/80 border border-white/10 p-2 rounded-2xl">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              id="subview-catalog-tab"
+              onClick={() => setActiveSubView('catalog')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                activeSubView === 'catalog'
+                  ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Package className="h-4 w-4" />
+              <span>{isHindi ? "उत्पाद कैटलॉग" : "Product Catalog"}</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold bg-slate-950/40">
+                {products.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              id="subview-bulk-stock-tab"
+              onClick={() => setActiveSubView('bulk-stock')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                activeSubView === 'bulk-stock'
+                  ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Layers className="h-4 w-4" />
+              <span>{isHindi ? "थोक स्टॉक अपडेटर" : "Bulk Stock Manager"}</span>
+              {(lowStockCount > 0 || outOfStockCount > 0) && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold bg-rose-500 text-white">
+                  {outOfStockCount > 0 ? `${outOfStockCount} Out` : `${lowStockCount} Low`}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              id="subview-bulk-import-tab"
+              onClick={() => setActiveSubView('bulk-import')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                activeSubView === 'bulk-import'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              <span>{isHindi ? "थोक एक्सेल व जेसन आयात" : "Bulk Excel & JSON Import"}</span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded font-mono font-black bg-slate-950/40 text-emerald-200">
+                11 Fields
+              </span>
+            </button>
+          </div>
+
+          <div className="text-[11px] text-slate-400 font-medium px-2">
+            {activeSubView === 'catalog' && <span>Viewing & editing live store SKU inventory</span>}
+            {activeSubView === 'bulk-stock' && <span className="text-amber-300 font-bold">Quick mass stock adjustment ledger</span>}
+            {activeSubView === 'bulk-import' && <span className="text-emerald-300 font-bold">11-field validated deduplicating importer</span>}
+          </div>
         </div>
       </div>
 
+      {/* Subview 1: Bulk Stock Manager */}
+      {activeSubView === 'bulk-stock' && (
+        <BulkStockManager />
+      )}
+
+      {/* Subview 2: Bulk Excel & JSON Import Studio */}
+      {activeSubView === 'bulk-import' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Header Banner */}
+          <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/40 border border-emerald-500/20 p-6 rounded-3xl shadow-xl space-y-3">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-black uppercase tracking-wider">
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  <span>Validation & Code Protection Active</span>
+                </div>
+                <h3 className="text-base font-black text-white">
+                  Bulk Product Ingestion Studio (Excel & JSON)
+                </h3>
+                <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+                  Upload complete inventory spreadsheets or JSON data arrays conforming to the standardized 11-field specification. The engine validates each row, protects existing product codes (e.g. <span className="font-mono text-cyan-300">SP000001</span>), and prevents duplicate product names.
+                </p>
+              </div>
+
+              {/* Mode Selector */}
+              <div className="bg-slate-950/90 border border-white/10 p-4 rounded-2xl space-y-3 shrink-0 md:w-80">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-300 block flex items-center gap-1.5">
+                  <Filter className="h-3.5 w-3.5 text-cyan-400" />
+                  <span>Conflict & Duplicate Policy</span>
+                </span>
+                
+                <label className="flex items-start gap-2.5 cursor-pointer text-xs text-slate-300">
+                  <input
+                    type="radio"
+                    name="bulkImportMode"
+                    value="update_existing"
+                    checked={importMode === 'update_existing'}
+                    onChange={() => setImportMode('update_existing')}
+                    className="mt-0.5 text-cyan-400 focus:ring-0"
+                  />
+                  <div>
+                    <span className="font-bold text-white block">Smart Update & Protect</span>
+                    <span className="text-[10px] text-slate-400 block leading-tight">
+                      Update price, original price, stock & details if exists. Code is strictly preserved; no duplicate names created.
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 cursor-pointer text-xs text-slate-300">
+                  <input
+                    type="radio"
+                    name="bulkImportMode"
+                    value="skip_existing"
+                    checked={importMode === 'skip_existing'}
+                    onChange={() => setImportMode('skip_existing')}
+                    className="mt-0.5 text-amber-400 focus:ring-0"
+                  />
+                  <div>
+                    <span className="font-bold text-white block">Strict Skip (Do Nothing)</span>
+                    <span className="text-[10px] text-slate-400 block leading-tight">
+                      If code or name already exists, do nothing (skip row completely). Only enter brand new products.
+                    </span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Target Category Selector */}
+            <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-white/5">
+              <span className="text-[11px] font-bold text-slate-400">Default Category (for unassigned items):</span>
+              <select
+                value={bulkCategory}
+                onChange={(e) => setBulkCategory(e.target.value)}
+                className="bg-slate-950 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white outline-none cursor-pointer"
+              >
+                {categories.filter(c => c.id !== 'all').map(cat => (
+                  <option key={cat.id} value={cat.id}>📦 {cat.nameEn || cat.id}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Upload Dropzones */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Excel Upload Card */}
+            <div className="bg-slate-900 border border-amber-500/20 p-6 rounded-3xl space-y-4 shadow-xl flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                      <FileSpreadsheet className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-white">Excel Spreadsheet Import</h4>
+                      <p className="text-[10px] text-slate-400 font-mono">Accepts .xlsx, .xls</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={downloadSampleProductsExcel}
+                    className="px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-black text-[9px] uppercase tracking-wider rounded-lg border border-amber-500/30 transition-all cursor-pointer"
+                  >
+                    📥 Sample Excel
+                  </button>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Bulk import or update products using Microsoft Excel. Supports all 11 columns matching the standard Swastik supermarket schema.
+                </p>
+              </div>
+
+              <div className="border-2 border-dashed border-amber-500/30 rounded-2xl p-6 text-center space-y-3 hover:border-amber-400 transition-all relative bg-slate-950/40">
+                <FileSpreadsheet className="h-8 w-8 text-amber-400 mx-auto opacity-70" />
+                <div className="space-y-1">
+                  <span className="text-xs font-bold text-white block">Select or drop Excel catalog file</span>
+                  <span className="text-[10px] text-slate-500 font-mono block">Columns: Name, Brand, Category, Units, Price, OriginalPrice, Discount, Stock, Code, GST, Image</span>
+                </div>
+                <div className="relative inline-block w-full max-w-xs">
+                  <input
+                    type="file"
+                    accept=".xlsx, .xls"
+                    disabled={isUploading}
+                    onChange={handleBulkExcelUpload}
+                    className="opacity-0 absolute inset-0 cursor-pointer w-full h-full disabled:cursor-not-allowed"
+                  />
+                  <div className={`py-2.5 px-4 rounded-xl text-xs font-black uppercase tracking-wider text-center transition-all ${
+                    isUploading ? 'bg-slate-800 text-slate-500' : 'bg-amber-400 text-slate-950 hover:bg-amber-300 shadow-md shadow-amber-400/20 cursor-pointer'
+                  }`}>
+                    {isUploading ? "Processing Spreadsheet..." : "Choose .xlsx File"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* JSON Upload Card */}
+            <div className="bg-slate-900 border border-cyan-500/20 p-6 rounded-3xl space-y-4 shadow-xl flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                      <Layers className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-white">JSON Catalog Import</h4>
+                      <p className="text-[10px] text-slate-400 font-mono">Accepts .json</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={downloadSampleProductsJson}
+                    className="px-2.5 py-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 font-black text-[9px] uppercase tracking-wider rounded-lg border border-cyan-500/30 transition-all cursor-pointer"
+                  >
+                    📥 Sample JSON
+                  </button>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Import array of product objects directly via JSON. Ideal for API data dumps, POS migrations, and system backups.
+                </p>
+              </div>
+
+              <div className="border-2 border-dashed border-cyan-500/30 rounded-2xl p-6 text-center space-y-3 hover:border-cyan-400 transition-all relative bg-slate-950/40">
+                <Layers className="h-8 w-8 text-cyan-400 mx-auto opacity-70" />
+                <div className="space-y-1">
+                  <span className="text-xs font-bold text-white block">Select or drop JSON array file</span>
+                  <span className="text-[10px] text-slate-500 font-mono block">Format: Array of objects with the 11 schema keys</span>
+                </div>
+                <div className="relative inline-block w-full max-w-xs">
+                  <input
+                    type="file"
+                    accept=".json"
+                    disabled={isUploading}
+                    onChange={handleBulkJsonUpload}
+                    className="opacity-0 absolute inset-0 cursor-pointer w-full h-full disabled:cursor-not-allowed"
+                  />
+                  <div className={`py-2.5 px-4 rounded-xl text-xs font-black uppercase tracking-wider text-center transition-all ${
+                    isUploading ? 'bg-slate-800 text-slate-500' : 'bg-cyan-400 text-slate-950 hover:bg-cyan-300 shadow-md shadow-cyan-400/20 cursor-pointer'
+                  }`}>
+                    {isUploading ? "Processing JSON..." : "Choose .json File"}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 11 Fields Standard Table Specification */}
+          <div className="bg-slate-900 border border-white/10 rounded-3xl p-6 shadow-xl space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-3">
+              <div>
+                <h4 className="text-sm font-black text-white flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-cyan-400" />
+                  <span>The 11-Field Standard Specification</span>
+                </h4>
+                <p className="text-[11px] text-slate-400">
+                  Your Excel sheet columns or JSON object keys must include or map to these 11 exact fields:
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={downloadSampleProductsExcel}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 text-[10px] font-black uppercase rounded-xl border border-white/10 cursor-pointer"
+                >
+                  Download .xlsx Template
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-950 text-[10px] font-black uppercase text-slate-400 border-b border-white/10 font-mono tracking-wider">
+                  <tr>
+                    <th className="p-3">#</th>
+                    <th className="p-3">Field / Column Name</th>
+                    <th className="p-3">Type</th>
+                    <th className="p-3">Sample Value</th>
+                    <th className="p-3">Validation Rule</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5 font-medium text-slate-300">
+                  <tr>
+                    <td className="p-3 font-mono text-cyan-400">1</td>
+                    <td className="p-3 font-bold text-white">Product Display Name</td>
+                    <td className="p-3 font-mono text-[10px] text-slate-400">String (Required)</td>
+                    <td className="p-3 font-mono text-emerald-400">Premium Alphonso Mango</td>
+                    <td className="p-3 text-[11px] text-slate-400">Primary label; deduplicated against existing names</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 font-mono text-cyan-400">2</td>
+                    <td className="p-3 font-bold text-white">Brand / Segment Tag</td>
+                    <td className="p-3 font-mono text-[10px] text-slate-400">String</td>
+                    <td className="p-3 font-mono text-emerald-400">Ratnagiri Farms / Daawat</td>
+                    <td className="p-3 text-[11px] text-slate-400">Brand badge shown on product card</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 font-mono text-cyan-400">3</td>
+                    <td className="p-3 font-bold text-white">Product Department Category</td>
+                    <td className="p-3 font-mono text-[10px] text-slate-400">String</td>
+                    <td className="p-3 font-mono text-emerald-400">fruits, grocery, vegetables, chocolate</td>
+                    <td className="p-3 text-[11px] text-slate-400">Matches category slug or assigns chosen target category</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 font-mono text-cyan-400">4</td>
+                    <td className="p-3 font-bold text-white">Available Weight / Product Units</td>
+                    <td className="p-3 font-mono text-[10px] text-slate-400">String</td>
+                    <td className="p-3 font-mono text-emerald-400">1kg, 5kg / 1 Dozen, 6 Pcs</td>
+                    <td className="p-3 text-[11px] text-slate-400">Comma-separated pack weights for weight picker pills</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 font-mono text-cyan-400">5</td>
+                    <td className="p-3 font-bold text-white">Base Price / Default rate (₹)</td>
+                    <td className="p-3 font-mono text-[10px] text-slate-400">Number (Required)</td>
+                    <td className="p-3 font-mono text-emerald-400">650</td>
+                    <td className="p-3 text-[11px] text-slate-400">Selling price in Indian Rupees (₹)</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 font-mono text-cyan-400">6</td>
+                    <td className="p-3 font-bold text-white">Original Price crossed out (₹)</td>
+                    <td className="p-3 font-mono text-[10px] text-slate-400">Number (Optional)</td>
+                    <td className="p-3 font-mono text-emerald-400">800</td>
+                    <td className="p-3 text-[11px] text-slate-400">MRP price struck through to demonstrate customer savings</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 font-mono text-cyan-400">7</td>
+                    <td className="p-3 font-bold text-white">Discount ribbon label text</td>
+                    <td className="p-3 font-mono text-[10px] text-slate-400">String (Optional)</td>
+                    <td className="p-3 font-mono text-emerald-400">18% OFF / Save ₹25</td>
+                    <td className="p-3 text-[11px] text-slate-400">Highlighted promotional ribbon badge on card</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 font-mono text-cyan-400">8</td>
+                    <td className="p-3 font-bold text-white">Physical Stock Count (Qty)</td>
+                    <td className="p-3 font-mono text-[10px] text-slate-400">Number</td>
+                    <td className="p-3 font-mono text-emerald-400">50</td>
+                    <td className="p-3 text-[11px] text-slate-400">Remaining stock inventory units in warehouse/store</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 font-mono text-cyan-400">9</td>
+                    <td className="p-3 font-bold text-white">Unique Product Code (e.g. SP000001)</td>
+                    <td className="p-3 font-mono text-[10px] text-slate-400">String (Protected)</td>
+                    <td className="p-3 font-mono text-emerald-400">SP000001</td>
+                    <td className="p-3 text-[11px] text-slate-400">Strictly preserved upon updates; auto-assigned if blank</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 font-mono text-cyan-400">10</td>
+                    <td className="p-3 font-bold text-white">GST Rate (%) / जीएसटी दर</td>
+                    <td className="p-3 font-mono text-[10px] text-slate-400">Number</td>
+                    <td className="p-3 font-mono text-emerald-400">0, 5, 12, 18, 28</td>
+                    <td className="p-3 text-[11px] text-slate-400">Tax percentage recorded on invoice & GST reports</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 font-mono text-cyan-400">11</td>
+                    <td className="p-3 font-bold text-white">Product Illustration Image URL</td>
+                    <td className="p-3 font-mono text-[10px] text-slate-400">URL / String</td>
+                    <td className="p-3 font-mono text-emerald-400">https://images.unsplash.com/...</td>
+                    <td className="p-3 text-[11px] text-slate-400">Direct image link or Cloudflare R2 object URL</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Subview 3: Standard Product Catalog */}
+      {activeSubView === 'catalog' && (
+        <>
       {userRole !== 'customer' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
@@ -1159,22 +1614,41 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
                     {userRole !== 'customer' ? (
                       <div className="flex justify-end gap-1.5">
                         <button 
-                          onClick={() => startEditProduct(p)}
-                          className="bg-white/5 border border-white/10 hover:bg-cyan-400 hover:text-slate-950 p-1.5 rounded-lg text-slate-300 transition-all cursor-pointer"
-                          title="Edit product SKU parameters"
+                          type="button"
+                          onClick={() => setViewingProduct(p)}
+                          className="bg-cyan-500/10 border border-cyan-500/20 hover:bg-cyan-500/25 p-1.5 rounded-lg text-cyan-300 transition-all cursor-pointer shadow-sm"
+                          title="View 11-Field Product Details"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => openQuickEdit(p)}
+                          className="bg-white/5 border border-white/10 hover:bg-cyan-400 hover:text-slate-950 p-1.5 rounded-lg text-slate-300 transition-all cursor-pointer shadow-sm"
+                          title="Edit product parameters (Responsive Modal)"
                         >
                           <Edit3 className="h-3.5 w-3.5" />
                         </button>
                         <button 
+                          type="button"
                           onClick={() => handleDelete(p.id)}
-                          className="bg-red-500/5 border border-red-500/10 hover:bg-red-500/20 hover:border-red-500/30 p-1.5 rounded-lg text-red-400 transition-all active:scale-90 cursor-pointer"
-                          title="Strike off product item"
+                          className="bg-red-500/5 border border-red-500/10 hover:bg-red-500/20 hover:border-red-500/30 p-1.5 rounded-lg text-red-400 transition-all active:scale-90 cursor-pointer shadow-sm"
+                          title="Remove product"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
                     ) : (
-                      <span className="text-[9px] text-slate-500 font-bold uppercase">Locked</span>
+                      <div className="flex justify-end">
+                        <button 
+                          type="button"
+                          onClick={() => setViewingProduct(p)}
+                          className="bg-cyan-500/10 border border-cyan-500/20 hover:bg-cyan-500/25 p-1.5 rounded-lg text-cyan-300 transition-all cursor-pointer shadow-sm"
+                          title="View 11-Field Product Details"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -1261,7 +1735,550 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole 
           </div>
         )}
       </div>
+      </>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 4. MODAL 1: Bulk Ingestion Report Modal (Responsive & Scrollable)         */}
+      {/* ========================================================================= */}
+      {showResultModal && uploadResult && (
+        <div 
+          id="bulk-result-modal"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 bg-slate-950/85 backdrop-blur-md animate-fade-in overflow-y-auto"
+        >
+          <div className="bg-slate-900 border border-white/15 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[calc(100dvh-2rem)] sm:max-h-[90vh] my-auto animate-scale-in">
+            {/* Header */}
+            <div className="p-4 sm:p-6 border-b border-white/10 flex items-center justify-between bg-slate-950/60 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                  <CheckCircle2 className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-white">Bulk Ingestion Validation Report</h3>
+                  <p className="text-[11px] text-slate-400 font-mono">
+                    Mode: {uploadResult.mode === 'skip_existing' ? 'Strict Skip (Do Nothing If Exists)' : 'Smart Update & Protect'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowResultModal(false)}
+                className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-white/5 transition-all cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Body */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1 overscroll-contain">
+              {/* Summary Stats Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="bg-slate-950/80 border border-white/10 p-3.5 rounded-2xl space-y-1 text-center">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Total Parsed</span>
+                  <span className="text-xl font-black text-white font-mono">{uploadResult.totalRows || 0}</span>
+                </div>
+                <div className="bg-slate-950/80 border border-emerald-500/30 p-3.5 rounded-2xl space-y-1 text-center">
+                  <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider block">New Inserted</span>
+                  <span className="text-xl font-black text-emerald-400 font-mono">+{uploadResult.insertedCount || 0}</span>
+                </div>
+                <div className="bg-slate-950/80 border border-amber-500/30 p-3.5 rounded-2xl space-y-1 text-center">
+                  <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider block">Updated Existing</span>
+                  <span className="text-xl font-black text-amber-400 font-mono">↻ {uploadResult.updatedCount || 0}</span>
+                </div>
+                <div className="bg-slate-950/80 border border-slate-700 p-3.5 rounded-2xl space-y-1 text-center">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Skipped Existing</span>
+                  <span className="text-xl font-black text-slate-400 font-mono">{uploadResult.skippedCount || 0}</span>
+                </div>
+                <div className="bg-slate-950/80 border border-cyan-500/30 p-3.5 rounded-2xl space-y-1 text-center">
+                  <span className="text-[10px] uppercase font-bold text-cyan-400 tracking-wider block">Codes Preserved</span>
+                  <span className="text-xl font-black text-cyan-400 font-mono">✓ {uploadResult.preservedCodes || uploadResult.updatedCount || 0}</span>
+                </div>
+                <div className="bg-slate-950/80 border border-purple-500/30 p-3.5 rounded-2xl space-y-1 text-center">
+                  <span className="text-[10px] uppercase font-bold text-purple-400 tracking-wider block">Duplicates Averted</span>
+                  <span className="text-xl font-black text-purple-400 font-mono">{uploadResult.preventedDuplicates || uploadResult.updatedCount || 0}</span>
+                </div>
+              </div>
+
+              {/* Status Message */}
+              <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl flex items-start gap-3">
+                <ShieldCheck className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
+                <div className="text-xs text-emerald-300 leading-relaxed">
+                  <span className="font-bold block text-white mb-0.5">Validation Rules Verified:</span>
+                  All rows have been successfully processed through the 11-field standard. Existing product codes were preserved, duplicate names were merged or skipped according to policy, and inventory levels are live.
+                </div>
+              </div>
+
+              {/* Detailed Breakdown Table if available */}
+              {uploadResult.details && uploadResult.details.length > 0 && (
+                <div className="space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                    Item-By-Item Verification Audit ({uploadResult.details.length})
+                  </span>
+                  <div className="max-h-56 overflow-y-auto border border-white/10 rounded-2xl divide-y divide-white/5 bg-slate-950/50">
+                    {uploadResult.details.slice(0, 100).map((d, i) => (
+                      <div key={i} className="p-2.5 flex items-center justify-between text-xs gap-3">
+                        <div className="truncate flex-1">
+                          <span className="font-bold text-white block truncate">{d.name}</span>
+                          <span className="text-[10px] text-slate-500 font-mono">{d.code || 'Auto-Code'} • {d.category}</span>
+                        </div>
+                        <div className="shrink-0 flex items-center gap-2">
+                          <span className={`text-[9px] font-black px-2 py-0.5 rounded-md uppercase font-mono ${
+                            d.action === 'INSERT' 
+                              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                              : (d.action === 'UPDATE' 
+                                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' 
+                                : 'bg-slate-800 text-slate-400 border border-slate-700')
+                          }`}>
+                            {d.action || 'OK'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Fixed Footer */}
+            <div className="p-4 sm:p-5 border-t border-white/10 bg-slate-950/60 flex flex-wrap items-center justify-between gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowResultModal(false);
+                  setActiveSubView('bulk-stock');
+                }}
+                className="px-4 py-2 bg-amber-400 text-slate-950 font-black uppercase text-xs rounded-xl tracking-wider hover:bg-amber-300 transition-all cursor-pointer shadow-md shadow-amber-400/20"
+              >
+                Open Bulk Stock Manager ⚡
+              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowResultModal(false);
+                    setActiveSubView('catalog');
+                  }}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl border border-white/10 transition-all cursor-pointer"
+                >
+                  View in Catalog
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowResultModal(false)}
+                  className="px-4 py-2 bg-white/5 hover:bg-white/10 text-slate-300 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 5. MODAL 2: View Product Details Modal (Responsive & Scrollable)          */}
+      {/* ========================================================================= */}
+      {viewingProduct && (
+        <div 
+          id="view-product-modal"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 bg-slate-950/85 backdrop-blur-md animate-fade-in overflow-y-auto"
+        >
+          <div className="bg-slate-900 border border-white/15 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[calc(100dvh-2rem)] sm:max-h-[90vh] my-auto animate-scale-in">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-6 border-b border-white/10 flex items-center justify-between bg-slate-950/60 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
+                  <Package className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-white truncate max-w-xs sm:max-w-md">
+                    {viewingProduct.nameEn || viewingProduct.nameHi || viewingProduct.name}
+                  </h3>
+                  <p className="text-[11px] text-slate-400 font-mono">
+                    Product Code: <span className="text-cyan-300 font-bold">{viewingProduct.code || viewingProduct.Code || 'SP000000'}</span> • ID #{viewingProduct.id}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingProduct(null)}
+                className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-white/5 transition-all cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Content Body with 11 Fields */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1 overscroll-contain">
+              
+              {/* Image & Main Card */}
+              <div className="flex flex-col sm:flex-row gap-4 bg-slate-950/80 border border-white/10 p-4 rounded-2xl items-center sm:items-start">
+                <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden bg-slate-900 border border-white/10 shrink-0 relative">
+                  <img
+                    src={viewingProduct.image || viewingProduct.image_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400'}
+                    alt={viewingProduct.nameEn || viewingProduct.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.src = 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400';
+                    }}
+                  />
+                  {viewingProduct.discount && (
+                    <span className="absolute top-2 left-2 bg-pink-500 text-white font-black text-[9px] px-2 py-0.5 rounded-md shadow-md uppercase">
+                      {viewingProduct.discount}
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-2 flex-1 text-center sm:text-left">
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-bold text-[10px] uppercase">
+                      Category: {viewingProduct.category}
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full bg-slate-800 border border-white/10 text-slate-300 font-bold text-[10px] uppercase">
+                      Brand: {viewingProduct.brand || viewingProduct.subEn || 'General'}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-baseline justify-center sm:justify-start gap-2.5 pt-1">
+                    <span className="text-2xl font-black text-emerald-400 font-mono">₹{viewingProduct.price}</span>
+                    {viewingProduct.originalPrice && viewingProduct.originalPrice > viewingProduct.price && (
+                      <span className="text-sm line-through text-slate-500 font-mono">₹{viewingProduct.originalPrice}</span>
+                    )}
+                    {viewingProduct.originalPrice && viewingProduct.originalPrice > viewingProduct.price && (
+                      <span className="text-[10px] font-black text-pink-400">
+                        ({Math.round(((viewingProduct.originalPrice - viewingProduct.price) / viewingProduct.originalPrice) * 100)}% SAVINGS)
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="pt-1">
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-mono font-bold ${
+                      (viewingProduct.stockCount !== undefined ? viewingProduct.stockCount : 100) <= 0
+                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                        : ((viewingProduct.stockCount !== undefined ? viewingProduct.stockCount : 100) <= 10
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                          : 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20')
+                    }`}>
+                      Stock: {viewingProduct.stockCount !== undefined ? viewingProduct.stockCount : 100} units available
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 11 Fields Detailed Breakdown */}
+              <div className="space-y-2">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                  Complete 11-Field Specification Ledger
+                </span>
+                <div className="bg-slate-950/60 border border-white/10 rounded-2xl divide-y divide-white/5 overflow-hidden text-xs">
+                  <div className="p-3 flex items-center justify-between">
+                    <span className="text-slate-400 font-medium">1. Product Display Name:</span>
+                    <span className="font-bold text-white text-right">{viewingProduct.nameEn || viewingProduct.nameHi || viewingProduct.name}</span>
+                  </div>
+                  <div className="p-3 flex items-center justify-between">
+                    <span className="text-slate-400 font-medium">2. Brand / Segment Tag:</span>
+                    <span className="font-bold text-white text-right">{viewingProduct.brand || viewingProduct.subEn || 'General'}</span>
+                  </div>
+                  <div className="p-3 flex items-center justify-between">
+                    <span className="text-slate-400 font-medium">3. Department Category:</span>
+                    <span className="font-mono text-cyan-300 font-bold uppercase">{viewingProduct.category}</span>
+                  </div>
+                  <div className="p-3 flex items-center justify-between">
+                    <span className="text-slate-400 font-medium">4. Available Weight / Product Units:</span>
+                    <span className="font-bold text-white text-right">{viewingProduct.unit || '1 Unit'}</span>
+                  </div>
+                  <div className="p-3 flex items-center justify-between">
+                    <span className="text-slate-400 font-medium">5. Base Price / Default rate (₹):</span>
+                    <span className="font-mono font-bold text-emerald-400">₹{viewingProduct.price}</span>
+                  </div>
+                  <div className="p-3 flex items-center justify-between">
+                    <span className="text-slate-400 font-medium">6. Original Price crossed out (₹):</span>
+                    <span className="font-mono font-bold text-slate-400">{viewingProduct.originalPrice ? `₹${viewingProduct.originalPrice}` : 'None'}</span>
+                  </div>
+                  <div className="p-3 flex items-center justify-between">
+                    <span className="text-slate-400 font-medium">7. Discount ribbon label text:</span>
+                    <span className="font-bold text-pink-400">{viewingProduct.discount || 'None'}</span>
+                  </div>
+                  <div className="p-3 flex items-center justify-between">
+                    <span className="text-slate-400 font-medium">8. Physical Stock Count (Qty):</span>
+                    <span className="font-mono font-bold text-amber-300">{viewingProduct.stockCount !== undefined ? viewingProduct.stockCount : 100}</span>
+                  </div>
+                  <div className="p-3 flex items-center justify-between">
+                    <span className="text-slate-400 font-medium">9. Unique Product Code:</span>
+                    <span className="font-mono font-black text-cyan-400 bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-500/30">
+                      {viewingProduct.code || viewingProduct.Code || 'SP000000'} (Protected)
+                    </span>
+                  </div>
+                  <div className="p-3 flex items-center justify-between">
+                    <span className="text-slate-400 font-medium">10. GST Rate (%) / जीएसटी दर:</span>
+                    <span className="font-mono font-bold text-white">{viewingProduct.gstPercent !== undefined ? viewingProduct.gstPercent : 5}%</span>
+                  </div>
+                  <div className="p-3 flex items-center justify-between gap-4">
+                    <span className="text-slate-400 font-medium shrink-0">11. Image URL:</span>
+                    <span className="font-mono text-[10px] text-slate-400 truncate max-w-xs">{viewingProduct.image || viewingProduct.image_url}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 sm:p-5 border-t border-white/10 bg-slate-950/60 flex items-center justify-between gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  const toEdit = viewingProduct;
+                  setViewingProduct(null);
+                  openQuickEdit(toEdit);
+                }}
+                className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black uppercase text-xs rounded-xl tracking-wider transition-all cursor-pointer shadow-md shadow-cyan-500/20 flex items-center gap-1.5"
+              >
+                <Edit3 className="h-4 w-4" />
+                <span>Edit Product Details</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewingProduct(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl border border-white/10 transition-all cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 6. MODAL 3: Quick Edit Product Modal (Responsive & Scrollable)            */}
+      {/* ========================================================================= */}
+      {quickEditProduct && (
+        <div 
+          id="quick-edit-product-modal"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 bg-slate-950/85 backdrop-blur-md animate-fade-in overflow-y-auto"
+        >
+          <div className="bg-slate-900 border border-white/15 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[calc(100dvh-2rem)] sm:max-h-[90vh] my-auto animate-scale-in">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-6 border-b border-white/10 flex items-center justify-between bg-slate-950/60 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
+                  <Edit3 className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-white">Edit Product (Full CRUD)</h3>
+                  <p className="text-[11px] text-slate-400 font-mono">
+                    Product Code: <span className="text-cyan-300 font-bold">{quickEditProduct.code || 'SP000000'}</span> (Preserved) • ID #{quickEditProduct.id}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQuickEditProduct(null)}
+                className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-white/5 transition-all cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Form Body with All 11 Fields */}
+            <form onSubmit={handleQuickEditSubmit} className="flex flex-col flex-1 overflow-hidden">
+              <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 overscroll-contain">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Field 1: Name */}
+                  <div className="space-y-1 sm:col-span-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                      1. Product Display Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={quickEditProduct.name}
+                      onChange={(e) => setQuickEditProduct({ ...quickEditProduct, name: e.target.value })}
+                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-cyan-400"
+                    />
+                  </div>
+
+                  {/* Field 2: Brand Tag */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                      2. Brand / Segment Tag
+                    </label>
+                    <input
+                      type="text"
+                      value={quickEditProduct.brandTag}
+                      onChange={(e) => setQuickEditProduct({ ...quickEditProduct, brandTag: e.target.value })}
+                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-cyan-400"
+                    />
+                  </div>
+
+                  {/* Field 3: Category */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                      3. Department Category
+                    </label>
+                    <select
+                      value={quickEditProduct.category}
+                      onChange={(e) => setQuickEditProduct({ ...quickEditProduct, category: e.target.value })}
+                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-cyan-400 cursor-pointer"
+                    >
+                      {categories.filter(c => c.id !== 'all').map(cat => (
+                        <option key={cat.id} value={cat.id}>📦 {cat.nameEn || cat.id}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Field 4: Available Weight / Product Units */}
+                  <div className="space-y-1 sm:col-span-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                      4. Available Weight / Product Units (e.g. 500g, 1kg, 5kg)
+                    </label>
+                    <input
+                      type="text"
+                      value={quickEditProduct.unit}
+                      onChange={(e) => setQuickEditProduct({ ...quickEditProduct, unit: e.target.value })}
+                      placeholder="e.g. 1kg, 2kg, 5kg"
+                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-cyan-400"
+                    />
+                  </div>
+
+                  {/* Field 5: Base Price */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                      5. Base Price / Default rate (₹) *
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      step="any"
+                      value={quickEditProduct.price}
+                      onChange={(e) => setQuickEditProduct({ ...quickEditProduct, price: e.target.value })}
+                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-emerald-400 font-mono font-bold outline-none focus:border-emerald-400"
+                    />
+                  </div>
+
+                  {/* Field 6: Original Price */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                      6. Original Price crossed out (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      placeholder="e.g. 150"
+                      value={quickEditProduct.originalPrice}
+                      onChange={(e) => setQuickEditProduct({ ...quickEditProduct, originalPrice: e.target.value })}
+                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-slate-300 font-mono outline-none focus:border-cyan-400"
+                    />
+                  </div>
+
+                  {/* Field 7: Discount ribbon label */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                      7. Discount ribbon label text
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 20% OFF or Save ₹30"
+                      value={quickEditProduct.discount}
+                      onChange={(e) => setQuickEditProduct({ ...quickEditProduct, discount: e.target.value })}
+                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-pink-400 outline-none focus:border-pink-400"
+                    />
+                  </div>
+
+                  {/* Field 8: Physical Stock Count */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                      8. Physical Stock Count (Qty)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={quickEditProduct.stockCount}
+                      onChange={(e) => setQuickEditProduct({ ...quickEditProduct, stockCount: e.target.value })}
+                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-amber-300 font-mono font-bold outline-none focus:border-amber-400"
+                    />
+                  </div>
+
+                  {/* Field 9: Unique Product Code (Preserved) */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block flex items-center justify-between">
+                      <span>9. Unique Product Code (e.g. SP000001)</span>
+                      <span className="text-[9px] text-cyan-400 font-mono">Protected Code</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={quickEditProduct.code}
+                      onChange={(e) => setQuickEditProduct({ ...quickEditProduct, code: e.target.value })}
+                      placeholder="e.g. SP000001"
+                      className="w-full bg-slate-950 border border-cyan-500/30 rounded-xl px-3.5 py-2.5 text-xs text-cyan-300 font-mono font-bold outline-none focus:border-cyan-400"
+                    />
+                  </div>
+
+                  {/* Field 10: GST Rate (%) */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                      10. GST Rate (%) / जीएसटी दर
+                    </label>
+                    <select
+                      value={quickEditProduct.gstPercent}
+                      onChange={(e) => setQuickEditProduct({ ...quickEditProduct, gstPercent: e.target.value })}
+                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-cyan-400 cursor-pointer"
+                    >
+                      <option value="0">0% (Exempt / Fresh produce)</option>
+                      <option value="5">5% (Essential groceries & staples)</option>
+                      <option value="12">12% (Processed foods & items)</option>
+                      <option value="18">18% (Confectionery & home care)</option>
+                      <option value="28">28% (Luxury & aerated beverages)</option>
+                    </select>
+                  </div>
+
+                  {/* Field 11: Product Illustration Image URL with R2 Uploader */}
+                  <div className="space-y-2 sm:col-span-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                      11. Product Illustration Image URL
+                    </label>
+                    <input
+                      type="url"
+                      value={quickEditProduct.image}
+                      onChange={(e) => setQuickEditProduct({ ...quickEditProduct, image: e.target.value })}
+                      placeholder="https://..."
+                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-slate-300 font-mono outline-none focus:border-cyan-400"
+                    />
+                    <div className="pt-1">
+                      <ImageUpload
+                        onImageUploaded={(url) => setQuickEditProduct(prev => ({ ...prev, image: url }))}
+                        currentImage={quickEditProduct.image}
+                        folder="products"
+                        label="Upload photo to R2 cloud storage"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Fixed Footer */}
+              <div className="p-4 sm:p-5 border-t border-white/10 bg-slate-950/60 flex items-center justify-between gap-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setQuickEditProduct(null)}
+                  className="px-4 py-2 bg-white/5 hover:bg-white/10 text-slate-300 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingQuickEdit}
+                  className="px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black uppercase text-xs rounded-xl tracking-wider transition-all cursor-pointer shadow-md shadow-cyan-500/20 disabled:opacity-50"
+                >
+                  {isSavingQuickEdit ? "Saving Updates..." : "Save Product Details"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );
 }
+

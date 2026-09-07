@@ -2429,25 +2429,36 @@ export default function CustomersManager() {
                         // Sync current user profile if needed
                         const stored = localStorage.getItem('swastik_profile');
                         if (stored) {
-                          const prof = JSON.parse(stored);
-                          if (prof.phone === selectedDetailCust.phone || prof.email === selectedDetailCust.email) {
-                            const nextProf = {
-                              ...prof,
-                              name: editForm.name,
-                              email: editForm.email,
-                              phone: editForm.phone,
-                              points: editForm.points,
-                              isPrimeActive: editForm.isPrimeActive,
-                              primeMembershipNo: editForm.primeMembershipNo ? editForm.primeMembershipNo.toUpperCase() : '',
-                              image: editForm.image,
-                              password: editForm.password,
-                              address: editForm.address,
-                              dob: editForm.dob,
-                              anniversary: editForm.anniversary
-                            };
-                            localStorage.setItem('swastik_profile', JSON.stringify(nextProf));
-                            window.dispatchEvent(new Event('storage'));
-                          }
+                          try {
+                            const prof = JSON.parse(stored);
+                            const cleanP = (p) => String(p || '').replace(/\D/g, '').slice(-10);
+                            const profP = cleanP(prof.phone || prof.mobile);
+                            const custP = cleanP(selectedDetailCust.phone || selectedDetailCust.mobile);
+                            const isMatch = (prof.id && Number(prof.id) === Number(selectedDetailCust.id)) ||
+                              (profP && custP && profP === custP) ||
+                              (prof.email && selectedDetailCust.email && prof.email.toLowerCase() === selectedDetailCust.email.toLowerCase());
+                            if (isMatch) {
+                              const nextProf = {
+                                ...prof,
+                                id: selectedDetailCust.id,
+                                fullName: editForm.name,
+                                name: editForm.name,
+                                email: editForm.email,
+                                phone: editForm.phone,
+                                points: editForm.points,
+                                isPrimeActive: editForm.isPrimeActive,
+                                primeMembershipNo: editForm.primeMembershipNo ? editForm.primeMembershipNo.toUpperCase() : '',
+                                image: editForm.image,
+                                password: editForm.password,
+                                address: editForm.address,
+                                dob: editForm.dob,
+                                anniversary: editForm.anniversary
+                              };
+                              localStorage.setItem('swastik_profile', JSON.stringify(nextProf));
+                              window.dispatchEvent(new Event('storage'));
+                              window.dispatchEvent(new CustomEvent('swastik_auth_change'));
+                            }
+                          } catch (e) {}
                         }
                         setToastMessage('Customer profile saved successfully!');
                         setSelectedDetailCust(null);
@@ -2703,13 +2714,24 @@ export default function CustomersManager() {
                     // Sync profile if current
                     const stored = localStorage.getItem('swastik_profile');
                     if (stored) {
-                      const prof = JSON.parse(stored);
-                      if (prof.phone === cardGenModalCust.phone || prof.email === cardGenModalCust.email) {
-                        prof.isPrimeActive = true;
-                        prof.primeMembershipNo = num;
-                        localStorage.setItem('swastik_profile', JSON.stringify(prof));
-                        window.dispatchEvent(new Event('storage'));
-                      }
+                      try {
+                        const prof = JSON.parse(stored);
+                        const cleanP = (p) => String(p || '').replace(/\D/g, '').slice(-10);
+                        const profP = cleanP(prof.phone || prof.mobile);
+                        const custP = cleanP(cardGenModalCust.phone || cardGenModalCust.mobile);
+                        const isMatch = (prof.id && Number(prof.id) === Number(cardGenModalCust.id)) ||
+                          (profP && custP && profP === custP) ||
+                          (prof.email && cardGenModalCust.email && prof.email.toLowerCase() === cardGenModalCust.email.toLowerCase());
+                        if (isMatch) {
+                          prof.isPrimeActive = true;
+                          prof.primeMembershipNo = num;
+                          prof.fullName = cardGenModalCust.name || prof.fullName;
+                          prof.name = cardGenModalCust.name || prof.name;
+                          localStorage.setItem('swastik_profile', JSON.stringify(prof));
+                          window.dispatchEvent(new Event('storage'));
+                          window.dispatchEvent(new CustomEvent('swastik_auth_change'));
+                        }
+                      } catch (e) {}
                     }
                     setToastMessage(`Prime VIP Card ${num} assigned and activated!`);
                     setCardGenModalCust(null);
@@ -2738,13 +2760,24 @@ export default function CustomersManager() {
                     // Sync profile if current
                     const stored = localStorage.getItem('swastik_profile');
                     if (stored) {
-                      const prof = JSON.parse(stored);
-                      if (prof.phone === cardGenModalCust.phone || prof.email === cardGenModalCust.email) {
-                        prof.isPrimeActive = true;
-                        prof.primeMembershipNo = num;
-                        localStorage.setItem('swastik_profile', JSON.stringify(prof));
-                        window.dispatchEvent(new Event('storage'));
-                      }
+                      try {
+                        const prof = JSON.parse(stored);
+                        const cleanP = (p) => String(p || '').replace(/\D/g, '').slice(-10);
+                        const profP = cleanP(prof.phone || prof.mobile);
+                        const custP = cleanP(cardGenModalCust.phone || cardGenModalCust.mobile);
+                        const isMatch = (prof.id && Number(prof.id) === Number(cardGenModalCust.id)) ||
+                          (profP && custP && profP === custP) ||
+                          (prof.email && cardGenModalCust.email && prof.email.toLowerCase() === cardGenModalCust.email.toLowerCase());
+                        if (isMatch) {
+                          prof.isPrimeActive = true;
+                          prof.primeMembershipNo = num;
+                          prof.fullName = cardGenModalCust.name || prof.fullName;
+                          prof.name = cardGenModalCust.name || prof.name;
+                          localStorage.setItem('swastik_profile', JSON.stringify(prof));
+                          window.dispatchEvent(new Event('storage'));
+                          window.dispatchEvent(new CustomEvent('swastik_auth_change'));
+                        }
+                      } catch (e) {}
                     }
                     handlePrintCard(updatedObj);
                     setToastMessage(`Card ${num} activated & opening print dialog...`);
