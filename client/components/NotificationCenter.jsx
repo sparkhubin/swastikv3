@@ -45,20 +45,64 @@ export default function NotificationCenter({ role = 'customer', phone = '', clas
   };
 
   useEffect(() => {
-    // For customers, only poll if they are logged in with a phone number
+    // For customers, only fetch if they are logged in with a phone number
     if (role === 'customer' && !phone) {
       setNotifications([]);
       setUnreadCount(0);
       return;
     }
 
+    // 1. Initial fetch on mount
     fetchNotifications();
-    const interval = setInterval(() => {
+
+    // 2. Refresh whenever the user switches back to this tab/app
+    const handleVisibilityOrFocus = () => {
       if (typeof document !== 'undefined' && !document.hidden) {
         fetchNotifications();
       }
-    }, 30000); // Smart 30s polling
-    return () => clearInterval(interval);
+    };
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+
+    // 3. Listen for internal app events (e.g. order placed, status updated)
+    const handleCustomRefresh = () => fetchNotifications();
+    window.addEventListener('swastik:refresh-notifications', handleCustomRefresh);
+
+    // 4. Background polling:
+    // - Customers: NO background interval (saves 100% of unnecessary server hits while shopping)
+    // - Admin / Staff / Delivery: Smart 60s poll ONLY when tab is active and visible
+    let interval = null;
+    if (role !== 'customer') {
+      let lastUserActivity = Date.now();
+      const markActive = () => { lastUserActivity = Date.now(); };
+      window.addEventListener('mousemove', markActive, { passive: true });
+      window.addEventListener('keydown', markActive, { passive: true });
+      window.addEventListener('touchstart', markActive, { passive: true });
+
+      interval = setInterval(() => {
+        const isVisible = typeof document !== 'undefined' && !document.hidden;
+        const isUserActive = Date.now() - lastUserActivity < 3 * 60 * 1000; // active in last 3 min
+        if (isVisible && isUserActive) {
+          fetchNotifications();
+        }
+      }, 60000); // 60s interval instead of 30s
+
+      return () => {
+        clearInterval(interval);
+        document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+        window.removeEventListener('focus', handleVisibilityOrFocus);
+        window.removeEventListener('swastik:refresh-notifications', handleCustomRefresh);
+        window.removeEventListener('mousemove', markActive);
+        window.removeEventListener('keydown', markActive);
+        window.removeEventListener('touchstart', markActive);
+      };
+    }
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      window.removeEventListener('swastik:refresh-notifications', handleCustomRefresh);
+    };
   }, [role, phone]);
 
   // When user opens the dropdown, fetch immediately for fresh data

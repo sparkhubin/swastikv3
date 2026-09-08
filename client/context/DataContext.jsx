@@ -1239,6 +1239,10 @@ export function DataProvider({ children }) {
           });
         }
 
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('swastik:refresh-notifications'));
+        }
+
         return { success: true, order: createdOrder };
       } else {
         const errorData = await res.json();
@@ -1328,6 +1332,9 @@ export function DataProvider({ children }) {
         body: JSON.stringify(updated),
       });
       setOrders(prev => prev.map(o => String(o.id) === String(id) ? { ...o, ...updated } : o));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('swastik:refresh-notifications'));
+      }
     } catch (e) {
       console.error(e);
       setOrders(prev => prev.map(o => String(o.id) === String(id) ? { ...o, ...updated } : o));
