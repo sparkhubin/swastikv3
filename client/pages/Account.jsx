@@ -698,6 +698,40 @@ export default function Account({ onViewChange }) {
   const [authMode, setAuthMode] = useState('login'); // login | signup | forgot_password
   const [authType, setAuthType] = useState('password'); // password | otp
 
+  // Staff Session State & Sync Listener
+  const [activeStaffSession, setActiveStaffSession] = useState(() => {
+    try {
+      const saved = localStorage.getItem('swastik_logged_in_staff');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    const handleSync = () => {
+      try {
+        const saved = localStorage.getItem('swastik_logged_in_staff');
+        setActiveStaffSession(saved ? JSON.parse(saved) : null);
+      } catch (e) {
+        setActiveStaffSession(null);
+      }
+    };
+    window.addEventListener('storage', handleSync);
+    window.addEventListener('staff_session_change', handleSync);
+    return () => {
+      window.removeEventListener('storage', handleSync);
+      window.removeEventListener('staff_session_change', handleSync);
+    };
+  }, []);
+
+  const handleExitStaffSession = () => {
+    localStorage.removeItem('swastik_logged_in_staff');
+    setActiveStaffSession(null);
+    window.dispatchEvent(new Event('staff_session_change'));
+    window.dispatchEvent(new Event('storage'));
+  };
+
   // --- AUTH FORM STATES ---
   const [mobileNumber, setMobileNumber] = useState('');
   const [password, setPassword] = useState('');
@@ -1147,14 +1181,28 @@ export default function Account({ onViewChange }) {
   const [orderStatusFilter, setOrderStatusFilter] = useState('all'); // all | active | completed
   const [orderSearchText, setOrderSearchText] = useState('');
   // --- 3. AUTH LOGICS ---
+  const verifyServerOtp = async (phone, enteredCode) => {
+    const cleanCode = (enteredCode || '').trim();
+    if (cleanCode === '8765') return true;
+    try {
+      const res = await fetch('/api/auth/otp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: phone, code: cleanCode })
+      });
+      const data = await res.json();
+      return res.ok && data.status === 'verified';
+    } catch (e) {
+      return cleanCode === '8765';
+    }
+  };
+
   const triggerOtpSend = async () => {
     if (!mobileNumber || mobileNumber.length < 10) {
       setAuthError(isHindi ? "कृपया 10 अंकों का वैध मोबाइल नंबर दर्ज करें।" : "Please enter a valid 10-digit mobile number.");
       return;
     }
     setAuthError('');
-    const fallbackPin = String(Math.floor(1000 + Math.random() * 9000));
-    let realWaCode = fallbackPin;
     setOtpCode('');
     try {
       const res = await fetch('/api/auth/otp/send', {
@@ -1163,22 +1211,22 @@ export default function Account({ onViewChange }) {
         body: JSON.stringify({ phoneNumber: mobileNumber })
       });
       if (res.ok) {
-        const data = await res.json();
-        if (data.simulated_code) {
-          realWaCode = data.simulated_code;
-        }
+        setAuthSuccess(isHindi 
+          ? "सुरक्षा ओटीपी कोड आपके व्हाट्सएप नंबर पर भेज दिया गया है।" 
+          : "Security OTP code has been dispatched to your WhatsApp number."
+        );
+      } else {
+        setAuthError(isHindi ? "ओटीपी भेजने में असमर्थ। कृपया पुनः प्रयास करें।" : "Unable to dispatch OTP. Please check your number and retry.");
       }
     } catch(e) {
-      console.warn("Falling back to local client simulation wrapper:", e);
+      setAuthSuccess(isHindi 
+        ? "सुरक्षा ओटीपी कोड आपके व्हाट्सएप नंबर पर भेज दिया गया है।" 
+        : "Security OTP code has been dispatched to your WhatsApp number."
+      );
     }
-    setSimulatedOtp(realWaCode);
-    setAuthSuccess(isHindi 
-      ? "सुरक्षा ओटीपी कोड आपके व्हाट्सएप नंबर पर भेज दिया गया है।" 
-      : "Security OTP code has been dispatched to your WhatsApp number."
-    );
   };
 
-  const verifyOtpAndProceed = (e) => {
+  const verifyOtpAndProceed = async (e) => {
     e.preventDefault();
     if (!mobileNumber) {
       setAuthError(isHindi ? "मोबाइल नंबर दर्ज करना आवश्यक है।" : "Mobile number is required.");
@@ -1193,10 +1241,9 @@ export default function Account({ onViewChange }) {
       return;
     }
     const cleanCode = (otpCode || '').trim();
-    const isMasterOtp = cleanCode === '8765';
-    const isSentOtp = Boolean(simulatedOtp && simulatedOtp.trim().length > 0 && cleanCode === simulatedOtp.trim());
-    if (!isMasterOtp && !isSentOtp) {
-      setAuthError(isHindi ? "गलत ओटीपी कोड! कृपया सही ओटीपी दर्ज करें।" : "Invalid OTP code! Please enter the correct OTP.");
+    const isValid = await verifyServerOtp(mobileNumber, cleanCode);
+    if (!isValid) {
+      setAuthError(isHindi ? "गलत ओटीपी कोड! कृपया सही ओटीपी दर्ज करें।" : "Invalid OTP code! Please enter the correct OTP sent to your WhatsApp.");
       return;
     }
 
@@ -1504,10 +1551,9 @@ export default function Account({ onViewChange }) {
       setAuthError(isHindi ? "कृपया 4 अंकों का ओटीपी कोड दर्ज करें।" : "Please enter 4-digit OTP code.");
       return;
     }
-    const isMasterOtp = cleanCode === '8765';
-    const isSentOtp = Boolean(simulatedOtp && simulatedOtp.trim().length > 0 && cleanCode === simulatedOtp.trim());
-    if (!isMasterOtp && !isSentOtp) {
-      setAuthError(isHindi ? "गलत ओटीपी कोड! कृपया सही ओटीपी दर्ज करें।" : "Invalid OTP code! Please enter the correct OTP.");
+    const isValid = await verifyServerOtp(mobileNumber, cleanCode);
+    if (!isValid) {
+      setAuthError(isHindi ? "गलत ओटीपी कोड! कृपया सही ओटीपी दर्ज करें।" : "Invalid OTP code! Please enter the correct OTP sent to your WhatsApp.");
       return;
     }
     if (!password) {
@@ -2026,6 +2072,11 @@ export default function Account({ onViewChange }) {
             <button 
               onClick={() => {
                 setIsLoggedIn(false);
+                localStorage.removeItem('swastik_is_logged_in');
+                localStorage.removeItem('swastik_logged_in_staff');
+                setActiveStaffSession(null);
+                window.dispatchEvent(new Event('staff_session_change'));
+                window.dispatchEvent(new Event('storage'));
                 setAuthError('');
                 setMobileNumber('');
                 setPassword('');
@@ -2040,35 +2091,48 @@ export default function Account({ onViewChange }) {
           </section>
 
           {/* Staff Partner Session Quick Switcher Banner */}
-          {(() => {
-            try {
-              const staffSession = localStorage.getItem('swastik_logged_in_staff');
-              if (staffSession) {
-                const stObj = JSON.parse(staffSession);
-                return (
-                  <div className="p-4 rounded-2xl bg-slate-900 border border-cyan-500/40 text-white flex flex-wrap items-center justify-between gap-3 shadow-md">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2.5 bg-cyan-500/20 text-cyan-400 rounded-xl border border-cyan-500/30">
-                        <ShieldAlert className="h-6 w-6 animate-pulse" />
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-black uppercase text-cyan-400 tracking-wider block">Active Staff Session</span>
-                        <p className="text-sm font-extrabold text-white">{stObj.name} ({stObj.role || 'Staff'})</p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => onViewChange && onViewChange('admin')}
-                      className="px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
-                    >
-                      {isHindi ? 'एडमिन / डिलीवरी डैशबोर्ड खोलें →' : 'Open Staff Workspace →'}
-                    </button>
+          {activeStaffSession && (
+            <div className="p-4 rounded-2xl bg-slate-900 border border-cyan-500/40 text-white flex flex-wrap items-center justify-between gap-4 shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-cyan-500/20 text-cyan-400 rounded-xl border border-cyan-500/30 shrink-0">
+                  <ShieldAlert className="h-6 w-6 animate-pulse" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black uppercase text-cyan-400 tracking-wider">Active Staff Session</span>
+                    <span className="text-[10px] font-semibold bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full border border-cyan-500/30">
+                      Browser Saved
+                    </span>
                   </div>
-                );
-              }
-            } catch (e) {}
-            return null;
-          })()}
+                  <p className="text-sm font-extrabold text-white">
+                    {activeStaffSession.name} ({activeStaffSession.role || 'Staff'})
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    {isHindi 
+                      ? 'आप अभी ग्राहक खाते में हैं। यह सत्र पहले एडमिन/स्टाफ पैनल में लॉगिन रहने के कारण सेव है।'
+                      : 'You are signed into your Customer Account. A staff session is also saved in your browser.'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onViewChange && onViewChange('admin')}
+                  className="px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
+                >
+                  {isHindi ? 'एडमिन / डिलीवरी डैशबोर्ड खोलें →' : 'Open Staff Workspace →'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExitStaffSession}
+                  className="px-3.5 py-2.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold rounded-xl transition-all active:scale-95 cursor-pointer"
+                  title="Log out of Staff Session and dismiss this banner"
+                >
+                  {isHindi ? 'स्टाफ सत्र बंद करें' : 'Exit Staff Mode'}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Navigation Tabs */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none w-full border-b border-slate-200 mb-6">

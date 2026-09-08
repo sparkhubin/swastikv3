@@ -121,13 +121,20 @@ router.post("/whatsapp/send", async (req, res) => {
     languageCode || "en_US"
   );
 
+  const maskedTo = isOtp && String(to).replace(/\D/g, '').length >= 10
+    ? `${String(to).replace(/\D/g, '').slice(-10, -8)}******${String(to).replace(/\D/g, '').slice(-2)}`
+    : to;
+
   res.json({
     status: waRes.success ? "dispatched" : "failed",
-    to,
-    message: fallbackBody,
+    to: maskedTo,
+    message: isOtp ? "Security OTP dispatched successfully via WhatsApp." : fallbackBody,
     template_name: templateName || (isOtp ? "reference_no" : null),
     language_code: languageCode || "en_US",
-    whatsapp_response: waRes
+    whatsapp_response: {
+      success: waRes.success,
+      status: waRes.status || (waRes.success ? "delivered" : "failed")
+    }
   });
 });
 

@@ -652,6 +652,22 @@ export function DataProvider({ children }) {
 
   const inFlightMap = useRef({});
 
+  // Synchronous refs to prevent useCallback dependency invalidation and infinite re-render loops
+  const productsRef = useRef(products);
+  productsRef.current = products;
+  const ordersRef = useRef(orders);
+  ordersRef.current = orders;
+  const customersRef = useRef(customers);
+  customersRef.current = customers;
+  const staffRef = useRef(staff);
+  staffRef.current = staff;
+  const partnersRef = useRef(partners);
+  partnersRef.current = partners;
+  const reviewsRef = useRef(reviews);
+  reviewsRef.current = reviews;
+  const deletionRequestsRef = useRef(dataDeletionRequests);
+  deletionRequestsRef.current = dataDeletionRequests;
+
   // 1. App Configuration (Lightweight - R2 base URL & Payment switches)
   const fetchConfig = useCallback(async (force = false) => {
     if (loadedMap.current.config && !force) return;
@@ -728,7 +744,7 @@ export function DataProvider({ children }) {
 
   // 3. Products Loader (Only fetched on Home, Shop, Cart, or Products Manager)
   const fetchProducts = useCallback(async (force = false) => {
-    if (loadedMap.current.products && !force) return products;
+    if (loadedMap.current.products && !force) return productsRef.current;
     if (inFlightMap.current.products) return inFlightMap.current.products;
 
     inFlightMap.current.products = (async () => {
@@ -747,14 +763,14 @@ export function DataProvider({ children }) {
       } finally {
         delete inFlightMap.current.products;
       }
-      return [];
+      return productsRef.current || [];
     })();
     return inFlightMap.current.products;
-  }, [products]);
+  }, []);
 
   // 4. Orders Loader (Only fetched on Admin Dashboard, Orders Manager, or User Account History)
   const fetchOrders = useCallback(async (force = false) => {
-    if (loadedMap.current.orders && !force) return orders;
+    if (loadedMap.current.orders && !force) return ordersRef.current;
     if (inFlightMap.current.orders) return inFlightMap.current.orders;
 
     inFlightMap.current.orders = (async () => {
@@ -773,14 +789,14 @@ export function DataProvider({ children }) {
       } finally {
         delete inFlightMap.current.orders;
       }
-      return [];
+      return ordersRef.current || [];
     })();
     return inFlightMap.current.orders;
-  }, [orders]);
+  }, []);
 
   // 5. Customers Loader (Only fetched on Customers Manager or Checkout Customer lookup)
   const fetchCustomers = useCallback(async (force = false) => {
-    if (loadedMap.current.customers && !force) return customers;
+    if (loadedMap.current.customers && !force) return customersRef.current;
     if (inFlightMap.current.customers) return inFlightMap.current.customers;
 
     inFlightMap.current.customers = (async () => {
@@ -800,14 +816,14 @@ export function DataProvider({ children }) {
       } finally {
         delete inFlightMap.current.customers;
       }
-      return [];
+      return customersRef.current || [];
     })();
     return inFlightMap.current.customers;
-  }, [customers]);
+  }, []);
 
   // 6. Staff Loader (Only fetched on Staff Manager, Delivery Dashboard, or Role checks)
   const fetchStaff = useCallback(async (force = false) => {
-    if (loadedMap.current.staff && !force) return staff;
+    if (loadedMap.current.staff && !force) return staffRef.current;
     if (inFlightMap.current.staff) return inFlightMap.current.staff;
 
     inFlightMap.current.staff = (async () => {
@@ -827,14 +843,14 @@ export function DataProvider({ children }) {
       } finally {
         delete inFlightMap.current.staff;
       }
-      return [];
+      return staffRef.current || [];
     })();
     return inFlightMap.current.staff;
-  }, [staff]);
+  }, []);
 
   // 7. Partners Loader (Only fetched on Partners page or Partners Admin)
   const fetchPartners = useCallback(async (force = false) => {
-    if (loadedMap.current.partners && !force) return partners;
+    if (loadedMap.current.partners && !force) return partnersRef.current;
     if (inFlightMap.current.partners) return inFlightMap.current.partners;
 
     inFlightMap.current.partners = (async () => {
@@ -853,14 +869,14 @@ export function DataProvider({ children }) {
       } finally {
         delete inFlightMap.current.partners;
       }
-      return [];
+      return partnersRef.current || [];
     })();
     return inFlightMap.current.partners;
-  }, [partners]);
+  }, []);
 
   // 8. Reviews Loader (Only fetched on Reviews page or Reviews Admin)
   const fetchReviews = useCallback(async (force = false) => {
-    if (loadedMap.current.reviews && !force) return reviews;
+    if (loadedMap.current.reviews && !force) return reviewsRef.current;
     if (inFlightMap.current.reviews) return inFlightMap.current.reviews;
 
     inFlightMap.current.reviews = (async () => {
@@ -879,14 +895,14 @@ export function DataProvider({ children }) {
       } finally {
         delete inFlightMap.current.reviews;
       }
-      return [];
+      return reviewsRef.current || [];
     })();
     return inFlightMap.current.reviews;
-  }, [reviews]);
+  }, []);
 
   // 9. Data Deletion Requests Loader (Only fetched on Data Deletion Admin tab)
   const fetchDataDeletionRequests = useCallback(async (force = false) => {
-    if (loadedMap.current.deletionRequests && !force) return dataDeletionRequests;
+    if (loadedMap.current.deletionRequests && !force) return deletionRequestsRef.current;
     if (inFlightMap.current.deletionRequests) return inFlightMap.current.deletionRequests;
 
     inFlightMap.current.deletionRequests = (async () => {
@@ -906,10 +922,10 @@ export function DataProvider({ children }) {
       } finally {
         delete inFlightMap.current.deletionRequests;
       }
-      return [];
+      return deletionRequestsRef.current || [];
     })();
     return inFlightMap.current.deletionRequests;
-  }, [dataDeletionRequests]);
+  }, []);
 
   // Backward-compatible fetchAll (only fetches core visual settings and products)
   const fetchAll = useCallback(async () => {
@@ -923,14 +939,11 @@ export function DataProvider({ children }) {
     ]);
   }, [fetchConfig, fetchSettings, fetchProducts, fetchCustomers, fetchStaff, fetchDataDeletionRequests]);
 
-  // Initial App Mount: load core config, settings, customers, and staff from real database
+  // Initial App Mount: load core storefront config and public store settings
   useEffect(() => {
     fetchConfig();
     fetchSettings();
-    fetchCustomers();
-    fetchStaff();
-    fetchDataDeletionRequests();
-  }, [fetchConfig, fetchSettings, fetchCustomers, fetchStaff, fetchDataDeletionRequests]);
+  }, [fetchConfig, fetchSettings]);
 
   useEffect(() => {
     localStorage.setItem('swastik_user_role', userRole);
@@ -1013,7 +1026,7 @@ export function DataProvider({ children }) {
         body: JSON.stringify({
           items,
           mode: options.mode || 'update_existing',
-          defaultCategory: options.defaultCategory || 'vegetables'
+          defaultCategory: options.defaultCategory || 'swastik'
         })
       });
       if (res.ok) {

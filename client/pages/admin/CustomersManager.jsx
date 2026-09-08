@@ -206,7 +206,7 @@ const metaApprovalTemplates = [
 
 export default function CustomersManager() {
   const { isHindi } = useLanguage();
-  const { customers, addCustomer, updateCustomer, deleteCustomer, orders = [], primeSettings, dataDeletionRequests = [], fetchCustomers } = useData();
+  const { customers, addCustomer, updateCustomer, deleteCustomer, orders = [], primeSettings, dataDeletionRequests = [], fetchCustomers, contactSettings } = useData();
 
   useEffect(() => {
     fetchCustomers();

@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { useLanguage } from '../../context/LanguageContext';
 import { useData } from '../../context/DataContext';
 import { resolveProductImage } from '../../utils/imageHelper';
+import AdminPageLoader from '../../components/admin/AdminPageLoader';
 import { 
   Search, 
   Layers, 
@@ -25,6 +26,19 @@ import {
 export default function BulkStockManager() {
   const { isHindi } = useLanguage();
   const { products, categories, bulkUpdateStock, fetchProducts, r2PublicUrl } = useData();
+
+  const [isLoading, setIsLoading] = useState(!products || products.length === 0);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!products || products.length === 0) {
+      setIsLoading(true);
+    }
+    fetchProducts(true).finally(() => {
+      if (isMounted) setIsLoading(false);
+    });
+    return () => { isMounted = false; };
+  }, [fetchProducts]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -235,13 +249,13 @@ export default function BulkStockManager() {
   // Export current stock list as Excel
   const handleExportStockExcel = () => {
     const exportData = products.map(p => ({
-      "Unique Product Code (e.g. SP000001)": p.code || `SP${String(p.id).padStart(6, '0')}`,
-      "Product Display Name": p.nameEn || p.name || "",
-      "Brand / Segment Tag": p.brand || p.subEn || "General",
-      "Product Department Category": p.category || "vegetables",
-      "Available Weight / Product Units": p.unit || "1 Unit",
-      "Base Price / Default rate (₹)": p.price || 0,
-      "Physical Stock Count (Qty)": modifiedStocks[p.id] !== undefined ? modifiedStocks[p.id] : getProductStock(p)
+      "Product Code": p.code || `SP${String(p.id).padStart(6, '0')}`,
+      "Product Name": p.nameEn || p.name || "",
+      "Category": p.category || "swastik",
+      "Brand": p.brand || p.subEn || "Swastik",
+      "Unit": p.unit || "1 Unit",
+      "Sales Price": p.price || 0,
+      "Stock": modifiedStocks[p.id] !== undefined ? modifiedStocks[p.id] : getProductStock(p)
     }));
 
     const wb = XLSX.utils.book_new();
@@ -275,6 +289,7 @@ export default function BulkStockManager() {
 
         rows.forEach(row => {
           const code = (
+            row["Product Code"] ||
             row["Unique Product Code (e.g. SP000001)"] || 
             row["Code"] || 
             row["ProductCode"] || 
@@ -283,6 +298,7 @@ export default function BulkStockManager() {
           ).trim().toLowerCase();
 
           const name = (
+            row["Product Name"] ||
             row["Product Display Name"] || 
             row["Name"] || 
             row.name || 
@@ -290,7 +306,7 @@ export default function BulkStockManager() {
             ""
           ).trim().toLowerCase();
 
-          const rawStock = row["Physical Stock Count (Qty)"] ?? row["Stock"] ?? row["StockCount"] ?? row["Qty"] ?? row.stockCount;
+          const rawStock = row["Stock"] ?? row["Physical Stock Count (Qty)"] ?? row["StockCount"] ?? row["Qty"] ?? row.stockCount;
           if (rawStock === undefined || rawStock === null || rawStock === '') return;
           const stock = Math.max(0, parseInt(rawStock, 10));
           if (isNaN(stock)) return;
@@ -319,6 +335,15 @@ export default function BulkStockManager() {
     };
     reader.readAsBinaryString(file);
   };
+
+  if (isLoading && (!products || products.length === 0)) {
+    return (
+      <AdminPageLoader 
+        title={isHindi ? "थोक स्टॉक लोड हो रहा है..." : "Loading Bulk Stock Catalog..."} 
+        subtitle={isHindi ? "उत्पाद सूची और मौजूदा स्टॉक गिनती प्राप्त की जा रही है..." : "Retrieving inventory records and product quantities..."} 
+      />
+    );
+  }
 
   return (
     <div id="bulk-stock-manager-container" className="space-y-6">

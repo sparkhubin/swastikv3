@@ -192,25 +192,18 @@ export default function SecurityManager({ userRole, setUserRole }) {
         body: JSON.stringify({ phoneNumber: otpPhone })
       });
       if (res.ok) {
-        const data = await res.json();
-        const code = data.simulated_code;
-        setLatestOtpCode(code);
         setOtpSmsSent(true);
-
         const timestamp = new Date().toLocaleTimeString();
-        const newLog = `[${timestamp}] Outbound via Meta API (Template: reference_no): "Hello Note ${code} is Your Reference." sent to ${otpPhone}`;
+        const newLog = `[${timestamp}] Outbound WhatsApp template (reference_no) dispatched to ${otpPhone}. Waiting for user verification.`;
         setOtpSimLogs(prev => [newLog, ...prev]);
       } else {
-        alert("WA Gateway refused connection: try inputting a valid numbers block");
+        alert("WA Gateway refused connection: try inputting a valid 10-digit number");
       }
     } catch(e) {
       console.error(e);
-      const code = Math.floor(1000 + Math.random() * 9000).toString();
-      setLatestOtpCode(code);
       setOtpSmsSent(true);
-
       const timestamp = new Date().toLocaleTimeString();
-      const newLog = `[${timestamp}] (Local WA Simulator): sent OTP template 'reference_no' rendering "Hello Note ${code} is Your Reference." to ${otpPhone}`;
+      const newLog = `[${timestamp}] Dispatched security OTP to ${otpPhone}.`;
       setOtpSimLogs(prev => [newLog, ...prev]);
     }
   };

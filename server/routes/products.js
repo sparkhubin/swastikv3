@@ -4,6 +4,32 @@ import { mapProduct } from "../utils.js";
 
 const router = express.Router();
 
+// Helper to ensure database never stores full domain URLs; only clean filenames/codes
+export function cleanImageStorageValue(raw, code = '') {
+  if (!raw || typeof raw !== 'string') return '';
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.includes('photo-1542838132-92c53300491e') || trimmed.includes('unsplash.com')) {
+    return '';
+  }
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    try {
+      const parsed = new URL(trimmed);
+      const parts = parsed.pathname.split('/');
+      const last = parts[parts.length - 1];
+      if (last && !last.includes('photo-1542838132-92c53300491e')) {
+        return decodeURIComponent(last);
+      }
+      return '';
+    } catch {
+      return '';
+    }
+  }
+  if (trimmed.startsWith('/uploads/')) {
+    return trimmed.replace(/^\/uploads\//, '');
+  }
+  return trimmed;
+}
+
 router.get("/products", async (req, res) => {
   try {
     const category = req.query.category;
@@ -23,6 +49,7 @@ router.post("/products", async (req, res) => {
   try {
     const p = req.body;
     const gstVal = p.gstPercent !== undefined ? Number(p.gstPercent) : (p.gst_percent !== undefined ? Number(p.gst_percent) : 5);
+    const cleanedImg = cleanImageStorageValue(p.imageUrl || p.image || "", p.code || "");
     const resId = await db.execute(
       `INSERT INTO product (
         code, name_en, name_hi, category, sub_en, sub_hi, 
@@ -32,7 +59,7 @@ router.post("/products", async (req, res) => {
       [
         p.code || "", p.nameEn || p.name || "", p.nameHi || p.name || "", p.category || "swastik",
         p.subEn || p.brand || "General", p.subHi || p.brand || "General", p.price || 0,
-        p.originalPrice || null, p.discountTag || "", p.imageUrl || p.image || "", p.stockCount || 100,
+        p.originalPrice || null, p.discountTag || "", cleanedImg, p.stockCount || 100,
         p.unit || "", p.unitPrices || "", p.packEn || "", p.packHi || "", gstVal
       ]
     );
@@ -47,10 +74,37 @@ router.post("/products", async (req, res) => {
   }
 });
 
+// Helper to flexibly extract field values regardless of casing, punctuation (e.g. M.R.P. vs MRP), or alternative column labels
+function extractFieldValue(raw, candidateKeys) {
+  if (!raw || typeof raw !== 'object') return undefined;
+  
+  // 1. Exact key match
+  for (const key of candidateKeys) {
+    if (raw[key] !== undefined && raw[key] !== null && String(raw[key]).trim() !== '') {
+      return raw[key];
+    }
+  }
+
+  // 2. Normalized alphanumeric key match (strips punctuation, dots, spaces, parens, currency signs)
+  const entries = Object.entries(raw);
+  for (const key of candidateKeys) {
+    const cleanKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    for (const [rKey, rVal] of entries) {
+      if (rVal !== undefined && rVal !== null && String(rVal).trim() !== '') {
+        const cleanRKey = rKey.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (cleanRKey === cleanKey) {
+          return rVal;
+        }
+      }
+    }
+  }
+  return undefined;
+}
+
 // Bulk Upload Products (Excel & JSON with validation: skip or update, preserve code, prevent duplicate names)
 router.post("/products/bulk-upload", async (req, res) => {
   try {
-    const { items = [], mode = "update_existing", defaultCategory = "vegetables" } = req.body;
+    const { items = [], mode = "update_existing", defaultCategory = "swastik" } = req.body;
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: "No products provided in items array" });
     }
@@ -102,84 +156,190 @@ router.post("/products/bulk-upload", async (req, res) => {
       const raw = items[index];
       if (!raw || typeof raw !== 'object') continue;
 
-      // Extract all 11 fields supporting both user friendly exact names and camelCase/shorthand
-      const name = (
-        raw["Product Display Name"] ||
-        raw["Name"] ||
-        raw.name ||
-        raw.nameEn ||
-        raw.nameHi ||
-        ""
-      ).trim();
+      // 1. Product Name (Primary user requested column, also supports all synonyms)
+      const nameVal = extractFieldValue(raw, [
+        "Product Name",
+        "Product Display Name",
+        "Name",
+        "Item Name",
+        "Item",
+        "Product",
+        "Title",
+        "name",
+        "nameEn",
+        "nameHi"
+      ]);
+      const name = String(nameVal || "").trim();
 
       if (!name) {
-        details.push({ index, status: "skipped", reason: "Missing Product Display Name" });
+        details.push({ index, status: "skipped", reason: "Missing Product Name" });
         continue;
       }
 
-      const brandTag = (
-        raw["Brand / Segment Tag"] ||
-        raw["Brand"] ||
-        raw.brandTag ||
-        raw.brand ||
-        raw.subEn ||
-        raw.subHi ||
-        "General"
-      ).trim();
+      // 2. M.R.P. (Primary user requested column, e.g. "60.00" or 60)
+      const mrpVal = extractFieldValue(raw, [
+        "M.R.P.",
+        "M.R.P",
+        "MRP",
+        "Original Price crossed out (₹)",
+        "Original Price",
+        "OriginalPrice",
+        "List Price",
+        "originalPrice",
+        "original_price",
+        "mrp"
+      ]);
+      const mrpNum = (mrpVal !== undefined && mrpVal !== null && String(mrpVal).trim() !== "")
+        ? Number(String(mrpVal).replace(/[^0-9.]/g, ''))
+        : null;
+      const originalPrice = (mrpNum !== null && !isNaN(mrpNum) && mrpNum > 0) ? mrpNum : null;
 
-      const category = (
-        raw["Product Department Category"] ||
-        raw["Category"] ||
-        raw.category ||
-        defaultCategory ||
-        "vegetables"
-      ).trim().toLowerCase();
+      // 3. Sales Price (Primary user requested column, e.g. "50.00" or 50)
+      const salesPriceVal = extractFieldValue(raw, [
+        "Sales Price",
+        "Sale Price",
+        "Selling Price",
+        "Base Price / Default rate (₹)",
+        "Price",
+        "Rate",
+        "price",
+        "salesPrice",
+        "sales_price",
+        "sale_price"
+      ]);
+      const salesPriceNum = (salesPriceVal !== undefined && salesPriceVal !== null && String(salesPriceVal).trim() !== "")
+        ? Number(String(salesPriceVal).replace(/[^0-9.]/g, ''))
+        : 0;
+      const price = Math.max(0, (!isNaN(salesPriceNum) ? salesPriceNum : 0));
 
-      const unit = (
-        raw["Available Weight / Product Units"] ||
-        raw["Unit"] ||
-        raw["Units"] ||
-        raw.unit ||
-        "1 Unit"
-      ).trim();
+      // 4. Category (Defaults to "swastik")
+      const catVal = extractFieldValue(raw, [
+        "Category",
+        "Product Department Category",
+        "Department",
+        "category",
+        "cat"
+      ]);
+      const category = String(catVal || defaultCategory || "swastik").trim().toLowerCase();
 
-      const priceRaw = raw["Base Price / Default rate (₹)"] ?? raw["Price"] ?? raw.price ?? 0;
-      const price = Math.max(0, Number(priceRaw) || 0);
+      // 5. Brand (Defaults to detected first word from name or "Swastik")
+      const brandVal = extractFieldValue(raw, [
+        "Brand",
+        "Brand / Segment Tag",
+        "Brand Name",
+        "brand",
+        "brandTag",
+        "subEn",
+        "subHi"
+      ]);
+      let brandTag = String(brandVal || "").trim();
+      if (!brandTag) {
+        const firstWord = name.split(/\s+/)[0];
+        if (firstWord && firstWord.length >= 2 && !/^\d+$/.test(firstWord)) {
+          brandTag = firstWord.toUpperCase();
+        } else {
+          brandTag = "Swastik";
+        }
+      }
 
-      const origPriceRaw = raw["Original Price crossed out (₹)"] ?? raw["OriginalPrice"] ?? raw["MRP"] ?? raw.originalPrice;
-      const originalPrice = origPriceRaw !== undefined && origPriceRaw !== null && origPriceRaw !== "" && Number(origPriceRaw) > 0 ? Number(origPriceRaw) : null;
+      // 6. Unit (Extracts weight from name like "200G" in "ZOFF SOYA BADI 200G" or defaults to "1 Unit")
+      const unitVal = extractFieldValue(raw, [
+        "Unit",
+        "Available Weight / Product Units",
+        "Units",
+        "Weight",
+        "Pack",
+        "Pack Size",
+        "unit",
+        "packEn",
+        "packHi"
+      ]);
+      let unit = String(unitVal || "").trim();
+      if (!unit) {
+        const unitMatch = name.match(/(\d+(?:\.\d+)?\s*(?:kg|g|gm|gms|gram|grams|ml|l|ltr|litre|litres|pcs|pc|pack|dozen|badi))\b/i);
+        if (unitMatch) {
+          unit = unitMatch[1].trim();
+        } else {
+          unit = "1 Unit";
+        }
+      }
 
-      const discount = (
-        raw["Discount ribbon label text"] ||
-        raw["Discount"] ||
-        raw["DiscountRibbon"] ||
-        raw.discount ||
-        raw.discountTag ||
-        ""
-      ).trim();
+      // 7. Discount Ribbon (Auto-computes from MRP and Sales Price if not provided)
+      const discountVal = extractFieldValue(raw, [
+        "Discount",
+        "Discount ribbon label text",
+        "Discount (%)",
+        "discount",
+        "discountTag",
+        "DiscountRibbon"
+      ]);
+      let discount = String(discountVal || "").trim();
+      if (!discount && originalPrice && price && originalPrice > price) {
+        const saveAmt = Math.round(originalPrice - price);
+        const pct = Math.round(((originalPrice - price) / originalPrice) * 100);
+        if (pct >= 5) {
+          discount = `${pct}% OFF`;
+        } else if (saveAmt > 0) {
+          discount = `Save ₹${saveAmt}`;
+        }
+      }
 
-      const stockRaw = raw["Physical Stock Count (Qty)"] ?? raw["Stock"] ?? raw["StockCount"] ?? raw["Qty"] ?? raw.stockCount ?? 100;
-      const stockCount = Number(stockRaw) >= 0 ? Math.floor(Number(stockRaw)) : 100;
+      // 8. Stock Count (Defaults to 100)
+      const stockVal = extractFieldValue(raw, [
+        "Stock",
+        "Physical Stock Count (Qty)",
+        "Stock Count",
+        "Qty",
+        "Quantity",
+        "stockCount",
+        "stock",
+        "qty"
+      ]);
+      const stockNum = (stockVal !== undefined && stockVal !== null && String(stockVal).trim() !== "")
+        ? Math.floor(Number(String(stockVal).replace(/[^0-9]/g, '')))
+        : 100;
+      const stockCount = (!isNaN(stockNum) && stockNum >= 0) ? stockNum : 100;
 
-      const incomingCode = (
-        raw["Unique Product Code (e.g. SP000001)"] ||
-        raw["Code"] ||
-        raw["ProductCode"] ||
-        raw.code ||
-        ""
-      ).trim();
+      // 9. Product Code (Preserved if matching existing item, auto-assigned if empty)
+      const codeVal = extractFieldValue(raw, [
+        "Product Code",
+        "Code",
+        "Unique Product Code (e.g. SP000001)",
+        "Barcode",
+        "Item Code",
+        "code",
+        "productCode"
+      ]);
+      const incomingCode = String(codeVal || "").trim();
 
-      const gstRaw = raw["GST Rate (%) / जीएसटी दर"] ?? raw["GST (%)"] ?? raw["GST"] ?? raw["GstPercent"] ?? raw.gstPercent ?? raw.gst_percent ?? 5;
-      const gstPercent = Number(String(gstRaw).replace(/[^0-9.]/g, '')) || 0;
+      // 10. GST (%) (Defaults to 5%)
+      const gstVal = extractFieldValue(raw, [
+        "GST (%)",
+        "GST Rate (%) / जीएसटी दर",
+        "GST Rate",
+        "GST",
+        "GstPercent",
+        "gstPercent",
+        "gst_percent",
+        "gst"
+      ]);
+      const gstNum = (gstVal !== undefined && gstVal !== null && String(gstVal).trim() !== "")
+        ? Number(String(gstVal).replace(/[^0-9.]/g, ''))
+        : 5;
+      const gstPercent = (!isNaN(gstNum) && gstNum >= 0) ? gstNum : 5;
 
-      const image = (
-        raw["Product Illustration Image URL"] ||
-        raw["Image"] ||
-        raw["ImageUrl"] ||
-        raw.image ||
-        raw.imageUrl ||
-        ""
-      ).trim();
+      // 11. Image URL (Retains existing product photo or sets clean fallback)
+      const imageVal = extractFieldValue(raw, [
+        "Image URL",
+        "Product Illustration Image URL",
+        "Image",
+        "ImageUrl",
+        "image",
+        "imageUrl",
+        "Photo",
+        "photo"
+      ]);
+      const image = String(imageVal || "").trim();
 
       const normalizedName = name.toLowerCase();
       const normalizedIncomingCode = incomingCode.toLowerCase();
@@ -198,7 +358,6 @@ router.post("/products/bulk-upload", async (req, res) => {
 
       if (existing) {
         if (mode === "skip_existing") {
-          // If already exists then don't do anything
           skippedCount++;
           details.push({
             name,
@@ -215,10 +374,18 @@ router.post("/products/bulk-upload", async (req, res) => {
             duplicatesPrevented++;
           }
 
-          const finalImage = image && image.length > 5 ? image : existing.image_url;
-          const finalUnitPrices = raw.unitPrices || existing.unit_prices || (unit ? `${unit.split(',')[0].trim()}:${price}` : "");
+          const cleanedIncomingImage = cleanImageStorageValue(image, finalCode);
+          const finalImage = cleanedIncomingImage || cleanImageStorageValue(existing.image_url, finalCode);
+          const finalPrice = price > 0 ? price : (existing.price || 0);
+          const finalOrigPrice = originalPrice !== null ? originalPrice : existing.original_price;
+          const finalDiscount = discount || existing.discount_tag || "";
+          const finalCategory = (catVal ? category : existing.category) || "swastik";
+          const finalBrand = (brandVal ? brandTag : existing.sub_en) || brandTag;
+          const finalStock = (stockVal !== undefined ? stockCount : existing.stock_count) || 100;
           const packEn = unit ? unit.split(',')[0].trim() : (existing.pack_en || "1 Unit");
           const packHi = packEn;
+          const finalUnit = unit || existing.unit || "1 Unit";
+          const finalUnitPrices = raw.unitPrices || existing.unit_prices || `${packEn}:${finalPrice}`;
 
           await db.execute(
             `UPDATE product SET 
@@ -230,15 +397,15 @@ router.post("/products/bulk-upload", async (req, res) => {
               finalCode,
               name,
               name,
-              category || existing.category,
-              brandTag || existing.sub_en,
-              brandTag || existing.sub_hi,
-              price,
-              originalPrice,
-              discount,
+              finalCategory,
+              finalBrand,
+              finalBrand,
+              finalPrice,
+              finalOrigPrice,
+              finalDiscount,
               finalImage,
-              stockCount,
-              unit,
+              finalStock,
+              finalUnit,
               finalUnitPrices,
               packEn,
               packHi,
@@ -250,6 +417,9 @@ router.post("/products/bulk-upload", async (req, res) => {
           existing.code = finalCode;
           existing.name_en = name;
           existing.name_hi = name;
+          existing.price = finalPrice;
+          existing.original_price = finalOrigPrice;
+          existing.category = finalCategory;
           codeMap.set(finalCode.toLowerCase(), existing);
           nameMap.set(name.toLowerCase(), existing);
 
@@ -262,9 +432,9 @@ router.post("/products/bulk-upload", async (req, res) => {
           });
         }
       } else {
-        // Brand new item: enter/insert into database
+        // Brand new item: insert into database
         const finalCode = incomingCode || generateUniqueCode(category);
-        const finalImage = image || "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400";
+        const finalImage = cleanImageStorageValue(image, finalCode);
         const packEn = unit ? unit.split(',')[0].trim() : "1 Unit";
         const packHi = packEn;
         const finalUnitPrices = raw.unitPrices || `${packEn}:${price}`;
@@ -446,7 +616,8 @@ router.put("/products/:id", async (req, res) => {
     const price = p.price !== undefined ? p.price : current.price;
     const originalPrice = p.originalPrice !== undefined ? p.originalPrice : (p.mrp !== undefined ? p.mrp : current.original_price);
     const discountTag = p.discountTag !== undefined ? p.discountTag : current.discount_tag;
-    const imageUrl = p.imageUrl !== undefined ? p.imageUrl : (p.image !== undefined ? p.image : current.image_url);
+    const rawImg = p.imageUrl !== undefined ? p.imageUrl : (p.image !== undefined ? p.image : current.image_url);
+    const imageUrl = cleanImageStorageValue(rawImg, code);
     const stockCount = p.stockCount !== undefined ? p.stockCount : (p.stock !== undefined ? p.stock : current.stock_count);
     const unit = p.unit !== undefined ? p.unit : current.unit;
     const unitPrices = p.unitPrices !== undefined ? p.unitPrices : current.unit_prices;

@@ -17,7 +17,10 @@ import {
   Timer,
   ShoppingBag,
   Map,
-  X
+  X,
+  Tag,
+  Copy,
+  Check
 } from 'lucide-react';
 
 const API_KEY =
@@ -29,12 +32,13 @@ const hasValidKey = Boolean(API_KEY) && API_KEY !== 'YOUR_API_KEY';
 
 export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
   const { t, language } = useLanguage();
-  const { products, reviews, slides: dynamicSlides, contactSettings, categories: dynamicCategories, fetchProducts, fetchReviews } = useData();
+  const { products, reviews, slides: dynamicSlides, contactSettings, categories: dynamicCategories, offers, fetchProducts, fetchReviews, fetchSettings } = useData();
 
   useEffect(() => {
     fetchProducts();
     fetchReviews();
-  }, [fetchProducts, fetchReviews]);
+    fetchSettings();
+  }, [fetchProducts, fetchReviews, fetchSettings]);
 
   const [activeSlide, setActiveSlide] = useState(0);
   const [activeTestimonial, setActiveTestimonial] = useState(0);
@@ -54,36 +58,71 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
     };
   }, []);
 
-  // Simulated countdown timer for Flash Sales (ticking down)
-  const [timeLeft, setTimeLeft] = useState({ hours: 8, minutes: 45, seconds: 12 });
+  // Dynamic Coupons from Existing Coupon CRUD (offers)
+  const [currentOfferIndex, setCurrentOfferIndex] = useState(0);
+  const [couponCopied, setCouponCopied] = useState(false);
+
+  const activeOffers = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const filtered = (offers || []).filter(o => {
+      if (o.status && o.status !== 'Active') return false;
+      if (o.endDate && o.endDate < today) return false;
+      return true;
+    });
+    return filtered.length > 0 ? filtered : (offers || []);
+  }, [offers]);
+
+  const currentCoupon = activeOffers.length > 0
+    ? activeOffers[currentOfferIndex % activeOffers.length]
+    : null;
+
+  // Auto rotate coupons if multiple coupons exist in CRUD
+  useEffect(() => {
+    if (activeOffers.length <= 1) return;
+    const offerTimer = setInterval(() => {
+      setCurrentOfferIndex(prev => (prev + 1) % activeOffers.length);
+    }, 6000);
+    return () => clearInterval(offerTimer);
+  }, [activeOffers.length]);
+
+  // Dynamic countdown timer for active coupon
+  const [timeLeft, setTimeLeft] = useState({ hours: 12, minutes: 45, seconds: 30 });
 
   useEffect(() => {
-    const countdown = setInterval(() => {
-      setTimeLeft(prev => {
-        let h = prev.hours;
-        let m = prev.minutes;
-        let s = prev.seconds - 1;
+    const updateCountdown = () => {
+      if (currentCoupon?.endDate) {
+        const target = new Date(`${currentCoupon.endDate}T23:59:59`).getTime();
+        const diff = Math.max(0, target - Date.now());
+        const totalSeconds = Math.floor(diff / 1000);
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        setTimeLeft({ hours, minutes, seconds });
+      } else {
+        setTimeLeft(prev => {
+          let s = prev.seconds - 1;
+          let m = prev.minutes;
+          let h = prev.hours;
+          if (s < 0) { s = 59; m -= 1; }
+          if (m < 0) { m = 59; h -= 1; }
+          if (h < 0) { h = 12; m = 0; s = 0; }
+          return { hours: h, minutes: m, seconds: s };
+        });
+      }
+    };
 
-        if (s < 0) {
-          s = 59;
-          m -= 1;
-        }
-        if (m < 0) {
-          m = 59;
-          h -= 1;
-        }
-        if (h < 0) {
-          // Reset to some values
-          h = 12;
-          m = 0;
-          s = 0;
-        }
-        return { hours: h, minutes: m, seconds: s };
-      });
-    }, 1000);
+    updateCountdown();
+    const timer = setInterval(updateCountdown, 1000);
+    return () => clearInterval(timer);
+  }, [currentCoupon?.id, currentCoupon?.endDate]);
 
-    return () => clearInterval(countdown);
-  }, []);
+  const handleCopyCoupon = (e, code) => {
+    e.stopPropagation();
+    if (!code) return;
+    navigator.clipboard?.writeText(code);
+    setCouponCopied(true);
+    setTimeout(() => setCouponCopied(false), 2000);
+  };
 
   const slidesList = dynamicSlides && dynamicSlides.length > 0 ? dynamicSlides : [
     {
@@ -167,43 +206,96 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
 
   return (
     <div className="flex flex-col gap-8 pb-12" id="home-view">
-      {/* 0. Flagship Store Full-Width Hero Banner */}
+      {/* 1. Dynamic Home Banner Slider (Powered by Sliders CRUD) */}
       <section className="relative w-full overflow-hidden px-4 md:px-8 mt-2">
-        <div className="relative h-[220px] md:h-[350px] w-full rounded-2xl overflow-hidden shadow-2xl border border-white/10">
-          <img 
-            src={contactSettings?.banner || "https://images.unsplash.com/photo-1534723452862-4c874018d66d?auto=format&fit=crop&q=80&w=1920"} 
-            alt={contactSettings?.brandName || "Swastik Supermarket Banner"}
-            className="w-full h-full object-cover rounded-2xl"
-            referrerPolicy="no-referrer"
-          />
-        </div>
-      </section>
-
-      {/* 1. Hero Promo Slide Section */}
-      <section className="relative w-full overflow-hidden px-4 md:px-8 mt-1 pt-1">
         <div 
           onClick={handleSlideAction}
-          className={`relative h-[220px] md:h-[320px] w-full rounded-2xl overflow-hidden group shadow-2xl border border-white/10 ${hasLink ? 'cursor-pointer' : ''}`}
+          className={`relative h-[230px] sm:h-[300px] md:h-[370px] w-full rounded-3xl overflow-hidden group shadow-xl border border-slate-200 bg-slate-900 select-none ${hasLink ? 'cursor-pointer' : ''}`}
         >
           {currentSlide && (
             <img 
               src={currentSlide.image} 
-              alt="Promotion Banner"
-              className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-102"
+              alt={slideTitle || "Promotion Banner"}
+              className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
               referrerPolicy="no-referrer"
             />
           )}
 
-          {/* Slide Indicator Dots */}
-          <div className="absolute bottom-4 right-4 flex gap-2 z-10" onClick={(e) => e.stopPropagation()}>
-            {slidesList.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setActiveSlide(i)}
-                className={`h-2 rounded-full transition-all duration-300 ${activeSlide === i ? 'w-6 bg-cyan-400' : 'w-2 bg-white/60 hover:bg-white'}`}
-              />
-            ))}
+          {/* Premium Gradient Overlay for Legibility */}
+          <div className="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-black/85 via-black/50 to-transparent flex flex-col justify-end md:justify-center p-6 md:p-10 z-10">
+            <div className="max-w-xl text-white space-y-3">
+              {slideLabel && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/85 backdrop-blur-md text-white text-xs font-black tracking-wider uppercase shadow-sm">
+                  <Sparkles className="h-3.5 w-3.5 text-amber-300" />
+                  <span>{slideLabel}</span>
+                </div>
+              )}
+              
+              {slideTitle && (
+                <h2 className="text-xl sm:text-2xl md:text-4xl font-black text-white leading-tight tracking-tight drop-shadow-md whitespace-pre-line">
+                  {slideTitle}
+                </h2>
+              )}
+
+              {slideBtnText && (
+                <div className="pt-1">
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSlideAction();
+                    }}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs md:text-sm font-extrabold rounded-xl shadow-lg transition-all transform active:scale-95 group-hover:shadow-emerald-500/25 cursor-pointer"
+                  >
+                    <span>{slideBtnText}</span>
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
+
+          {/* Slide Navigation Chevrons */}
+          {slidesList.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveSlide((activeSlide - 1 + slidesList.length) % slidesList.length);
+                }}
+                className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/40 hover:bg-black/70 text-white backdrop-blur-sm border border-white/20 transition-all z-20 active:scale-90"
+                aria-label="Previous Slide"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveSlide((activeSlide + 1) % slidesList.length);
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/40 hover:bg-black/70 text-white backdrop-blur-sm border border-white/20 transition-all z-20 active:scale-90"
+                aria-label="Next Slide"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </>
+          )}
+
+          {/* Slide Indicator Dots */}
+          {slidesList.length > 1 && (
+            <div className="absolute bottom-4 right-4 flex gap-1.5 z-20" onClick={(e) => e.stopPropagation()}>
+              {slidesList.map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setActiveSlide(i)}
+                  className={`h-2 rounded-full transition-all duration-300 ${activeSlide === i ? 'w-6 bg-emerald-400' : 'w-2 bg-white/60 hover:bg-white'}`}
+                  aria-label={`Go to slide ${i + 1}`}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -231,31 +323,102 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
         </div>
       </section>
 
-      {/* 3. Offer Zone Banner (Ticking Flash Sale) */}
+      {/* 3. Dynamic Offer Zone Banner (Powered by Coupon CRUD) */}
       <section className="px-4 md:px-8">
-        <div className="bg-gradient-to-r from-emerald-600 via-teal-700 to-emerald-800 text-white rounded-2xl p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-lg border border-emerald-500/30">
-          <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/20 text-white border border-white/30 font-black text-xs tracking-wider mr-2 uppercase rounded-lg mb-3">
-              <Flame className="h-3.5 w-3.5 animate-bounce text-amber-300" />
-              <span>{t('offerZone')}</span>
+        <div 
+          onClick={() => {
+            onCategorySelect('all');
+            onViewChange('shop');
+          }}
+          className="bg-gradient-to-r from-emerald-600 via-teal-700 to-emerald-800 text-white rounded-3xl p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl border border-emerald-500/30 cursor-pointer relative overflow-hidden group"
+        >
+          <div className="z-10 flex-1">
+            <div className="flex items-center gap-2 flex-wrap mb-3">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/20 text-white border border-white/30 font-black text-xs tracking-wider uppercase rounded-lg">
+                <Flame className="h-3.5 w-3.5 animate-bounce text-amber-300" />
+                <span>{t('offerZone')}</span>
+              </div>
+              {activeOffers.length > 1 && (
+                <span className="text-[11px] font-bold text-emerald-200/90 bg-emerald-950/40 px-2 py-0.5 rounded-md border border-white/10">
+                  {currentOfferIndex + 1} / {activeOffers.length}
+                </span>
+              )}
             </div>
-            <h3 className="font-black text-lg md:text-xl text-white tracking-tight">
-              {t('flashSaleTitle')}
+
+            <h3 className="font-black text-lg md:text-2xl text-white tracking-tight">
+              {currentCoupon 
+                ? (language === 'hi' ? (currentCoupon.bannerHi || currentCoupon.bannerEn) : currentCoupon.bannerEn)
+                : t('flashSaleTitle')}
             </h3>
-            <p className="text-xs md:text-sm text-emerald-100 mt-1 font-medium">
-              {t('flashSaleDesc')}
+            
+            <p className="text-xs md:text-sm text-emerald-100 mt-1 font-medium max-w-xl">
+              {currentCoupon 
+                ? (language === 'hi' ? (currentCoupon.descriptionHi || currentCoupon.descriptionEn) : currentCoupon.descriptionEn)
+                : t('flashSaleDesc')}
             </p>
+
+            {/* Dynamic Coupon Code Pill & Copy Button */}
+            {currentCoupon?.code && (
+              <div className="mt-4 flex items-center gap-2.5 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-black/40 backdrop-blur-md rounded-xl border border-amber-300/40 text-amber-300 text-xs font-mono font-bold tracking-wider shadow-inner">
+                  <Tag className="h-3.5 w-3.5 text-amber-300" />
+                  <span>CODE: {currentCoupon.code}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => handleCopyCoupon(e, currentCoupon.code)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white hover:bg-amber-100 text-emerald-900 rounded-xl text-xs font-black shadow-md transition-all active:scale-95 cursor-pointer"
+                  title="Copy coupon code"
+                >
+                  {couponCopied ? (
+                    <>
+                      <Check className="h-3.5 w-3.5 text-emerald-700" />
+                      <span className="text-emerald-800">COPIED!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3.5 w-3.5 text-emerald-800" />
+                      <span>TAP TO COPY</span>
+                    </>
+                  )}
+                </button>
+                {currentCoupon.minOrder > 0 && (
+                  <span className="text-xs text-emerald-100 font-semibold">
+                    (Min Order: ₹{currentCoupon.minOrder})
+                  </span>
+                )}
+              </div>
+            )}
           </div>
-          <div className="flex flex-col items-end shrink-0 select-none bg-emerald-950/40 p-4 rounded-xl border border-white/20 shadow-md">
-            <span className="font-black text-xl md:text-2xl text-amber-300 tracking-wider uppercase block">
-              {t('upTo60')}
+
+          {/* Right side Discount Highlight & Countdown Timer */}
+          <div className="flex flex-col items-end shrink-0 select-none bg-emerald-950/50 p-4 sm:p-5 rounded-2xl border border-white/20 shadow-lg z-10 w-full md:w-auto text-right">
+            <span className="font-black text-2xl md:text-3xl text-amber-300 tracking-wider uppercase block">
+              {currentCoupon 
+                ? (currentCoupon.discountType === 'percentage' 
+                    ? `${currentCoupon.value}% OFF` 
+                    : `₹${currentCoupon.value} OFF`)
+                : t('upTo60')}
             </span>
-            <div className="flex items-center gap-1.5 text-xs text-white mt-1">
+            <div className="flex items-center gap-1.5 text-xs text-white mt-1.5 justify-end">
               <Timer className="h-3.5 w-3.5 text-amber-300" />
-              <p className="font-mono font-black">
+              <p className="font-mono font-black text-sm">
                 {String(timeLeft.hours).padStart(2, '0')}h : {String(timeLeft.minutes).padStart(2, '0')}m : {String(timeLeft.seconds).padStart(2, '0')}s
               </p>
             </div>
+            {activeOffers.length > 1 && (
+              <div className="flex items-center gap-1.5 mt-3 justify-end" onClick={(e) => e.stopPropagation()}>
+                {activeOffers.map((_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setCurrentOfferIndex(i)}
+                    className={`h-1.5 rounded-full transition-all ${currentOfferIndex === i ? 'w-5 bg-amber-300' : 'w-2 bg-white/40 hover:bg-white/70'}`}
+                    aria-label={`Coupon ${i + 1}`}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </section>

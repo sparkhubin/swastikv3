@@ -3,12 +3,14 @@ import * as XLSX from 'xlsx';
 import { useLanguage } from '../../context/LanguageContext';
 import { useData } from '../../context/DataContext';
 import R2ImageUploader from './R2ImageUploader';
+import AdminPageLoader from '../../components/admin/AdminPageLoader';
 import { 
   resolveProductImage, 
   getNextCandidateImage,
   markImageFailed, 
   hasCustomProductImage, 
-  DEFAULT_PRODUCT_FALLBACK 
+  DEFAULT_PRODUCT_FALLBACK,
+  extractCleanImageName
 } from '../../utils/imageHelper';
 import { 
   Package, 
@@ -93,8 +95,17 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
     fetchProducts 
   } = useData();
 
+  const [isLoading, setIsLoading] = useState(!products || products.length === 0);
+
   useEffect(() => {
-    fetchProducts();
+    let isMounted = true;
+    if (!products || products.length === 0) {
+      setIsLoading(true);
+    }
+    fetchProducts(true).finally(() => {
+      if (isMounted) setIsLoading(false);
+    });
+    return () => { isMounted = false; };
   }, [fetchProducts]);
 
   // Subview state: 'catalog' | 'bulk-stock' | 'bulk-import'
@@ -130,7 +141,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
     discount: '',
     unit: '1 Unit', // Single unit default
     unitPrices: '',
-    image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400',
+    image: '',
     stockCount: '100',
     code: '',
     gstPercent: '5'
@@ -201,76 +212,95 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
     setCurrentPage(1);
   }, [searchQuery, filterCategory, filterPromoStatus, filterBrand, filterImageStatus, filterStockStatus, itemsPerPage]);
 
-  // 11 requested fields standard structure
+  // 11 requested fields standard structure (Clean, user-specified standard column naming)
   const sample11FieldsProducts = [
     {
-      "Product Display Name": "Premium Alphonso Mango (Devgad)",
-      "Brand / Segment Tag": "Ratnagiri Farms",
-      "Product Department Category": "fruits",
-      "Available Weight / Product Units": "1 Dozen, 6 Pcs",
-      "Base Price / Default rate (₹)": 650,
-      "Original Price crossed out (₹)": 800,
-      "Discount ribbon label text": "18% OFF",
-      "Physical Stock Count (Qty)": 50,
-      "Unique Product Code (e.g. SP000001)": "SP000001",
-      "GST Rate (%) / जीएसटी दर": 0,
-      "Product Illustration Image URL": "https://images.unsplash.com/photo-1553279768-865429fa0078?auto=format&fit=crop&q=80&w=400"
+      "Product Name": "ZOFF SOYA BADI 200G",
+      "M.R.P.": "60.00",
+      "Sales Price": "50.00",
+      "Category": "swastik",
+      "Brand": "ZOFF",
+      "Unit": "200g",
+      "Discount": "17% OFF",
+      "Stock": 100,
+      "Product Code": "SP000001",
+      "GST (%)": 5,
+      "Image URL": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400"
     },
     {
-      "Product Display Name": "Daawat Rozana Super Basmati Rice",
-      "Brand / Segment Tag": "Daawat",
-      "Product Department Category": "grocery",
-      "Available Weight / Product Units": "1kg, 5kg",
-      "Base Price / Default rate (₹)": 115,
-      "Original Price crossed out (₹)": 140,
-      "Discount ribbon label text": "₹25 OFF",
-      "Physical Stock Count (Qty)": 120,
-      "Unique Product Code (e.g. SP000001)": "SP000002",
-      "GST Rate (%) / जीएसटी दर": 5,
-      "Product Illustration Image URL": "https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&q=80&w=400"
+      "Product Name": "Fortune Sunlite Refined Sunflower Oil",
+      "M.R.P.": "180.00",
+      "Sales Price": "155.00",
+      "Category": "swastik",
+      "Brand": "Fortune",
+      "Unit": "1L",
+      "Discount": "Save ₹25",
+      "Stock": 80,
+      "Product Code": "SP000002",
+      "GST (%)": 5,
+      "Image URL": "https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&q=80&w=400"
     },
     {
-      "Product Display Name": "Fortune Sunlite Refined Sunflower Oil",
-      "Brand / Segment Tag": "Fortune",
-      "Product Department Category": "grocery",
-      "Available Weight / Product Units": "1L, 5L",
-      "Base Price / Default rate (₹)": 155,
-      "Original Price crossed out (₹)": 180,
-      "Discount ribbon label text": "Save ₹25",
-      "Physical Stock Count (Qty)": 80,
-      "Unique Product Code (e.g. SP000001)": "SP000003",
-      "GST Rate (%) / जीएसटी दर": 5,
-      "Product Illustration Image URL": "https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&q=80&w=400"
+      "Product Name": "Daawat Rozana Super Basmati Rice",
+      "M.R.P.": "140.00",
+      "Sales Price": "115.00",
+      "Category": "swastik",
+      "Brand": "Daawat",
+      "Unit": "1kg",
+      "Discount": "₹25 OFF",
+      "Stock": 120,
+      "Product Code": "SP000003",
+      "GST (%)": 5,
+      "Image URL": "https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&q=80&w=400"
     },
     {
-      "Product Display Name": "Cadbury Dairy Milk Silk Hazelnut",
-      "Brand / Segment Tag": "Cadbury",
-      "Product Department Category": "chocolate",
-      "Available Weight / Product Units": "143g Bar",
-      "Base Price / Default rate (₹)": 175,
-      "Original Price crossed out (₹)": 195,
-      "Discount ribbon label text": "10% OFF",
-      "Physical Stock Count (Qty)": 45,
-      "Unique Product Code (e.g. SP000001)": "SP000004",
-      "GST Rate (%) / जीएसटी दर": 18,
-      "Product Illustration Image URL": "https://images.unsplash.com/photo-1548907040-4d42b52125ca?auto=format&fit=crop&q=80&w=400"
+      "Product Name": "Cadbury Dairy Milk Silk Hazelnut",
+      "M.R.P.": "195.00",
+      "Sales Price": "175.00",
+      "Category": "chocolate",
+      "Brand": "Cadbury",
+      "Unit": "143g Bar",
+      "Discount": "10% OFF",
+      "Stock": 45,
+      "Product Code": "SP000004",
+      "GST (%)": 18,
+      "Image URL": "https://images.unsplash.com/photo-1548907040-4d42b52125ca?auto=format&fit=crop&q=80&w=400"
     },
     {
-      "Product Display Name": "Pampers All Round Protection Baby Pants (L)",
-      "Brand / Segment Tag": "Pampers",
-      "Product Department Category": "babycare",
-      "Available Weight / Product Units": "34 Diapers Pack",
-      "Base Price / Default rate (₹)": 599,
-      "Original Price crossed out (₹)": 749,
-      "Discount ribbon label text": "20% OFF",
-      "Physical Stock Count (Qty)": 30,
-      "Unique Product Code (e.g. SP000001)": "SP000005",
-      "GST Rate (%) / जीएसटी दर": 12,
-      "Product Illustration Image URL": "https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&q=80&w=400"
+      "Product Name": "Pampers All Round Protection Baby Pants (L)",
+      "M.R.P.": "749.00",
+      "Sales Price": "599.00",
+      "Category": "babycare",
+      "Brand": "Pampers",
+      "Unit": "34 Diapers Pack",
+      "Discount": "20% OFF",
+      "Stock": 30,
+      "Product Code": "SP000005",
+      "GST (%)": 12,
+      "Image URL": "https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&q=80&w=400"
     }
   ];
 
-  // Download Sample Excel Template
+  // Minimal 3-field quick sample (Product Name, M.R.P., Sales Price)
+  const sample3FieldsProducts = [
+    {
+      "Product Name": "ZOFF SOYA BADI 200G",
+      "M.R.P.": "60.00",
+      "Sales Price": "50.00"
+    },
+    {
+      "Product Name": "FORTUNE SUNLITE REFINED OIL 1L",
+      "M.R.P.": "180.00",
+      "Sales Price": "155.00"
+    },
+    {
+      "Product Name": "DAAWAT ROZANA BASMATI RICE 1KG",
+      "M.R.P.": "140.00",
+      "Sales Price": "115.00"
+    }
+  ];
+
+  // Download Sample Excel Template (11 fields)
   const downloadSampleProductsExcel = () => {
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(sample11FieldsProducts);
@@ -278,7 +308,15 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
     XLSX.writeFile(wb, "swastik_products_sample_11fields.xlsx");
   };
 
-  // Download Sample JSON Template
+  // Download Sample Excel Template (3 fields)
+  const downloadSample3FieldsExcel = () => {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(sample3FieldsProducts);
+    XLSX.utils.book_append_sheet(wb, ws, "Products 3 Fields");
+    XLSX.writeFile(wb, "swastik_products_sample_3fields.xlsx");
+  };
+
+  // Download Sample JSON Template (11 fields)
   const downloadSampleProductsJson = () => {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(sample11FieldsProducts, null, 2));
     const downloadAnchor = document.createElement('a');
@@ -289,20 +327,31 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
     downloadAnchor.remove();
   };
 
+  // Download Sample JSON Template (3 fields)
+  const downloadSample3FieldsJson = () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(sample3FieldsProducts, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", "swastik_products_sample_3fields.json");
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
   // Export Current Live Catalog to Excel
   const exportCatalogToExcel = () => {
     const exportRows = products.map((p, idx) => ({
-      "Product Display Name": p.nameEn || p.name || "",
-      "Brand / Segment Tag": p.brand || p.subEn || "General",
-      "Product Department Category": p.category || "vegetables",
-      "Available Weight / Product Units": p.unit || "1 Unit",
-      "Base Price / Default rate (₹)": p.price || 0,
-      "Original Price crossed out (₹)": p.originalPrice || "",
-      "Discount ribbon label text": p.discount || p.discount_tag || "",
-      "Physical Stock Count (Qty)": getStockCount(p),
-      "Unique Product Code (e.g. SP000001)": p.code || `SP${String(idx + 1).padStart(6, '0')}`,
-      "GST Rate (%) / जीएसटी दर": p.gstPercent !== undefined ? p.gstPercent : (p.gst_percent !== undefined ? p.gst_percent : 5),
-      "Product Illustration Image URL": p.image || p.image_url || ""
+      "Product Name": p.nameEn || p.name || "",
+      "M.R.P.": (p.originalPrice !== null && p.originalPrice !== undefined) ? p.originalPrice : (p.original_price || ""),
+      "Sales Price": p.price || 0,
+      "Category": p.category || "swastik",
+      "Brand": p.brand || p.subEn || "Swastik",
+      "Unit": p.unit || "1 Unit",
+      "Discount": p.discount || p.discount_tag || "",
+      "Stock": getStockCount(p),
+      "Product Code": p.code || `SP${String(idx + 1).padStart(6, '0')}`,
+      "GST (%)": p.gstPercent !== undefined ? p.gstPercent : (p.gst_percent !== undefined ? p.gst_percent : 5),
+      "Image URL": p.image || p.image_url || ""
     }));
 
     const wb = XLSX.utils.book_new();
@@ -314,17 +363,17 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
   // Export Current Live Catalog to JSON
   const exportCatalogToJson = () => {
     const exportRows = products.map((p, idx) => ({
-      "Product Display Name": p.nameEn || p.name || "",
-      "Brand / Segment Tag": p.brand || p.subEn || "General",
-      "Product Department Category": p.category || "vegetables",
-      "Available Weight / Product Units": p.unit || "1 Unit",
-      "Base Price / Default rate (₹)": p.price || 0,
-      "Original Price crossed out (₹)": p.originalPrice || null,
-      "Discount ribbon label text": p.discount || p.discount_tag || "",
-      "Physical Stock Count (Qty)": getStockCount(p),
-      "Unique Product Code (e.g. SP000001)": p.code || `SP${String(idx + 1).padStart(6, '0')}`,
-      "GST Rate (%) / जीएसटी दर": p.gstPercent !== undefined ? p.gstPercent : (p.gst_percent !== undefined ? p.gst_percent : 5),
-      "Product Illustration Image URL": p.image || p.image_url || ""
+      "Product Name": p.nameEn || p.name || "",
+      "M.R.P.": (p.originalPrice !== null && p.originalPrice !== undefined) ? p.originalPrice : (p.original_price || null),
+      "Sales Price": p.price || 0,
+      "Category": p.category || "swastik",
+      "Brand": p.brand || p.subEn || "Swastik",
+      "Unit": p.unit || "1 Unit",
+      "Discount": p.discount || p.discount_tag || "",
+      "Stock": getStockCount(p),
+      "Product Code": p.code || `SP${String(idx + 1).padStart(6, '0')}`,
+      "GST (%)": p.gstPercent !== undefined ? p.gstPercent : (p.gst_percent !== undefined ? p.gst_percent : 5),
+      "Image URL": p.image || p.image_url || ""
     }));
 
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportRows, null, 2));
@@ -336,8 +385,8 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
     downloadAnchor.remove();
   };
 
-  // Bulk Import Destination Category
-  const [bulkCategory, setBulkCategory] = useState('vegetables');
+  // Bulk Import Destination Category (Default: swastik)
+  const [bulkCategory, setBulkCategory] = useState('swastik');
 
   // Submit Single Product Form (Register or Modify)
   const handleProductSubmit = async (e) => {
@@ -363,7 +412,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
       unitPrices: productForm.unitPrices || '',
       packEn: productForm.unit ? productForm.unit.split(',')[0].trim() : '1 Unit',
       packHi: productForm.unit ? productForm.unit.split(',')[0].trim() : '1 Unit',
-      image: productForm.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400',
+      image: extractCleanImageName(productForm.image || ''),
       stockCount: productForm.stockCount !== '' ? Number(productForm.stockCount) : 100,
       code: finalCode,
       gstPercent: productForm.gstPercent !== '' ? Number(productForm.gstPercent) : 5
@@ -386,7 +435,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
       discount: '',
       unit: '1 Unit',
       unitPrices: '',
-      image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400',
+      image: '',
       stockCount: '100',
       code: '',
       gstPercent: '5'
@@ -404,7 +453,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
       discount: prod.discount || prod.discount_tag || '',
       unit: prod.unit || '1 Unit',
       unitPrices: prod.unitPrices || '',
-      image: prod.image || prod.image_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400',
+      image: extractCleanImageName(prod.image || prod.image_url || ''),
       stockCount: prod.stockCount !== undefined ? String(prod.stockCount) : (prod.stock_count !== undefined ? String(prod.stock_count) : '100'),
       code: prod.code || prod.Code || '',
       gstPercent: prod.gstPercent !== undefined ? String(prod.gstPercent) : (prod.gst_percent !== undefined ? String(prod.gst_percent) : '5')
@@ -508,7 +557,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
 
         const result = await bulkUploadProducts(rows, {
           mode: importMode,
-          defaultCategory: bulkCategory
+          defaultCategory: bulkCategory || 'swastik'
         });
 
         setUploadResult(result);
@@ -524,7 +573,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
     reader.readAsBinaryString(file);
   };
 
-  // Bulk JSON Upload Parser with 11 Fields Validation & Deduplication
+  // Bulk JSON Upload Parser supporting 3-field minimal format, 11-field standard, arrays or single objects
   const handleBulkJsonUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -533,8 +582,18 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
     const reader = new FileReader();
     reader.onload = async (evt) => {
       try {
-        const parsed = JSON.parse(evt.target.result);
-        const arrayData = Array.isArray(parsed) ? parsed : [parsed];
+        const rawText = evt.target.result;
+        const parsed = JSON.parse(rawText);
+        
+        let arrayData = [];
+        if (Array.isArray(parsed)) {
+          arrayData = parsed;
+        } else if (parsed && typeof parsed === 'object') {
+          if (Array.isArray(parsed.products)) arrayData = parsed.products;
+          else if (Array.isArray(parsed.items)) arrayData = parsed.items;
+          else if (Array.isArray(parsed.data)) arrayData = parsed.data;
+          else arrayData = [parsed];
+        }
 
         if (arrayData.length === 0) {
           alert(isHindi ? "JSON फ़ाइल खाली है।" : "JSON file contains no products.");
@@ -544,7 +603,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
 
         const result = await bulkUploadProducts(arrayData, {
           mode: importMode,
-          defaultCategory: bulkCategory
+          defaultCategory: bulkCategory || 'swastik'
         });
 
         setUploadResult(result);
@@ -604,6 +663,15 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
     }
   }, [filteredProducts.length, totalPages, currentPage]);
 
+  if (isLoading) {
+    return (
+      <AdminPageLoader 
+        title={isHindi ? "उत्पाद एवं स्टॉक डेटाबेस लोड हो रहा है..." : "Loading Inventory & Products..."}
+        subtitle={isHindi ? "कैटलॉग, SKU कोड्स और स्टॉक स्तर प्राप्त किए जा रहे हैं..." : "Fetching full SKU catalog, prices, and stock balances..."}
+      />
+    );
+  }
+
   return (
     <div className="space-y-8 animate-fade-in text-white/90">
       
@@ -626,12 +694,12 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={downloadSampleProductsExcel}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-amber-300 font-extrabold uppercase text-[10px] tracking-wider rounded-xl border border-amber-500/30 transition-all cursor-pointer shadow-sm active:scale-95"
-              title="Download standard 11-field Excel sample (.xlsx)"
+              onClick={downloadSample3FieldsJson}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-cyan-300 font-extrabold uppercase text-[10px] tracking-wider rounded-xl border border-cyan-500/30 transition-all cursor-pointer shadow-sm active:scale-95"
+              title="Download minimal 3-field JSON sample (Product Name, M.R.P., Sales Price)"
             >
               <Download className="h-3.5 w-3.5" />
-              <span>Excel Sample (11 Fields)</span>
+              <span>3-Field JSON Sample</span>
             </button>
             <button
               type="button"
@@ -640,7 +708,16 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
               title="Download standard 11-field JSON sample (.json)"
             >
               <Download className="h-3.5 w-3.5" />
-              <span>JSON Sample</span>
+              <span>11-Field JSON</span>
+            </button>
+            <button
+              type="button"
+              onClick={downloadSampleProductsExcel}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-amber-300 font-extrabold uppercase text-[10px] tracking-wider rounded-xl border border-amber-500/30 transition-all cursor-pointer shadow-sm active:scale-95"
+              title="Download standard 11-field Excel sample (.xlsx)"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span>11-Field Excel</span>
             </button>
             <button
               type="button"
@@ -816,16 +893,27 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
                       <p className="text-[10px] text-slate-400 font-mono">Accepts .xlsx, .xls</p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={downloadSampleProductsExcel}
-                    className="px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-black text-[9px] uppercase tracking-wider rounded-lg border border-amber-500/30 transition-all cursor-pointer"
-                  >
-                    📥 Sample Excel
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={downloadSample3FieldsExcel}
+                      className="px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-black text-[9px] uppercase tracking-wider rounded-lg border border-amber-500/30 transition-all cursor-pointer"
+                      title="Download minimal 3-column Excel template"
+                    >
+                      3-Col .xlsx
+                    </button>
+                    <button
+                      type="button"
+                      onClick={downloadSampleProductsExcel}
+                      className="px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-black text-[9px] uppercase tracking-wider rounded-lg border border-amber-500/30 transition-all cursor-pointer"
+                      title="Download complete 11-column Excel template"
+                    >
+                      11-Col .xlsx
+                    </button>
+                  </div>
                 </div>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Bulk import or update products using Microsoft Excel. Supports all 11 columns matching the standard Swastik supermarket schema.
+                  Bulk import or update products using Microsoft Excel. Supports minimal 3 columns (<span className="text-amber-300 font-mono font-bold">Product Name, M.R.P., Sales Price</span>) or all 11 columns. Default category is <span className="text-emerald-400 font-bold">swastik</span>.
                 </p>
               </div>
 
@@ -833,7 +921,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
                 <FileSpreadsheet className="h-8 w-8 text-amber-400 mx-auto opacity-70" />
                 <div className="space-y-1">
                   <span className="text-xs font-bold text-white block">Select or drop Excel catalog file</span>
-                  <span className="text-[10px] text-slate-500 font-mono block">Columns: Name, Brand, Category, Units, Price, OriginalPrice, Discount, Stock, Code, GST, Image</span>
+                  <span className="text-[10px] text-slate-500 font-mono block">Supports 3-column & 11-column standardized schemas</span>
                 </div>
                 <div className="relative inline-block w-full max-w-xs">
                   <input
@@ -865,16 +953,27 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
                       <p className="text-[10px] text-slate-400 font-mono">Accepts .json</p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={downloadSampleProductsJson}
-                    className="px-2.5 py-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 font-black text-[9px] uppercase tracking-wider rounded-lg border border-cyan-500/30 transition-all cursor-pointer"
-                  >
-                    📥 Sample JSON
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={downloadSample3FieldsJson}
+                      className="px-2 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 font-black text-[9px] uppercase tracking-wider rounded-lg border border-cyan-500/30 transition-all cursor-pointer"
+                      title="Download minimal 3-column JSON sample"
+                    >
+                      3-Col .json
+                    </button>
+                    <button
+                      type="button"
+                      onClick={downloadSampleProductsJson}
+                      className="px-2 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 font-black text-[9px] uppercase tracking-wider rounded-lg border border-cyan-500/30 transition-all cursor-pointer"
+                      title="Download complete 11-column JSON sample"
+                    >
+                      11-Col .json
+                    </button>
+                  </div>
                 </div>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Import array of product objects directly via JSON. Ideal for API data dumps, POS migrations, and system backups.
+                  Import array or object directly via JSON. Seamlessly parses minimal 3 fields (<span className="text-cyan-300 font-mono font-bold">Product Name, M.R.P., Sales Price</span>) or full 11 fields with default category <span className="text-emerald-400 font-bold">swastik</span>.
                 </p>
               </div>
 
@@ -882,7 +981,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
                 <Layers className="h-8 w-8 text-cyan-400 mx-auto opacity-70" />
                 <div className="space-y-1">
                   <span className="text-xs font-bold text-white block">Select or drop JSON array file</span>
-                  <span className="text-[10px] text-slate-500 font-mono block">Format: Array of objects with the 11 schema keys</span>
+                  <span className="text-[10px] text-slate-500 font-mono block">Format: Array of objects with 3 or 11 standardized keys</span>
                 </div>
                 <div className="relative inline-block w-full max-w-xs">
                   <input
@@ -908,19 +1007,26 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
               <div>
                 <h4 className="text-sm font-black text-white flex items-center gap-2">
                   <FileText className="h-4 w-4 text-cyan-400" />
-                  <span>The 11-Field Standard Specification</span>
+                  <span>Standard Catalog Schema Specification</span>
                 </h4>
                 <p className="text-[11px] text-slate-400">
-                  Your Excel sheet columns or JSON object keys must include or map to these 11 exact fields:
+                  Minimal 3 columns (<span className="text-cyan-300 font-semibold">Product Name, M.R.P., Sales Price</span>) or full 11 standardized columns with default category <span className="text-emerald-400 font-bold">swastik</span>:
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
+                  onClick={downloadSample3FieldsJson}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 text-[10px] font-black uppercase rounded-xl border border-white/10 cursor-pointer"
+                >
+                  3-Field Sample
+                </button>
+                <button
+                  type="button"
                   onClick={downloadSampleProductsExcel}
                   className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 text-[10px] font-black uppercase rounded-xl border border-white/10 cursor-pointer"
                 >
-                  Download .xlsx Template
+                  11-Field Template (.xlsx)
                 </button>
               </div>
             </div>
@@ -930,89 +1036,98 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
                 <thead className="bg-slate-950 text-[10px] font-black uppercase text-slate-400 border-b border-white/10 font-mono tracking-wider">
                   <tr>
                     <th className="p-3">#</th>
-                    <th className="p-3">Field / Column Name</th>
-                    <th className="p-3">Type</th>
+                    <th className="p-3">Standard Column Name</th>
+                    <th className="p-3">Type & Presence</th>
                     <th className="p-3">Sample Value</th>
-                    <th className="p-3">Validation Rule</th>
+                    <th className="p-3">Behavior & Validation Rule</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5 font-medium text-slate-300">
-                  <tr>
+                  <tr className="bg-cyan-950/20">
                     <td className="p-3 font-mono text-cyan-400">1</td>
-                    <td className="p-3 font-bold text-white">Product Display Name</td>
-                    <td className="p-3 font-mono text-[10px] text-slate-400">String (Required)</td>
-                    <td className="p-3 font-mono text-emerald-400">Premium Alphonso Mango</td>
-                    <td className="p-3 text-[11px] text-slate-400">Primary label; deduplicated against existing names</td>
+                    <td className="p-3 font-bold text-white flex items-center gap-2">
+                      <span>Product Name</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono font-bold">REQUIRED</span>
+                    </td>
+                    <td className="p-3 font-mono text-[10px] text-slate-400">String</td>
+                    <td className="p-3 font-mono text-emerald-400">ZOFF SOYA BADI 200G</td>
+                    <td className="p-3 text-[11px] text-slate-300">Item title; deduplicated against existing names. Weight and brand auto-detected if missing.</td>
                   </tr>
-                  <tr>
+                  <tr className="bg-cyan-950/10">
                     <td className="p-3 font-mono text-cyan-400">2</td>
-                    <td className="p-3 font-bold text-white">Brand / Segment Tag</td>
-                    <td className="p-3 font-mono text-[10px] text-slate-400">String</td>
-                    <td className="p-3 font-mono text-emerald-400">Ratnagiri Farms / Daawat</td>
-                    <td className="p-3 text-[11px] text-slate-400">Brand badge shown on product card</td>
+                    <td className="p-3 font-bold text-white flex items-center gap-2">
+                      <span>M.R.P.</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold">3-COL</span>
+                    </td>
+                    <td className="p-3 font-mono text-[10px] text-slate-400">Number / String</td>
+                    <td className="p-3 font-mono text-emerald-400">60.00</td>
+                    <td className="p-3 text-[11px] text-slate-300">Original MRP crossed out on card. Used with Sales Price to calculate discount savings.</td>
                   </tr>
-                  <tr>
+                  <tr className="bg-cyan-950/20">
                     <td className="p-3 font-mono text-cyan-400">3</td>
-                    <td className="p-3 font-bold text-white">Product Department Category</td>
-                    <td className="p-3 font-mono text-[10px] text-slate-400">String</td>
-                    <td className="p-3 font-mono text-emerald-400">fruits, grocery, vegetables, chocolate</td>
-                    <td className="p-3 text-[11px] text-slate-400">Matches category slug or assigns chosen target category</td>
+                    <td className="p-3 font-bold text-white flex items-center gap-2">
+                      <span>Sales Price</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono font-bold">REQUIRED</span>
+                    </td>
+                    <td className="p-3 font-mono text-[10px] text-slate-400">Number / String</td>
+                    <td className="p-3 font-mono text-emerald-400">50.00</td>
+                    <td className="p-3 text-[11px] text-slate-300">Actual selling price charged to customer in Indian Rupees (₹).</td>
                   </tr>
                   <tr>
                     <td className="p-3 font-mono text-cyan-400">4</td>
-                    <td className="p-3 font-bold text-white">Available Weight / Product Units</td>
-                    <td className="p-3 font-mono text-[10px] text-slate-400">String</td>
-                    <td className="p-3 font-mono text-emerald-400">1kg, 5kg / 1 Dozen, 6 Pcs</td>
-                    <td className="p-3 text-[11px] text-slate-400">Comma-separated pack weights for weight picker pills</td>
+                    <td className="p-3 font-bold text-white">Category</td>
+                    <td className="p-3 font-mono text-[10px] text-slate-400">String (Optional)</td>
+                    <td className="p-3 font-mono text-emerald-400">swastik</td>
+                    <td className="p-3 text-[11px] text-slate-400">Defaults automatically to <strong className="text-emerald-400">swastik</strong> (SWSTIK PRODUCT LIST) if left blank or omitted.</td>
                   </tr>
                   <tr>
                     <td className="p-3 font-mono text-cyan-400">5</td>
-                    <td className="p-3 font-bold text-white">Base Price / Default rate (₹)</td>
-                    <td className="p-3 font-mono text-[10px] text-slate-400">Number (Required)</td>
-                    <td className="p-3 font-mono text-emerald-400">650</td>
-                    <td className="p-3 text-[11px] text-slate-400">Selling price in Indian Rupees (₹)</td>
+                    <td className="p-3 font-bold text-white">Brand</td>
+                    <td className="p-3 font-mono text-[10px] text-slate-400">String (Optional)</td>
+                    <td className="p-3 font-mono text-emerald-400">ZOFF / Fortune</td>
+                    <td className="p-3 text-[11px] text-slate-400">Brand badge. If omitted, first token of Product Name or "Swastik" is used.</td>
                   </tr>
                   <tr>
                     <td className="p-3 font-mono text-cyan-400">6</td>
-                    <td className="p-3 font-bold text-white">Original Price crossed out (₹)</td>
-                    <td className="p-3 font-mono text-[10px] text-slate-400">Number (Optional)</td>
-                    <td className="p-3 font-mono text-emerald-400">800</td>
-                    <td className="p-3 text-[11px] text-slate-400">MRP price struck through to demonstrate customer savings</td>
+                    <td className="p-3 font-bold text-white">Unit</td>
+                    <td className="p-3 font-mono text-[10px] text-slate-400">String (Optional)</td>
+                    <td className="p-3 font-mono text-emerald-400">200g / 1kg / 1L</td>
+                    <td className="p-3 text-[11px] text-slate-400">Available pack sizes. Auto-extracted from Product Name (e.g. 200G → 200g) or "1 Unit".</td>
                   </tr>
                   <tr>
                     <td className="p-3 font-mono text-cyan-400">7</td>
-                    <td className="p-3 font-bold text-white">Discount ribbon label text</td>
+                    <td className="p-3 font-bold text-white">Discount</td>
                     <td className="p-3 font-mono text-[10px] text-slate-400">String (Optional)</td>
-                    <td className="p-3 font-mono text-emerald-400">18% OFF / Save ₹25</td>
-                    <td className="p-3 text-[11px] text-slate-400">Highlighted promotional ribbon badge on card</td>
+                    <td className="p-3 font-mono text-emerald-400">17% OFF / Save ₹10</td>
+                    <td className="p-3 text-[11px] text-slate-400">Ribbon tag. Automatically computed from M.R.P. &amp; Sales Price if omitted.</td>
                   </tr>
                   <tr>
                     <td className="p-3 font-mono text-cyan-400">8</td>
-                    <td className="p-3 font-bold text-white">Physical Stock Count (Qty)</td>
-                    <td className="p-3 font-mono text-[10px] text-slate-400">Number</td>
-                    <td className="p-3 font-mono text-emerald-400">50</td>
-                    <td className="p-3 text-[11px] text-slate-400">Remaining stock inventory units in warehouse/store</td>
+                    <td className="p-3 font-bold text-white">Stock</td>
+                    <td className="p-3 font-mono text-[10px] text-slate-400">Number (Optional)</td>
+                    <td className="p-3 font-mono text-emerald-400">100</td>
+                    <td className="p-3 text-[11px] text-slate-400">Available inventory count. Defaults to 100 if omitted.</td>
                   </tr>
                   <tr>
                     <td className="p-3 font-mono text-cyan-400">9</td>
-                    <td className="p-3 font-bold text-white">Unique Product Code (e.g. SP000001)</td>
+                    <td className="p-3 font-bold text-white">Product Code</td>
                     <td className="p-3 font-mono text-[10px] text-slate-400">String (Protected)</td>
                     <td className="p-3 font-mono text-emerald-400">SP000001</td>
-                    <td className="p-3 text-[11px] text-slate-400">Strictly preserved upon updates; auto-assigned if blank</td>
+                    <td className="p-3 text-[11px] text-slate-400">Preserved strictly on updates; sequential unique SP code auto-generated if blank.</td>
                   </tr>
                   <tr>
                     <td className="p-3 font-mono text-cyan-400">10</td>
-                    <td className="p-3 font-bold text-white">GST Rate (%) / जीएसटी दर</td>
-                    <td className="p-3 font-mono text-[10px] text-slate-400">Number</td>
-                    <td className="p-3 font-mono text-emerald-400">0, 5, 12, 18, 28</td>
-                    <td className="p-3 text-[11px] text-slate-400">Tax percentage recorded on invoice & GST reports</td>
+                    <td className="p-3 font-bold text-white">GST (%)</td>
+                    <td className="p-3 font-mono text-[10px] text-slate-400">Number (Optional)</td>
+                    <td className="p-3 font-mono text-emerald-400">5</td>
+                    <td className="p-3 text-[11px] text-slate-400">Tax percentage recorded on customer invoice. Defaults to 5%.</td>
                   </tr>
                   <tr>
                     <td className="p-3 font-mono text-cyan-400">11</td>
-                    <td className="p-3 font-bold text-white">Product Illustration Image URL</td>
-                    <td className="p-3 font-mono text-[10px] text-slate-400">URL / String</td>
+                    <td className="p-3 font-bold text-white">Image URL</td>
+                    <td className="p-3 font-mono text-[10px] text-slate-400">URL (Optional)</td>
                     <td className="p-3 font-mono text-emerald-400">https://images.unsplash.com/...</td>
-                    <td className="p-3 text-[11px] text-slate-400">Direct image link or Cloudflare R2 object URL</td>
+                    <td className="p-3 text-[11px] text-slate-400">Product illustration. Preserves existing image on updates or sets default catalog image.</td>
                   </tr>
                 </tbody>
               </table>
@@ -1268,13 +1383,14 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
                 <span>Bulk Import Destination</span>
               </h3>
               <div className="space-y-1">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Choose Target Category</label>
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Choose Target Category (Default: swastik)</label>
                 <select 
                   value={bulkCategory}
                   onChange={(e) => setBulkCategory(e.target.value)}
                   className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white"
                 >
-                  {categories.filter(c => c.id !== 'all').map(cat => (
+                  <option value="swastik">📦 SWASTIK PRODUCT LIST (swastik)</option>
+                  {categories.filter(c => c.id !== 'all' && c.id !== 'swastik').map(cat => (
                     <option key={cat.id} value={cat.id}>📦 {cat.nameEn || cat.id}</option>
                   ))}
                 </select>
@@ -1283,17 +1399,28 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
 
             {/* Bulk JSON Upload Box */}
             <div className="bg-slate-900 border border-white/10 p-5 rounded-3xl space-y-4 shadow-xl">
-              <h3 className="text-xs font-black uppercase text-cyan-400 tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-2">
-                <Layers className="h-4 w-4 text-cyan-400" />
-                <span>Bulk JSON Category Import</span>
-              </h3>
+              <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                <h3 className="text-xs font-black uppercase text-cyan-400 tracking-wider flex items-center gap-1.5">
+                  <Layers className="h-4 w-4 text-cyan-400" />
+                  <span>Bulk JSON Import</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={downloadSample3FieldsJson}
+                  className="text-[9px] font-bold text-cyan-300 hover:text-cyan-200 underline cursor-pointer"
+                >
+                  Sample JSON
+                </button>
+              </div>
               <p className="text-[10px] text-slate-400 leading-normal">
-                Upload a `.json` file of products to register them bulk category-wise into the chosen target.
+                Upload `.json` products. Accepts 3 columns (<span className="text-cyan-300 font-mono">Product Name, M.R.P., Sales Price</span>) or full 11 columns.
               </p>
 
               <div className="border-2 border-dashed border-white/10 p-4 rounded-xl hover:border-cyan-400/30 transition-all text-center space-y-2 relative">
-                <span className="text-[10px] block font-semibold text-slate-300">File structure requirement:</span>
-                <p className="text-[8px] text-slate-500 font-mono">{"[ { \"name\": \"...\", \"price\": 120, \"code\": \"SP000001\" } ]"}</p>
+                <span className="text-[10px] block font-semibold text-slate-300">File structure format:</span>
+                <p className="text-[8px] text-cyan-400/90 font-mono font-bold leading-relaxed">
+                  {'[ { "Product Name": "ZOFF SOYA BADI 200G", "M.R.P.": "60.00", "Sales Price": "50.00" } ]'}
+                </p>
                 
                 <div className="relative">
                   <input 
@@ -1311,17 +1438,28 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
 
             {/* Excel Bulk Upload Box */}
             <div className="bg-slate-900 border border-white/10 p-5 rounded-3xl space-y-4 shadow-xl">
-              <h3 className="text-xs font-black uppercase text-amber-400 tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-2">
-                <FileSpreadsheet className="h-4 w-4" />
-                <span>Bulk Spreadsheet Import</span>
-              </h3>
+              <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                <h3 className="text-xs font-black uppercase text-amber-400 tracking-wider flex items-center gap-1.5">
+                  <FileSpreadsheet className="h-4 w-4" />
+                  <span>Bulk Excel Import</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={downloadSample3FieldsExcel}
+                  className="text-[9px] font-bold text-amber-300 hover:text-amber-200 underline cursor-pointer"
+                >
+                  Sample Excel
+                </button>
+              </div>
               <p className="text-[10px] text-slate-400 leading-normal">
                 Upload `.xlsx` or `.xls` sheets to bulk catalog products directly.
               </p>
 
               <div className="border-2 border-dashed border-white/10 p-4 rounded-xl hover:border-amber-400/30 transition-all text-center space-y-2 relative">
-                <span className="text-[10px] block font-semibold text-slate-300">File columns standard requirement:</span>
-                <p className="text-[8px] text-slate-500 font-mono">Name, Price, OriginalPrice, Discount, Unit, UnitPrices, Brand, Image, Code</p>
+                <span className="text-[10px] block font-semibold text-slate-300">Supported columns:</span>
+                <p className="text-[8px] text-amber-400/90 font-mono font-bold leading-relaxed">
+                  Product Name, M.R.P., Sales Price, Category, Brand, Unit, Discount, Stock, Product Code, GST (%), Image URL
+                </p>
                 
                 <div className="flex gap-2">
                   <div className="relative flex-grow">
@@ -2237,19 +2375,17 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
                       11. Product Illustration Image URL
                     </label>
-                    <input
-                      type="url"
-                      value={quickEditProduct.image}
-                      onChange={(e) => setQuickEditProduct({ ...quickEditProduct, image: e.target.value })}
-                      placeholder="https://..."
-                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-slate-300 font-mono outline-none focus:border-cyan-400"
-                    />
-                    <div className="pt-1">
-                      <ImageUpload
-                        onImageUploaded={(url) => setQuickEditProduct(prev => ({ ...prev, image: url }))}
-                        currentImage={quickEditProduct.image}
-                        folder="products"
-                        label="Upload photo to R2 cloud storage"
+                    <div className="flex gap-2">
+                      <input
+                        type="url"
+                        value={quickEditProduct.image}
+                        onChange={(e) => setQuickEditProduct({ ...quickEditProduct, image: e.target.value })}
+                        placeholder="https://..."
+                        className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-slate-300 font-mono outline-none focus:border-cyan-400"
+                      />
+                      <R2ImageUploader
+                        onUploadComplete={(url) => setQuickEditProduct(prev => ({ ...prev, image: url }))}
+                        initialImageUrl={quickEditProduct.image}
                       />
                     </div>
                   </div>

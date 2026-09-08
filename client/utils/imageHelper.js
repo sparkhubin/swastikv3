@@ -7,22 +7,68 @@ export const GENERIC_PLACEHOLDER_KEY = 'photo-1542838132-92c53300491e';
 const failedUrlCache = new Set();
 
 /**
- * Resolves any image URL (including relative /uploads/ paths) to a valid absolute URL
- * when frontend and backend run on different domains or ports.
+ * Returns the configured base URL for images from environment variable VITE_IMAGE_BASE_URL.
+ * Defaults to '/uploads' (serving public/uploads on the same server where the project runs).
+ */
+export function getImageBaseUrl() {
+  const envUrl = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_IMAGE_BASE_URL : '';
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
+    return envUrl.trim().replace(/\/+$/, '');
+  }
+  return '/uploads';
+}
+
+/**
+ * Extracts a clean relative filename or code from any image string
+ * (e.g. "https://example.com/uploads/SP000001.jpg" -> "SP000001.jpg")
+ */
+export function extractCleanImageName(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.includes(GENERIC_PLACEHOLDER_KEY)) return '';
+
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    try {
+      const parsed = new URL(trimmed);
+      const parts = parsed.pathname.split('/');
+      const last = parts[parts.length - 1];
+      if (last && !last.includes(GENERIC_PLACEHOLDER_KEY)) {
+        return decodeURIComponent(last);
+      }
+      return '';
+    } catch {
+      // Not a valid URL, treat as filename
+    }
+  }
+
+  if (trimmed.startsWith('/uploads/')) {
+    return trimmed.replace(/^\/uploads\//, '');
+  }
+
+  return trimmed;
+}
+
+/**
+ * Resolves any image URL (including relative paths and filenames) to a valid URL
+ * using VITE_IMAGE_BASE_URL or API base URL.
  */
 export function resolveImageUrl(url) {
   if (!url || typeof url !== 'string') return '';
   const trimmed = url.trim();
   if (!trimmed) return '';
 
-  if (trimmed.startsWith('/uploads/')) {
-    const rawApiUrl = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_API_URL : '';
-    if (rawApiUrl && (rawApiUrl.startsWith('http://') || rawApiUrl.startsWith('https://'))) {
-      const cleanBase = rawApiUrl.endsWith('/') ? rawApiUrl.slice(0, -1) : rawApiUrl;
-      return `${cleanBase}${trimmed}`;
-    }
+  // If already absolute http/https
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    // If it's a generic placeholder unsplash, ignore
+    if (trimmed.includes(GENERIC_PLACEHOLDER_KEY)) return '';
+    return trimmed;
   }
-  return trimmed;
+
+  const base = getImageBaseUrl();
+  const cleanName = extractCleanImageName(trimmed);
+  if (!cleanName) return '';
+
+  return `${base}/${cleanName}`;
 }
 
 /**
@@ -35,33 +81,29 @@ export function hasCustomProductImage(product) {
   const trimmed = raw.trim();
   if (!trimmed) return false;
   if (failedUrlCache.has(trimmed)) return false;
-  // If it is the default generic unsplash fallback image, consider it as no custom image
   if (trimmed.includes(GENERIC_PLACEHOLDER_KEY)) return false;
   return true;
 }
 
 /**
- * Resolves the fastest, optimized image URL for a product
+ * Resolves all candidate image URLs for a product based on its code, filename, and env base URL
  */
 export function getCandidateImages(product, r2PublicUrl) {
   if (!product) return [];
   const candidates = [];
+  const base = getImageBaseUrl();
   const raw = (product.imageUrl || product.image || '').trim();
-  const isGenericPlaceholder = !raw || raw.includes(GENERIC_PLACEHOLDER_KEY);
+  const cleanName = extractCleanImageName(raw);
 
-  // If a non-placeholder custom URL exists
-  if (raw && !isGenericPlaceholder) {
-    let resolved = raw;
-    if (raw.startsWith('/uploads/')) {
-      resolved = resolveImageUrl(raw);
-    }
-    candidates.push(resolved);
+  // 1. If a clean custom filename exists (e.g. "SP000001.webp" or "rice.jpg")
+  if (cleanName) {
+    const directUrl = `${base}/${cleanName}`;
+    candidates.push(directUrl);
   }
 
-  // If code and R2 public URL exist, add format candidates prioritizing .webp
+  // 2. Resolve by product code (e.g. SP000001, SW-SW0001)
   const code = (product.code || product.Code || '').trim();
-  if (code && r2PublicUrl) {
-    const cleanR2Base = r2PublicUrl.replace(/\/$/, '');
+  if (code) {
     const candidateCodes = [code];
     if (code.toUpperCase().startsWith('SW-')) {
       candidateCodes.push(code.replace(/^SW-/i, ''));
@@ -69,15 +111,21 @@ export function getCandidateImages(product, r2PublicUrl) {
       candidateCodes.push(`SW-${code}`);
     }
 
-    for (const c of candidateCodes) {
-      // Cloudflare R2 images are overwhelmingly .webp (1000+ files)
-      const variants = [c, `${c} `, `${c}_`, `${c} (2)`];
-      for (const v of variants) {
-        const encoded = encodeURIComponent(v);
-        candidates.push(`${cleanR2Base}/${encoded}.webp`);
-        candidates.push(`${cleanR2Base}/${encoded}.jpeg`);
-        candidates.push(`${cleanR2Base}/${encoded}.jpg`);
-        candidates.push(`${cleanR2Base}/${encoded}.png`);
+    const basesToCheck = [base];
+    if (r2PublicUrl && r2PublicUrl.replace(/\/$/, '') !== base) {
+      basesToCheck.push(r2PublicUrl.replace(/\/$/, ''));
+    }
+
+    for (const b of basesToCheck) {
+      for (const c of candidateCodes) {
+        const variants = [c, `${c} `, `${c}_`];
+        for (const v of variants) {
+          const encoded = encodeURIComponent(v);
+          candidates.push(`${b}/${encoded}.webp`);
+          candidates.push(`${b}/${encoded}.jpg`);
+          candidates.push(`${b}/${encoded}.jpeg`);
+          candidates.push(`${b}/${encoded}.png`);
+        }
       }
     }
   }
@@ -88,22 +136,7 @@ export function getCandidateImages(product, r2PublicUrl) {
 export function resolveProductImage(product, r2PublicUrl, size = 300) {
   if (!product) return DEFAULT_PRODUCT_FALLBACK;
 
-  let raw = (product.imageUrl || product.image || '').trim();
-
-  // If product has a direct custom URL (e.g. Cloudflare R2, uploads, or custom link) and not placeholder
-  const isGenericPlaceholder = !raw || raw.includes(GENERIC_PLACEHOLDER_KEY);
-
-  if (raw && !isGenericPlaceholder && !failedUrlCache.has(raw)) {
-    if (raw.startsWith('/uploads/')) {
-      raw = resolveImageUrl(raw);
-    }
-    if (raw.includes('images.unsplash.com') && !raw.includes('w=')) {
-      return `${raw}&auto=format&fit=crop&q=75&w=${size}`;
-    }
-    return raw;
-  }
-
-  // Check candidate keys from Cloudflare R2
+  // Check candidate keys using env base URL and code
   const candidates = getCandidateImages(product, r2PublicUrl);
   for (const candidate of candidates) {
     if (!failedUrlCache.has(candidate)) {
@@ -111,9 +144,16 @@ export function resolveProductImage(product, r2PublicUrl, size = 300) {
     }
   }
 
-  // If raw was a valid non-failed URL (even fallback unsplash), return it before DEFAULT
-  if (raw && !failedUrlCache.has(raw)) {
-    return raw;
+  // Fallback if raw was a direct valid URL
+  let raw = (product.imageUrl || product.image || '').trim();
+  if (raw && !raw.includes(GENERIC_PLACEHOLDER_KEY) && !failedUrlCache.has(raw)) {
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      return raw;
+    }
+    const resolved = resolveImageUrl(raw);
+    if (resolved && !failedUrlCache.has(resolved)) {
+      return resolved;
+    }
   }
 
   return DEFAULT_PRODUCT_FALLBACK;
@@ -137,4 +177,5 @@ export function markImageFailed(url) {
     failedUrlCache.add(url);
   }
 }
+
 

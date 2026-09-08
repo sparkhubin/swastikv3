@@ -12,6 +12,32 @@ export default function Header({ onMenuClick, onSearchClick, currentView, onView
 
   const totalItems = cartItems.reduce((acc, item) => acc + item.quantity, 0);
 
+  const [staffSession, setStaffSession] = React.useState(() => {
+    try {
+      const saved = localStorage.getItem('swastik_logged_in_staff');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  React.useEffect(() => {
+    const handleSync = () => {
+      try {
+        const saved = localStorage.getItem('swastik_logged_in_staff');
+        setStaffSession(saved ? JSON.parse(saved) : null);
+      } catch (e) {
+        setStaffSession(null);
+      }
+    };
+    window.addEventListener('storage', handleSync);
+    window.addEventListener('staff_session_change', handleSync);
+    return () => {
+      window.removeEventListener('storage', handleSync);
+      window.removeEventListener('staff_session_change', handleSync);
+    };
+  }, []);
+
   const toggleLanguage = () => {
     setLanguage(language === 'en' ? 'hi' : 'en');
   };
@@ -111,48 +137,34 @@ export default function Header({ onMenuClick, onSearchClick, currentView, onView
         {/* Right Section */}
         <div className="flex items-center gap-2 sm:gap-3">
           {/* Staff Workspace shortcut button if logged in as Staff / Delivery */}
-          {(() => {
-            try {
-              const staffSession = localStorage.getItem('swastik_logged_in_staff');
-              if (staffSession) {
-                const parsed = JSON.parse(staffSession);
-                return (
-                  <button
-                    type="button"
-                    onClick={() => onViewChange && onViewChange('admin')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-cyan-400 border border-cyan-500/30 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider shadow-sm transition-all active:scale-95 cursor-pointer"
-                    title={`Logged in as ${parsed.name || 'Staff'}`}
-                  >
-                    <ShieldAlert className="h-3.5 w-3.5 text-cyan-400 animate-pulse" />
-                    <span>Staff Panel</span>
-                  </button>
-                );
-              }
-            } catch (e) {}
-            return null;
-          })()}
+          {staffSession && (
+            <button
+              type="button"
+              onClick={() => onViewChange && onViewChange('admin')}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-cyan-400 border border-cyan-500/30 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider shadow-sm transition-all active:scale-95 cursor-pointer"
+              title={`Logged in as ${staffSession.name || 'Staff'}`}
+            >
+              <ShieldAlert className="h-3.5 w-3.5 text-cyan-400 animate-pulse" />
+              <span>Staff Panel</span>
+            </button>
+          )}
 
           {/* Real-time Customer / Staff Notification Bell */}
           <NotificationCenter 
             role={(() => {
-              try {
-                const staffStr = localStorage.getItem('swastik_logged_in_staff');
-                if (staffStr) {
-                  const s = JSON.parse(staffStr);
-                  const isRider = s.role_id === 4 || s.role_code === 'rider' || (s.role && String(s.role).toLowerCase().includes('rider')) || (s.permissions?.includes('delivery') && !s.isMasterAdmin && s.id !== 1);
-                  if (isRider) return 'delivery';
-                  return 'admin';
-                }
-              } catch(e) {}
+              if (staffSession) {
+                const s = staffSession;
+                const isRider = s.role_id === 4 || s.role_code === 'rider' || (s.role && String(s.role).toLowerCase().includes('rider')) || (s.permissions?.includes('delivery') && !s.isMasterAdmin && s.id !== 1);
+                if (isRider) return 'delivery';
+                return 'admin';
+              }
               return 'customer';
             })()} 
             phone={(() => {
+              if (staffSession && staffSession.mobile) {
+                return staffSession.mobile;
+              }
               try {
-                const staffStr = localStorage.getItem('swastik_logged_in_staff');
-                if (staffStr) {
-                  const s = JSON.parse(staffStr);
-                  if (s.mobile) return s.mobile;
-                }
                 const profileStr = localStorage.getItem('swastik_profile');
                 if (profileStr) {
                   const p = JSON.parse(profileStr);
