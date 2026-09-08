@@ -11,4 +11,34 @@ git reset --hard origin/master
 npm install      # only if package.json changes
 npm run build
 
+pm2 restart swastik 
+
+
+
+////using google ai 
+
+
+#!/bin/bash
+set -e
+
+echo "🚀 [1/6] Navigating to project directory..."
+cd /var/www/swastik
+
+echo "📥 [2/6] Fetching latest changes from GitHub (main branch)..."
+git fetch origin main
+
+echo "🔀 [3/6] Merging origin/main into server-deploy..."
+git checkout server-deploy
+git merge origin/main --no-edit
+
+echo "📦 [4/6] Checking and installing dependencies..."
+npm install
+
+echo "🛠️ [5/6] Building production application (frontend & backend)..."
+npm run build
+
+echo "🔄 [6/6] Restarting live PM2 server..."
 pm2 restart swastik
+
+echo "✅ Deployment successful! Swastik is live on server-deploy."
+pm2 status swastik
