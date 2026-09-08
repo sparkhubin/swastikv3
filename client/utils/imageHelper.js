@@ -5,17 +5,24 @@ export const GENERIC_PLACEHOLDER_KEY = 'photo-1542838132-92c53300491e';
 
 // Global cache of failed image URLs so we never retry broken/404 links repeatedly
 const failedUrlCache = new Set();
+import { getBackendBaseUrl } from './capacitorHelper';
+
 // Fast in-memory cache of already resolved product image URLs to avoid repeated URL computation
 const resolvedImageCache = new Map();
 
 /**
  * Returns the configured base URL for images from environment variable VITE_IMAGE_BASE_URL.
+ * In a native Capacitor app, it prefixes the remote backend server URL so images load smoothly.
  * Defaults to '/uploads' (serving public/uploads on the same server where the project runs).
  */
 export function getImageBaseUrl() {
   const envUrl = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_IMAGE_BASE_URL : '';
   if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
     return envUrl.trim().replace(/\/+$/, '');
+  }
+  const backend = getBackendBaseUrl();
+  if (backend) {
+    return `${backend}/uploads`;
   }
   return '/uploads';
 }

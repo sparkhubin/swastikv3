@@ -4,6 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
 import { useData } from '../context/DataContext';
 import { resolveProductImage, getNextCandidateImage, markImageFailed, DEFAULT_PRODUCT_FALLBACK } from '../utils/imageHelper';
+import { getCurrentGpsPosition } from '../utils/capacitorHelper';
 import { 
   Trash2, 
   MapPin, 
@@ -261,59 +262,49 @@ export default function CartCheckout({ onViewChange }) {
   const [isDetectingGps, setIsDetectingGps] = useState(false);
   const [liveGpsCoords, setLiveGpsCoords] = useState(null);
 
-  const handleDetectLiveGpsLocation = () => {
-    if (!navigator.geolocation) {
-      alert(language === 'hi' 
-        ? "आपके डिवाइस या ब्राउज़र में GPS सपोर्ट उपलब्ध नहीं है। कृपया अपना पता मैन्युअल दर्ज करें।" 
-        : "GPS location detection is not supported in your browser. Please type your address manually.");
-      return;
-    }
-
+  const handleDetectLiveGpsLocation = async () => {
     setIsDetectingGps(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-        setLiveGpsCoords({ lat, lng });
+    try {
+      const position = await getCurrentGpsPosition();
+      const lat = position.lat;
+      const lng = position.lng;
+      setLiveGpsCoords({ lat, lng });
 
-        try {
-          // Free reverse geocoding via OpenStreetMap (Nominatim API - 100% Free, No Key Needed)
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`);
-          const data = await res.json();
-          if (data && data.display_name) {
-            setShippingInfo(prev => ({
-              ...prev,
-              address: data.display_name,
-              latitude: lat,
-              longitude: lng
-            }));
-          } else {
-            setShippingInfo(prev => ({
-              ...prev,
-              address: `GPS Pin: ${lat.toFixed(5)}° N, ${lng.toFixed(5)}° E (Detected via GPS)`,
-              latitude: lat,
-              longitude: lng
-            }));
-          }
-        } catch (err) {
+      try {
+        // Free reverse geocoding via OpenStreetMap (Nominatim API - 100% Free, No Key Needed)
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`);
+        const data = await res.json();
+        if (data && data.display_name) {
           setShippingInfo(prev => ({
             ...prev,
-            address: `GPS Pin: ${lat.toFixed(5)}° N, ${lng.toFixed(5)}° E`,
+            address: data.display_name,
             latitude: lat,
             longitude: lng
           }));
-        } finally {
-          setIsDetectingGps(false);
+        } else {
+          setShippingInfo(prev => ({
+            ...prev,
+            address: `GPS Pin: ${lat.toFixed(5)}° N, ${lng.toFixed(5)}° E (Detected via GPS)`,
+            latitude: lat,
+            longitude: lng
+          }));
         }
-      },
-      (err) => {
-        setIsDetectingGps(false);
-        alert(language === 'hi'
-          ? "GPS लोकेशन प्राप्त नहीं हो सकी। कृपया ब्राउज़र में लोकेशन की अनुमति (Allow Location) दें या अपना पता नीचे टाइप करें।"
-          : "Could not retrieve GPS location. Please allow browser location access or enter address manually below.");
-      },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
-    );
+      } catch (err) {
+        setShippingInfo(prev => ({
+          ...prev,
+          address: `GPS Pin: ${lat.toFixed(5)}° N, ${lng.toFixed(5)}° E`,
+          latitude: lat,
+          longitude: lng
+        }));
+      }
+    } catch (err) {
+      console.warn("GPS Detection error:", err.message);
+      alert(language === 'hi'
+        ? "GPS लोकेशन प्राप्त नहीं हो सकी। कृपया लोकेशन की अनुमति (Allow Location) दें या अपना पता नीचे टाइप करें।"
+        : "Could not retrieve GPS location. Please allow location access or enter address manually below.");
+    } finally {
+      setIsDetectingGps(false);
+    }
   };
 
   // Pre-fill shipping information automatically when user logs in
