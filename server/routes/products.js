@@ -133,7 +133,7 @@ function extractFieldValue(raw, candidateKeys) {
 }
 
 // Bulk Upload Products (Excel & JSON with validation: skip or update, preserve code, prevent duplicate names)
-router.post("/products/bulk-upload", async (req, res) => {
+router.post("/products/bulk-upload-before", async (req, res) => {
   try {
     const { items = [], mode = "update_existing", defaultCategory = "swastik" } = req.body;
     if (!Array.isArray(items) || items.length === 0) {
@@ -187,20 +187,16 @@ router.post("/products/bulk-upload", async (req, res) => {
       const raw = items[index];
       if (!raw || typeof raw !== 'object') continue;
 
-      // 1. Product Name (Primary user requested column, also supports all synonyms)
-      const nameVal = extractFieldValue(raw, [
-        "Product Name",
-        "Product Display Name",
-        "Name",
-        "Item Name",
-        "Item",
-        "Product",
-        "Title",
-        "name",
-        "nameEn",
-        "nameHi"
-      ]);
-      const name = String(nameVal || "").trim();
+      // Extract all 11 fields supporting both user friendly exact names and camelCase/shorthand
+      const name = (
+        raw["Product Display Name"] ||
+        raw["Product Name"] ||
+        raw["Name"] ||
+        raw.name ||
+        raw.nameEn ||
+        raw.nameHi ||
+        ""
+      ).trim();
 
       if (!name) {
         details.push({ index, status: "skipped", reason: "Missing Product Name" });
@@ -539,6 +535,582 @@ router.post("/products/bulk-upload", async (req, res) => {
   } catch (err) {
     console.error("Bulk upload error:", err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+
+router.post("/products/bulk-upload", async (req, res) => {
+  try {
+    const {
+      items = [],
+      defaultCategory = "vegetables"
+    } = req.body;
+
+    // ============================================================
+    // 1. VALIDATE INPUT
+    // ============================================================
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "No products provided in items array"
+      });
+    }
+
+    // ============================================================
+    // 2. FETCH EXISTING PRODUCTS
+    // ============================================================
+
+    const allProducts = await db.query(
+      "SELECT * FROM product ORDER BY id ASC"
+    );
+
+    // ============================================================
+    // 3. CREATE NAME MAP
+    //
+    // Same name = SKIP
+    //
+    // Case-insensitive + trims spaces.
+    //
+    // Example:
+    // "ZOFF SOYA BADI 200G"
+    // "zoff soya badi 200g"
+    // " ZOFF SOYA BADI 200G "
+    //
+    // All are considered the same product.
+    // ============================================================
+
+    const nameMap = new Map();
+
+    allProducts.forEach((p) => {
+      if (p.name_en && String(p.name_en).trim()) {
+        nameMap.set(
+          String(p.name_en).trim().toLowerCase(),
+          p
+        );
+      }
+
+      if (p.name_hi && String(p.name_hi).trim()) {
+        nameMap.set(
+          String(p.name_hi).trim().toLowerCase(),
+          p
+        );
+      }
+    });
+
+    // ============================================================
+    // 4. CREATE CODE MAP
+    //
+    // Used only to make sure automatically generated codes
+    // are unique.
+    // ============================================================
+
+    const codeMap = new Map();
+
+    allProducts.forEach((p) => {
+      if (p.code && String(p.code).trim()) {
+        codeMap.set(
+          String(p.code).trim().toLowerCase(),
+          p
+        );
+      }
+    });
+
+    // ============================================================
+    // 5. FIND HIGHEST EXISTING SP CODE
+    //
+    // Example:
+    // SP000001
+    // SP000002
+    // SP000250
+    //
+    // Next generated code = SP000251
+    // ============================================================
+
+    let maxNum = 0;
+
+    allProducts.forEach((p) => {
+      const code = String(p.code || "");
+
+      const match = code.match(/SP(\d+)/i);
+
+      if (match) {
+        const num = parseInt(match[1], 10);
+
+        if (Number.isFinite(num) && num > maxNum) {
+          maxNum = num;
+        }
+      }
+    });
+
+    // Safety fallback
+    if (maxNum < allProducts.length) {
+      maxNum = allProducts.length;
+    }
+
+    const generateUniqueCode = () => {
+      let code;
+
+      do {
+        maxNum++;
+
+        code = `SP${String(maxNum).padStart(6, "0")}`;
+      } while (codeMap.has(code.toLowerCase()));
+
+      return code;
+    };
+
+    // ============================================================
+    // 6. STATISTICS
+    // ============================================================
+
+    let insertedCount = 0;
+    let skippedCount = 0;
+    let invalidCount = 0;
+
+    const details = [];
+
+    // ============================================================
+    // 7. PROCESS EVERY IMPORTED PRODUCT
+    // ============================================================
+
+    for (let index = 0; index < items.length; index++) {
+      const raw = items[index];
+
+      // ----------------------------------------------------------
+      // Invalid row
+      // ----------------------------------------------------------
+
+      if (!raw || typeof raw !== "object") {
+        invalidCount++;
+
+        details.push({
+          index,
+          status: "invalid",
+          reason: "Invalid product object"
+        });
+
+        continue;
+      }
+
+      // ==========================================================
+      // 8. PRODUCT NAME
+      //
+      // Your JSON format:
+      //
+      // "Product Name": "ZOFF SOYA BADI 200G"
+      //
+      // ==========================================================
+
+      const nameRaw =
+        raw["Product Name"] ??
+        raw["Product Display Name"] ??
+        raw["Name"] ??
+        raw.name ??
+        "";
+
+      const name = String(nameRaw).trim();
+
+      // Product name is mandatory
+      if (!name) {
+        invalidCount++;
+
+        details.push({
+          index,
+          status: "invalid",
+          reason: "Missing Product Name"
+        });
+
+        continue;
+      }
+
+      // Normalize name for duplicate checking
+      const normalizedName = name
+        .trim()
+        .toLowerCase();
+
+      // ==========================================================
+      // 9. CHECK IF SAME PRODUCT NAME ALREADY EXISTS
+      //
+      // IMPORTANT:
+      //
+      // If same name exists:
+      //      SKIP
+      //
+      // We DO NOT:
+      //      update
+      //      delete
+      //      replace
+      //      change price
+      //      change image
+      //      change stock
+      //
+      // Existing product remains EXACTLY as it is.
+      // ==========================================================
+
+      if (nameMap.has(normalizedName)) {
+        const existing = nameMap.get(normalizedName);
+
+        skippedCount++;
+
+        details.push({
+          index,
+          name,
+          code: existing.code || null,
+          status: "skipped",
+          reason: "Product with same name already exists"
+        });
+
+        continue;
+      }
+
+      // ==========================================================
+      // 10. M.R.P.
+      //
+      // Your JSON:
+      //
+      // "M.R.P.": "60.00"
+      //
+      // Stored as:
+      //
+      // original_price
+      //
+      // ==========================================================
+
+      const mrpRaw =
+        raw["M.R.P."] ??
+        raw["MRP"] ??
+        raw["Original Price"] ??
+        raw["OriginalPrice"] ??
+        null;
+
+      let originalPrice = null;
+
+      if (
+        mrpRaw !== null &&
+        mrpRaw !== undefined &&
+        String(mrpRaw).trim() !== ""
+      ) {
+        const parsedMRP = Number(
+          String(mrpRaw).replace(/[^0-9.-]/g, "")
+        );
+
+        if (Number.isFinite(parsedMRP) && parsedMRP > 0) {
+          originalPrice = parsedMRP;
+        }
+      }
+
+      // ==========================================================
+      // 11. SALES PRICE
+      //
+      // Your JSON:
+      //
+      // "Sales Price": "50.00"
+      //
+      // Stored as:
+      //
+      // price
+      //
+      // ==========================================================
+
+      const salesPriceRaw =
+        raw["Sales Price"] ??
+        raw["Price"] ??
+        raw.price ??
+        0;
+
+      let price = Number(
+        String(salesPriceRaw).replace(/[^0-9.-]/g, "")
+      );
+
+      if (!Number.isFinite(price) || price < 0) {
+        price = 0;
+      }
+
+      // ==========================================================
+      // 12. OPTIONAL FIELDS
+      //
+      // These are NOT required for your current JSON.
+      //
+      // If they don't exist, sensible defaults are used because
+      // this is a BRAND NEW product.
+      // ==========================================================
+
+      const category = String(
+        raw["Product Department Category"] ??
+        raw["Category"] ??
+        raw.category ??
+        defaultCategory ??
+        "swastik"
+      )
+        .trim()
+        .toLowerCase();
+
+      const brandTag = String(
+        raw["Brand / Segment Tag"] ??
+        raw["Brand"] ??
+        raw.brandTag ??
+        raw.brand ??
+        "General"
+      ).trim();
+
+      const unit = String(
+        raw["Available Weight / Product Units"] ??
+        raw["Unit"] ??
+        raw["Units"] ??
+        raw.unit ??
+        "1 Unit"
+      ).trim();
+
+      const discount = String(
+        raw["Discount ribbon label text"] ??
+        raw["Discount"] ??
+        raw["DiscountRibbon"] ??
+        raw.discount ??
+        raw.discountTag ??
+        ""
+      ).trim();
+
+      const stockRaw =
+        raw["Physical Stock Count (Qty)"] ??
+        raw["Stock"] ??
+        raw["StockCount"] ??
+        raw["Qty"] ??
+        raw.stockCount ??
+        100;
+
+      let stockCount = Number(stockRaw);
+
+      if (!Number.isFinite(stockCount) || stockCount < 0) {
+        stockCount = 100;
+      } else {
+        stockCount = Math.floor(stockCount);
+      }
+
+      const gstRaw =
+        raw["GST Rate (%) / जीएसटी दर"] ??
+        raw["GST (%)"] ??
+        raw["GST"] ??
+        raw["GstPercent"] ??
+        raw.gstPercent ??
+        raw.gst_percent ??
+        5;
+
+      let gstPercent = Number(
+        String(gstRaw).replace(/[^0-9.-]/g, "")
+      );
+
+      if (!Number.isFinite(gstPercent) || gstPercent < 0) {
+        gstPercent = 5;
+      }
+
+      // ==========================================================
+      // 13. IMAGE
+      //
+      // Your current JSON doesn't contain an image.
+      //
+      // Therefore use your existing default image.
+      //
+      // You can later upload/replace images separately.
+      // ==========================================================
+
+      const image = String(
+        raw["Product Illustration Image URL"] ??
+        raw["Image"] ??
+        raw["ImageUrl"] ??
+        raw.image ??
+        raw.imageUrl ??
+        ""
+      ).trim();
+
+      const finalImage =
+        image.length > 5
+          ? image
+          : "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400";
+
+      // ==========================================================
+      // 14. PRODUCT CODE
+      //
+      // Your current JSON doesn't have a code.
+      //
+      // Generate one automatically.
+      //
+      // Example:
+      // SP000301
+      // ==========================================================
+
+      const finalCode = generateUniqueCode();
+
+      // ==========================================================
+      // 15. UNIT PRICE
+      // ==========================================================
+
+      const packEn = unit
+        ? unit.split(",")[0].trim()
+        : "1 Unit";
+
+      const packHi = packEn;
+
+      const finalUnitPrices =
+        raw.unitPrices ||
+        `${packEn}:${price}`;
+
+      // ==========================================================
+      // 16. INSERT NEW PRODUCT
+      // ==========================================================
+
+      const insertRes = await db.execute(
+        `INSERT INTO product (
+          code,
+          name_en,
+          name_hi,
+          category,
+          sub_en,
+          sub_hi,
+          price,
+          original_price,
+          discount_tag,
+          image_url,
+          stock_count,
+          unit,
+          unit_prices,
+          pack_en,
+          pack_hi,
+          gst_percent
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          finalCode,
+          name,
+          name,
+          category,
+          brandTag,
+          brandTag,
+          price,
+          originalPrice,
+          discount,
+          finalImage,
+          stockCount,
+          unit,
+          finalUnitPrices,
+          packEn,
+          packHi,
+          gstPercent
+        ]
+      );
+
+      // ==========================================================
+      // 17. GET NEW PRODUCT ID
+      // ==========================================================
+
+      const newId =
+        insertRes.lastID ||
+        insertRes.insertId ||
+        null;
+
+      // ==========================================================
+      // 18. ADD NEW PRODUCT TO MAP
+      //
+      // This is VERY important.
+      //
+      // If the same product appears twice inside your 300-item
+      // JSON file, the second one will now be skipped.
+      // ==========================================================
+
+      const newProductObj = {
+        id: newId,
+        code: finalCode,
+        name_en: name,
+        name_hi: name,
+        category,
+        sub_en: brandTag,
+        sub_hi: brandTag,
+        price,
+        original_price: originalPrice,
+        discount_tag: discount,
+        image_url: finalImage,
+        stock_count: stockCount,
+        unit,
+        unit_prices: finalUnitPrices,
+        pack_en: packEn,
+        pack_hi: packHi,
+        gst_percent: gstPercent
+      };
+
+      nameMap.set(
+        normalizedName,
+        newProductObj
+      );
+
+      codeMap.set(
+        finalCode.toLowerCase(),
+        newProductObj
+      );
+
+      // ==========================================================
+      // 19. STATISTICS
+      // ==========================================================
+
+      insertedCount++;
+
+      details.push({
+        index,
+        name,
+        code: finalCode,
+        status: "inserted"
+      });
+    }
+
+    // ============================================================
+    // 20. SAVE PERSISTENT SNAPSHOT
+    // ============================================================
+
+    if (db.savePersistentSnapshot) {
+      try {
+        await db.savePersistentSnapshot();
+      } catch (snapshotError) {
+        console.error(
+          "Persistent snapshot save error:",
+          snapshotError
+        );
+      }
+    }
+
+    // ============================================================
+    // 21. FETCH FINAL CATALOG
+    // ============================================================
+
+    const updatedCatalog = await db.query(
+      "SELECT * FROM product ORDER BY id ASC"
+    );
+
+    // ============================================================
+    // 22. RESPONSE
+    // ============================================================
+
+    return res.json({
+      success: true,
+
+      stats: {
+        totalProcessed: items.length,
+        insertedCount,
+        skippedCount,
+        invalidCount,
+        totalCatalogItems: updatedCatalog.length
+      },
+
+      details: details.slice(0, 500),
+
+      products: updatedCatalog.map(mapProduct)
+    });
+
+  } catch (err) {
+    console.error("Bulk upload error:", err);
+
+    return res.status(500).json({
+      success: false,
+      error: err.message
+    });
   }
 });
 
