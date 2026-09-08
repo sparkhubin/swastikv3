@@ -538,81 +538,160 @@ export const db = {
 
   // Auto-migration to ensure all tables have required columns across SQLite, MySQL, and PostgreSQL
   async migrateSchema() {
-    const orderColumns = [
-      { name: "customer_id", sqlite: "INT", pg: "INT", my: "INT" },
-      { name: "total", sqlite: "REAL DEFAULT 0.0", pg: "NUMERIC(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
-      { name: "grand_total", sqlite: "REAL DEFAULT 0.0", pg: "NUMERIC(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
-      { name: "referral_discount", sqlite: "REAL DEFAULT 0.0", pg: "NUMERIC(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
-      { name: "applied_points", sqlite: "INT DEFAULT 0", pg: "INT DEFAULT 0", my: "INT DEFAULT 0" },
-      { name: "coupon_discount", sqlite: "REAL DEFAULT 0.0", pg: "NUMERIC(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
-      { name: "coupon_code", sqlite: "TEXT DEFAULT ''", pg: "VARCHAR(100) DEFAULT ''", my: "VARCHAR(100) DEFAULT ''" },
-      { name: "celebration_discount", sqlite: "REAL DEFAULT 0.0", pg: "NUMERIC(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
-      { name: "celebration_offer_name", sqlite: "TEXT DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
-      { name: "payment_method", sqlite: "TEXT DEFAULT 'COD'", pg: "VARCHAR(50) DEFAULT 'COD'", my: "VARCHAR(50) DEFAULT 'COD'" },
-      { name: "payment_status", sqlite: "TEXT DEFAULT 'UNPAID'", pg: "VARCHAR(50) DEFAULT 'UNPAID'", my: "VARCHAR(50) DEFAULT 'UNPAID'" },
-      { name: "customer_email", sqlite: "TEXT DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
-      { name: "is_marg_bill", sqlite: "INT DEFAULT 0", pg: "BOOLEAN DEFAULT FALSE", my: "INT DEFAULT 0" },
-      { name: "points_earned", sqlite: "INT DEFAULT 0", pg: "INT DEFAULT 0", my: "INT DEFAULT 0" },
-      { name: "pdf_url", sqlite: "TEXT", pg: "TEXT", my: "TEXT" },
-      { name: "delivery_staff_id", sqlite: "INT", pg: "INT", my: "INT" },
-      { name: "cod_status", sqlite: "TEXT DEFAULT 'PENDING_CLEARANCE'", pg: "VARCHAR(50) DEFAULT 'PENDING_CLEARANCE'", my: "VARCHAR(50) DEFAULT 'PENDING_CLEARANCE'" },
-      { name: "cod_settled_at", sqlite: "TEXT", pg: "VARCHAR(50)", my: "VARCHAR(50)" },
-      { name: "cod_cleared_by", sqlite: "TEXT", pg: "VARCHAR(150)", my: "VARCHAR(150)" },
-      { name: "cod_settlement_note", sqlite: "TEXT", pg: "TEXT", my: "TEXT" }
-    ];
-
-    const userColumns = [
-      { name: "email", sqlite: "TEXT DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
-      { name: "permissions", sqlite: "TEXT DEFAULT '[]'", pg: "TEXT DEFAULT '[]'", my: "TEXT" },
-      { name: "status", sqlite: "TEXT DEFAULT 'Active'", pg: "VARCHAR(50) DEFAULT 'Active'", my: "VARCHAR(50) DEFAULT 'Active'" },
-      { name: "is_master_admin", sqlite: "INT DEFAULT 0", pg: "BOOLEAN DEFAULT FALSE", my: "INT DEFAULT 0" }
+    const tableMigrations = [
+      {
+        tableName: "product",
+        columns: [
+          { name: "code", sqlite: "VARCHAR(100) DEFAULT ''", pg: "VARCHAR(100) DEFAULT ''", my: "VARCHAR(100) DEFAULT ''" },
+          { name: "name_en", sqlite: "VARCHAR(255) DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
+          { name: "name_hi", sqlite: "VARCHAR(255) DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
+          { name: "category", sqlite: "VARCHAR(100) DEFAULT 'swastik'", pg: "VARCHAR(100) DEFAULT 'swastik'", my: "VARCHAR(100) DEFAULT 'swastik'" },
+          { name: "sub_en", sqlite: "VARCHAR(255) DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
+          { name: "sub_hi", sqlite: "VARCHAR(255) DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
+          { name: "price", sqlite: "REAL DEFAULT 0.0", pg: "DECIMAL(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
+          { name: "original_price", sqlite: "REAL DEFAULT 0.0", pg: "DECIMAL(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
+          { name: "discount_tag", sqlite: "VARCHAR(100) DEFAULT ''", pg: "VARCHAR(100) DEFAULT ''", my: "VARCHAR(100) DEFAULT ''" },
+          { name: "image_url", sqlite: "TEXT DEFAULT ''", pg: "TEXT DEFAULT ''", my: "TEXT" },
+          { name: "stock_count", sqlite: "INT DEFAULT 100", pg: "INT DEFAULT 100", my: "INT DEFAULT 100" },
+          { name: "unit", sqlite: "VARCHAR(255) DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
+          { name: "unit_prices", sqlite: "TEXT DEFAULT ''", pg: "TEXT DEFAULT ''", my: "TEXT" },
+          { name: "pack_en", sqlite: "VARCHAR(100) DEFAULT ''", pg: "VARCHAR(100) DEFAULT ''", my: "VARCHAR(100) DEFAULT ''" },
+          { name: "pack_hi", sqlite: "VARCHAR(100) DEFAULT ''", pg: "VARCHAR(100) DEFAULT ''", my: "VARCHAR(100) DEFAULT ''" },
+          { name: "gst_percent", sqlite: "REAL DEFAULT 5", pg: "DECIMAL(10,2) DEFAULT 5", my: "DECIMAL(10,2) DEFAULT 5" }
+        ]
+      },
+      {
+        tableName: "order",
+        columns: [
+          { name: "customer_id", sqlite: "INT", pg: "INT", my: "INT" },
+          { name: "user_id", sqlite: "INT", pg: "INT", my: "INT" },
+          { name: "order_date", sqlite: "TIMESTAMP DEFAULT CURRENT_TIMESTAMP", pg: "TIMESTAMP DEFAULT CURRENT_TIMESTAMP", my: "TIMESTAMP DEFAULT CURRENT_TIMESTAMP" },
+          { name: "is_active", sqlite: "INT DEFAULT 1", pg: "BOOLEAN DEFAULT TRUE", my: "INT DEFAULT 1" },
+          { name: "step_level", sqlite: "INT DEFAULT 0", pg: "INT DEFAULT 0", my: "INT DEFAULT 0" },
+          { name: "status_label", sqlite: "VARCHAR(100) DEFAULT 'Confirmed'", pg: "VARCHAR(100) DEFAULT 'Confirmed'", my: "VARCHAR(100) DEFAULT 'Confirmed'" },
+          { name: "subtotal", sqlite: "REAL DEFAULT 0.0", pg: "NUMERIC(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
+          { name: "delivery_fee", sqlite: "REAL DEFAULT 0.0", pg: "NUMERIC(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
+          { name: "gst_amount", sqlite: "REAL DEFAULT 0.0", pg: "NUMERIC(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
+          { name: "total", sqlite: "REAL DEFAULT 0.0", pg: "NUMERIC(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
+          { name: "grand_total", sqlite: "REAL DEFAULT 0.0", pg: "NUMERIC(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
+          { name: "referral_discount", sqlite: "REAL DEFAULT 0.0", pg: "NUMERIC(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
+          { name: "applied_points", sqlite: "INT DEFAULT 0", pg: "INT DEFAULT 0", my: "INT DEFAULT 0" },
+          { name: "coupon_discount", sqlite: "REAL DEFAULT 0.0", pg: "NUMERIC(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
+          { name: "coupon_code", sqlite: "TEXT DEFAULT ''", pg: "VARCHAR(100) DEFAULT ''", my: "VARCHAR(100) DEFAULT ''" },
+          { name: "celebration_discount", sqlite: "REAL DEFAULT 0.0", pg: "NUMERIC(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
+          { name: "celebration_offer_name", sqlite: "TEXT DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
+          { name: "payment_method", sqlite: "TEXT DEFAULT 'COD'", pg: "VARCHAR(50) DEFAULT 'COD'", my: "VARCHAR(50) DEFAULT 'COD'" },
+          { name: "payment_status", sqlite: "TEXT DEFAULT 'UNPAID'", pg: "VARCHAR(50) DEFAULT 'UNPAID'", my: "VARCHAR(50) DEFAULT 'UNPAID'" },
+          { name: "customer_name", sqlite: "VARCHAR(255)", pg: "VARCHAR(255)", my: "VARCHAR(255)" },
+          { name: "customer_phone", sqlite: "VARCHAR(30)", pg: "VARCHAR(30)", my: "VARCHAR(30)" },
+          { name: "customer_email", sqlite: "TEXT DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
+          { name: "is_marg_bill", sqlite: "INT DEFAULT 0", pg: "BOOLEAN DEFAULT FALSE", my: "INT DEFAULT 0" },
+          { name: "points_earned", sqlite: "INT DEFAULT 0", pg: "INT DEFAULT 0", my: "INT DEFAULT 0" },
+          { name: "pdf_url", sqlite: "TEXT", pg: "TEXT", my: "TEXT" },
+          { name: "delivery_staff_id", sqlite: "INT", pg: "INT", my: "INT" },
+          { name: "delivery_partner_name", sqlite: "VARCHAR(255)", pg: "VARCHAR(255)", my: "VARCHAR(255)" },
+          { name: "delivery_partner_phone", sqlite: "VARCHAR(30)", pg: "VARCHAR(30)", my: "VARCHAR(30)" },
+          { name: "dispatch_hub", sqlite: "VARCHAR(150)", pg: "VARCHAR(150)", my: "VARCHAR(150)" },
+          { name: "eta_status", sqlite: "VARCHAR(100)", pg: "VARCHAR(100)", my: "VARCHAR(100)" },
+          { name: "cod_status", sqlite: "TEXT DEFAULT 'PENDING_CLEARANCE'", pg: "VARCHAR(50) DEFAULT 'PENDING_CLEARANCE'", my: "VARCHAR(50) DEFAULT 'PENDING_CLEARANCE'" },
+          { name: "cod_settled_at", sqlite: "TEXT", pg: "VARCHAR(50)", my: "VARCHAR(50)" },
+          { name: "cod_cleared_by", sqlite: "TEXT", pg: "VARCHAR(150)", my: "VARCHAR(150)" },
+          { name: "cod_settlement_note", sqlite: "TEXT", pg: "TEXT", my: "TEXT" }
+        ]
+      },
+      {
+        tableName: "user",
+        columns: [
+          { name: "email", sqlite: "TEXT DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
+          { name: "permissions", sqlite: "TEXT DEFAULT '[]'", pg: "TEXT DEFAULT '[]'", my: "TEXT" },
+          { name: "status", sqlite: "TEXT DEFAULT 'Active'", pg: "VARCHAR(50) DEFAULT 'Active'", my: "VARCHAR(50) DEFAULT 'Active'" },
+          { name: "is_master_admin", sqlite: "INT DEFAULT 0", pg: "BOOLEAN DEFAULT FALSE", my: "INT DEFAULT 0" },
+          { name: "delivery_address", sqlite: "TEXT DEFAULT ''", pg: "TEXT DEFAULT ''", my: "TEXT" }
+        ]
+      },
+      {
+        tableName: "customer",
+        columns: [
+          { name: "email", sqlite: "VARCHAR(255) DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
+          { name: "address", sqlite: "TEXT DEFAULT ''", pg: "TEXT DEFAULT ''", my: "TEXT" },
+          { name: "status", sqlite: "VARCHAR(50) DEFAULT 'Active'", pg: "VARCHAR(50) DEFAULT 'Active'", my: "VARCHAR(50) DEFAULT 'Active'" },
+          { name: "order_count", sqlite: "INT DEFAULT 0", pg: "INT DEFAULT 0", my: "INT DEFAULT 0" },
+          { name: "total_spent", sqlite: "REAL DEFAULT 0.0", pg: "DECIMAL(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
+          { name: "points", sqlite: "INT DEFAULT 100", pg: "INT DEFAULT 100", my: "INT DEFAULT 100" },
+          { name: "is_prime_active", sqlite: "INT DEFAULT 0", pg: "BOOLEAN DEFAULT FALSE", my: "INT DEFAULT 0" },
+          { name: "prime_membership_no", sqlite: "VARCHAR(100) DEFAULT ''", pg: "VARCHAR(100) DEFAULT ''", my: "VARCHAR(100) DEFAULT ''" },
+          { name: "dob", sqlite: "VARCHAR(50) DEFAULT ''", pg: "VARCHAR(50) DEFAULT ''", my: "VARCHAR(50) DEFAULT ''" },
+          { name: "anniversary", sqlite: "VARCHAR(50) DEFAULT ''", pg: "VARCHAR(50) DEFAULT ''", my: "VARCHAR(50) DEFAULT ''" }
+        ]
+      },
+      {
+        tableName: "payment_settings",
+        columns: [
+          { name: "enabled", sqlite: "INT DEFAULT 1", pg: "BOOLEAN DEFAULT TRUE", my: "INT DEFAULT 1" },
+          { name: "app_id", sqlite: "VARCHAR(255) DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
+          { name: "secret_key", sqlite: "VARCHAR(255) DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
+          { name: "environment", sqlite: "VARCHAR(50) DEFAULT 'TEST'", pg: "VARCHAR(50) DEFAULT 'TEST'", my: "VARCHAR(50) DEFAULT 'TEST'" },
+          { name: "razorpay_enabled", sqlite: "INT DEFAULT 1", pg: "BOOLEAN DEFAULT TRUE", my: "INT DEFAULT 1" },
+          { name: "razorpay_key_id", sqlite: "VARCHAR(255) DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
+          { name: "razorpay_key_secret", sqlite: "VARCHAR(255) DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
+          { name: "active_gateway", sqlite: "VARCHAR(50) DEFAULT 'RAZORPAY'", pg: "VARCHAR(50) DEFAULT 'RAZORPAY'", my: "VARCHAR(50) DEFAULT 'RAZORPAY'" }
+        ]
+      },
+      {
+        tableName: "whatsapp_settings",
+        columns: [
+          { name: "meta_phone_number_id", sqlite: "VARCHAR(255) DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
+          { name: "meta_access_token", sqlite: "TEXT DEFAULT ''", pg: "TEXT DEFAULT ''", my: "TEXT" },
+          { name: "meta_business_account_id", sqlite: "VARCHAR(255) DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
+          { name: "meta_template_name", sqlite: "VARCHAR(100) DEFAULT 'reference_no'", pg: "VARCHAR(100) DEFAULT 'reference_no'", my: "VARCHAR(100) DEFAULT 'reference_no'" },
+          { name: "twilio_account_sid", sqlite: "VARCHAR(255) DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
+          { name: "twilio_auth_token", sqlite: "VARCHAR(255) DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
+          { name: "twilio_whatsapp_from", sqlite: "VARCHAR(50) DEFAULT '+14155238886'", pg: "VARCHAR(50) DEFAULT '+14155238886'", my: "VARCHAR(50) DEFAULT '+14155238886'" },
+          { name: "enabled", sqlite: "INT DEFAULT 1", pg: "BOOLEAN DEFAULT TRUE", my: "INT DEFAULT 1" }
+        ]
+      },
+      {
+        tableName: "notification",
+        columns: [
+          { name: "recipient_role", sqlite: "VARCHAR(50) DEFAULT 'customer'", pg: "VARCHAR(50) DEFAULT 'customer'", my: "VARCHAR(50) DEFAULT 'customer'" },
+          { name: "recipient_phone", sqlite: "VARCHAR(50) DEFAULT ''", pg: "VARCHAR(50) DEFAULT ''", my: "VARCHAR(50) DEFAULT ''" },
+          { name: "order_id", sqlite: "VARCHAR(50) DEFAULT ''", pg: "VARCHAR(50) DEFAULT ''", my: "VARCHAR(50) DEFAULT ''" },
+          { name: "title_en", sqlite: "VARCHAR(255) DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
+          { name: "title_hi", sqlite: "VARCHAR(255) DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
+          { name: "message_en", sqlite: "TEXT DEFAULT ''", pg: "TEXT DEFAULT ''", my: "TEXT" },
+          { name: "message_hi", sqlite: "TEXT DEFAULT ''", pg: "TEXT DEFAULT ''", my: "TEXT" },
+          { name: "type", sqlite: "VARCHAR(50) DEFAULT 'order_update'", pg: "VARCHAR(50) DEFAULT 'order_update'", my: "VARCHAR(50) DEFAULT 'order_update'" },
+          { name: "is_read", sqlite: "INT DEFAULT 0", pg: "BOOLEAN DEFAULT FALSE", my: "INT DEFAULT 0" }
+        ]
+      }
     ];
 
     // 1. SQLite Schema Migration
     if (sqliteDb) {
       try {
-        const existingSQLite = await new Promise((resolve) => {
-          sqliteDb.all('PRAGMA table_info("order")', (err, rows) => {
-            if (err) resolve([]);
-            else resolve(rows || []);
+        for (const table of tableMigrations) {
+          const tableEscaped = table.tableName === 'order' || table.tableName === 'user' ? `"${table.tableName}"` : table.tableName;
+          const existingSQLite = await new Promise((resolve) => {
+            sqliteDb.all(`PRAGMA table_info(${tableEscaped})`, (err, rows) => {
+              if (err) resolve([]);
+              else resolve(rows || []);
+            });
           });
-        });
-        const existingColNames = new Set(existingSQLite.map((c) => c.name));
-        for (const col of orderColumns) {
-          if (!existingColNames.has(col.name)) {
-            try {
-              await new Promise((resolve, reject) => {
-                sqliteDb.run(`ALTER TABLE "order" ADD COLUMN ${col.name} ${col.sqlite}`, (err) => {
-                  if (err && !err.message.includes("duplicate column")) reject(err);
-                  else resolve();
-                });
-              });
-              console.log(`✓ SQLite migrated: added column ${col.name} to "order" table.`);
-            } catch (colErr) {
-              console.warn(`Notice SQLite column add ${col.name}:`, colErr.message);
-            }
-          }
-        }
+          const existingColNames = new Set(existingSQLite.map((c) => c.name));
 
-        const existingUserSQLite = await new Promise((resolve) => {
-          sqliteDb.all('PRAGMA table_info("user")', (err, rows) => {
-            if (err) resolve([]);
-            else resolve(rows || []);
-          });
-        });
-        const existingUserColNames = new Set(existingUserSQLite.map((c) => c.name));
-        for (const col of userColumns) {
-          if (!existingUserColNames.has(col.name)) {
-            try {
-              await new Promise((resolve, reject) => {
-                sqliteDb.run(`ALTER TABLE "user" ADD COLUMN ${col.name} ${col.sqlite}`, (err) => {
-                  if (err && !err.message.includes("duplicate column")) reject(err);
-                  else resolve();
+          for (const col of table.columns) {
+            if (!existingColNames.has(col.name)) {
+              try {
+                await new Promise((resolve, reject) => {
+                  sqliteDb.run(`ALTER TABLE ${tableEscaped} ADD COLUMN ${col.name} ${col.sqlite}`, (err) => {
+                    if (err && !err.message.includes("duplicate column")) reject(err);
+                    else resolve();
+                  });
                 });
-              });
-              console.log(`✓ SQLite migrated: added column ${col.name} to "user" table.`);
-            } catch (colErr) {
-              console.warn(`Notice SQLite column add ${col.name}:`, colErr.message);
+                console.log(`✓ SQLite migrated: added column ${col.name} to ${tableEscaped} table.`);
+              } catch (colErr) {
+                console.warn(`Notice SQLite column add ${col.name} to ${tableEscaped}:`, colErr.message);
+              }
             }
           }
         }
@@ -657,15 +736,17 @@ export const db = {
     // 2. MySQL Schema Migration if active
     if (this.isMySQL && mysqlPool) {
       try {
-        const [existingMyCols] = await mysqlPool.query("SHOW COLUMNS FROM `order`");
-        const existingMyNames = new Set((existingMyCols || []).map((c) => c.Field));
-        for (const col of orderColumns) {
-          if (!existingMyNames.has(col.name)) {
-            try {
-              await mysqlPool.query(`ALTER TABLE \`order\` ADD COLUMN \`${col.name}\` ${col.my}`);
-              console.log(`✓ MySQL migrated: added column ${col.name} to \`order\` table.`);
-            } catch (myErr) {
-              console.warn(`Notice MySQL column add ${col.name}:`, myErr.message);
+        for (const table of tableMigrations) {
+          const [existingMyCols] = await mysqlPool.query(`SHOW COLUMNS FROM \`${table.tableName}\``);
+          const existingMyNames = new Set((existingMyCols || []).map((c) => c.Field));
+          for (const col of table.columns) {
+            if (!existingMyNames.has(col.name)) {
+              try {
+                await mysqlPool.query(`ALTER TABLE \`${table.tableName}\` ADD COLUMN \`${col.name}\` ${col.my}`);
+                console.log(`✓ MySQL migrated: added column ${col.name} to \`${table.tableName}\` table.`);
+              } catch (myErr) {
+                console.warn(`Notice MySQL column add ${col.name} to \`${table.tableName}\`:`, myErr.message);
+              }
             }
           }
         }
@@ -677,11 +758,14 @@ export const db = {
     // 3. PostgreSQL Schema Migration if active
     if (this.isPostgres && pgPool) {
       try {
-        for (const col of orderColumns) {
-          try {
-            await pgPool.query(`ALTER TABLE "order" ADD COLUMN IF NOT EXISTS ${col.name} ${col.pg}`);
-          } catch (pgErr) {
-            console.warn(`Notice PG column add ${col.name}:`, pgErr.message);
+        for (const table of tableMigrations) {
+          const tableEscaped = table.tableName === 'order' || table.tableName === 'user' ? `"${table.tableName}"` : table.tableName;
+          for (const col of table.columns) {
+            try {
+              await pgPool.query(`ALTER TABLE ${tableEscaped} ADD COLUMN IF NOT EXISTS ${col.name} ${col.pg}`);
+            } catch (pgErr) {
+              console.warn(`Notice PG column add ${col.name} to ${tableEscaped}:`, pgErr.message);
+            }
           }
         }
       } catch (err) {
@@ -1504,3 +1588,6 @@ export const db = {
     }
   }
 };
+
+export default db;
+
