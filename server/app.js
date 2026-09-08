@@ -40,8 +40,16 @@ export async function createServer() {
   }));
   
   app.options("*", cors());
-  // Serve uploaded assets statically
-  app.use("/uploads", express.static(uploadsDir));
+  // Serve uploaded assets statically with long-term browser cache (30 days)
+  app.use("/uploads", express.static(uploadsDir, {
+    maxAge: "30d",
+    immutable: true,
+    etag: true,
+    lastModified: true,
+    setHeaders: (res) => {
+      res.setHeader("Cache-Control", "public, max-age=2592000, immutable");
+    }
+  }));
   app.use(express.json());
 
   app.get("/api/health", (req, res) => {
@@ -105,8 +113,22 @@ export async function createServer() {
   } else {
     console.log("📦 Starting server in PRODUCTION mode with static build assets...");
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
+    app.use(express.static(distPath, {
+      maxAge: "7d",
+      etag: true,
+      lastModified: true,
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith(".html")) {
+          // Never cache index.html so updates are visible immediately on deploy
+          res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        } else if (filePath.includes(`${path.sep}assets${path.sep}`) || filePath.includes("/assets/")) {
+          // Bundled hashed assets are immutable
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        }
+      }
+    }));
     app.get("*", (req, res) => {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

@@ -5,6 +5,8 @@ export const GENERIC_PLACEHOLDER_KEY = 'photo-1542838132-92c53300491e';
 
 // Global cache of failed image URLs so we never retry broken/404 links repeatedly
 const failedUrlCache = new Set();
+// Fast in-memory cache of already resolved product image URLs to avoid repeated URL computation
+const resolvedImageCache = new Map();
 
 /**
  * Returns the configured base URL for images from environment variable VITE_IMAGE_BASE_URL.
@@ -59,7 +61,6 @@ export function resolveImageUrl(url) {
 
   // If already absolute http/https
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-    // If it's a generic placeholder unsplash, ignore
     if (trimmed.includes(GENERIC_PLACEHOLDER_KEY)) return '';
     return trimmed;
   }
@@ -86,7 +87,7 @@ export function hasCustomProductImage(product) {
 }
 
 /**
- * Resolves all candidate image URLs for a product based on its code, filename, and env base URL
+ * Resolves candidate image URLs for a product
  */
 export function getCandidateImages(product, r2PublicUrl) {
   if (!product) return [];
@@ -95,10 +96,17 @@ export function getCandidateImages(product, r2PublicUrl) {
   const raw = (product.imageUrl || product.image || '').trim();
   const cleanName = extractCleanImageName(raw);
 
-  // 1. If a clean custom filename exists (e.g. "SP000001.webp" or "rice.jpg")
+  // 1. If an exact assigned image path or filename exists, prioritize it directly
   if (cleanName) {
-    const directUrl = `${base}/${cleanName}`;
-    candidates.push(directUrl);
+    if (cleanName.startsWith('http://') || cleanName.startsWith('https://')) {
+      candidates.push(cleanName);
+    } else {
+      candidates.push(`${base}/${cleanName}`);
+    }
+    // If the image already has an extension, don't spam 20 speculative extensions
+    if (/\.(webp|jpg|jpeg|png|gif|svg)$/i.test(cleanName)) {
+      return candidates;
+    }
   }
 
   // 2. Resolve by product code (e.g. SP000001, SW-SW0001)
@@ -107,8 +115,6 @@ export function getCandidateImages(product, r2PublicUrl) {
     const candidateCodes = [code];
     if (code.toUpperCase().startsWith('SW-')) {
       candidateCodes.push(code.replace(/^SW-/i, ''));
-    } else {
-      candidateCodes.push(`SW-${code}`);
     }
 
     const basesToCheck = [base];
@@ -118,14 +124,10 @@ export function getCandidateImages(product, r2PublicUrl) {
 
     for (const b of basesToCheck) {
       for (const c of candidateCodes) {
-        const variants = [c, `${c} `, `${c}_`];
-        for (const v of variants) {
-          const encoded = encodeURIComponent(v);
-          candidates.push(`${b}/${encoded}.webp`);
-          candidates.push(`${b}/${encoded}.jpg`);
-          candidates.push(`${b}/${encoded}.jpeg`);
-          candidates.push(`${b}/${encoded}.png`);
-        }
+        const encoded = encodeURIComponent(c);
+        candidates.push(`${b}/${encoded}.webp`);
+        candidates.push(`${b}/${encoded}.jpg`);
+        candidates.push(`${b}/${encoded}.png`);
       }
     }
   }
@@ -136,26 +138,34 @@ export function getCandidateImages(product, r2PublicUrl) {
 export function resolveProductImage(product, r2PublicUrl, size = 300) {
   if (!product) return DEFAULT_PRODUCT_FALLBACK;
 
+  const cacheKey = `${product.id || ''}_${product.code || ''}_${product.imageUrl || product.image || ''}`;
+  if (resolvedImageCache.has(cacheKey)) {
+    const cached = resolvedImageCache.get(cacheKey);
+    if (!failedUrlCache.has(cached)) {
+      return cached;
+    }
+    resolvedImageCache.delete(cacheKey);
+  }
+
+  // Check direct raw URL first if absolute
+  const raw = (product.imageUrl || product.image || '').trim();
+  if (raw && !raw.includes(GENERIC_PLACEHOLDER_KEY) && !failedUrlCache.has(raw)) {
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      resolvedImageCache.set(cacheKey, raw);
+      return raw;
+    }
+  }
+
   // Check candidate keys using env base URL and code
   const candidates = getCandidateImages(product, r2PublicUrl);
   for (const candidate of candidates) {
     if (!failedUrlCache.has(candidate)) {
+      resolvedImageCache.set(cacheKey, candidate);
       return candidate;
     }
   }
 
-  // Fallback if raw was a direct valid URL
-  let raw = (product.imageUrl || product.image || '').trim();
-  if (raw && !raw.includes(GENERIC_PLACEHOLDER_KEY) && !failedUrlCache.has(raw)) {
-    if (raw.startsWith('http://') || raw.startsWith('https://')) {
-      return raw;
-    }
-    const resolved = resolveImageUrl(raw);
-    if (resolved && !failedUrlCache.has(resolved)) {
-      return resolved;
-    }
-  }
-
+  resolvedImageCache.set(cacheKey, DEFAULT_PRODUCT_FALLBACK);
   return DEFAULT_PRODUCT_FALLBACK;
 }
 
