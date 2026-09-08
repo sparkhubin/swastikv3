@@ -46,10 +46,63 @@ async function saveStoredCustomers(customers) {
   }
 }
 
+// Helpers to track deleted customers so auto-discovery does not re-add them
+async function getDeletedCustomerRecords() {
+  try {
+    const rows = await db.query("SELECT value_text FROM app_settings WHERE key_name = 'swastik_deleted_customers'");
+    if (rows.length > 0 && rows[0].value_text) {
+      const parsed = JSON.parse(rows[0].value_text);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {}
+  return [];
+}
+
+async function recordCustomerDeletion(id, phone) {
+  try {
+    const list = await getDeletedCustomerRecords();
+    const cleanP = cleanPhone(phone).slice(-10);
+    const updated = list.filter(item => Number(item.id) !== Number(id) && (!cleanP || item.phone !== cleanP));
+    updated.push({ id: Number(id), phone: cleanP, deletedAt: new Date().toISOString() });
+    const valueString = JSON.stringify(updated);
+    const existing = await db.query("SELECT key_name FROM app_settings WHERE key_name = 'swastik_deleted_customers'");
+    if (existing.length > 0) {
+      await db.execute("UPDATE app_settings SET value_text = ?, updated_at = CURRENT_TIMESTAMP WHERE key_name = 'swastik_deleted_customers'", [valueString]);
+    } else {
+      await db.execute("INSERT INTO app_settings (key_name, value_text) VALUES ('swastik_deleted_customers', ?)", [valueString]);
+    }
+  } catch (e) {
+    console.error("Error recording customer deletion:", e);
+  }
+}
+
+async function removeCustomerFromDeleted(phone) {
+  try {
+    const cleanP = cleanPhone(phone).slice(-10);
+    if (!cleanP) return;
+    const list = await getDeletedCustomerRecords();
+    const filtered = list.filter(item => item.phone !== cleanP);
+    const valueString = JSON.stringify(filtered);
+    await db.execute("UPDATE app_settings SET value_text = ?, updated_at = CURRENT_TIMESTAMP WHERE key_name = 'swastik_deleted_customers'", [valueString]);
+  } catch (e) {}
+}
+
 // GET /api/customers - Retrieve all customers, merged with orders & users
 router.get("/customers", async (req, res) => {
   try {
+    const deletedRecords = await getDeletedCustomerRecords();
+    const deletedIds = new Set(deletedRecords.map(d => Number(d.id)));
+    const deletedPhones = new Set(deletedRecords.map(d => d.phone).filter(Boolean));
+
     let customerList = await getStoredCustomers();
+
+    // Filter out any previously deleted customers
+    customerList = customerList.filter(c => {
+      if (deletedIds.has(Number(c.id))) return false;
+      const cleanP = cleanPhone(c.phone).slice(-10);
+      if (cleanP && deletedPhones.has(cleanP)) return false;
+      return true;
+    });
 
     // Seed from real customer table if empty
     if (customerList.length === 0) {
@@ -84,6 +137,8 @@ router.get("/customers", async (req, res) => {
           const rawPhone = o.customer_phone || "";
           const phoneDigits = cleanPhone(rawPhone);
           if (!phoneDigits || phoneDigits.length < 5) continue;
+          const ten = phoneDigits.slice(-10);
+          if (deletedPhones.has(ten)) continue;
           
           const rawName = o.customer_name || "Customer";
           if (rawName.toLowerCase().includes("simulated") && customerList.some(c => cleanPhone(c.phone).endsWith(phoneDigits.slice(-10)))) {
@@ -215,6 +270,7 @@ router.post("/customers", async (req, res) => {
       customerList.unshift(savedCust);
     }
 
+    await removeCustomerFromDeleted(formattedPhone || phoneDigits);
     await saveStoredCustomers(customerList);
 
     // Also upsert into relational SQL 'customer' table
@@ -429,6 +485,8 @@ router.delete("/customers/:id", async (req, res) => {
     const targetCust = customerList.find(c => Number(c.id) === custId);
     customerList = customerList.filter(c => Number(c.id) !== custId);
     await saveStoredCustomers(customerList);
+
+    await recordCustomerDeletion(custId, targetCust?.phone || "");
 
     try {
       await db.execute("DELETE FROM customer WHERE id = ?", [custId]);

@@ -15,7 +15,8 @@ uploads/
 *.sqlite
 *.db
 swastik_local.db
-!database/persistent_store.json
+database/persistent_store.json
+!database/persistent_store.template.json
 !data/store_data.json
 
 .DS_Store

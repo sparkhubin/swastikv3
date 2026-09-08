@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 import R2ImageUploader from './R2ImageUploader';
 import NotificationCenter from '../../components/NotificationCenter';
-import { isOrder1HourLocked, getLockTimeRemainingFormatted } from '../../utils/orderLock';
+import { isOrder1HourLocked, isOrderCancelled, getLockTimeRemainingFormatted } from '../../utils/orderLock';
 
 export default function OrdersManager({ userRole }) {
   const { isHindi } = useLanguage();
@@ -94,15 +94,17 @@ export default function OrdersManager({ userRole }) {
     return "Store Pickup / Counter Sale";
   }, [customers]);
 
-  // Real delivery riders filter (strictly delivery personnel)
+  // Real delivery riders filter (strictly delivery personnel: role_id 4 or rider role, excluding admins & managers)
   const deliveryStaffList = React.useMemo(() => {
-    return (staff || []).filter(s => 
-      s.role_id === 4 ||
-      s.role_code === 'rider' ||
-      s.permissions?.includes('delivery') ||
-      (s.role && String(s.role).toLowerCase().includes('rider')) ||
-      (s.role && String(s.role).toLowerCase().includes('delivery'))
-    );
+    return (staff || []).filter(s => {
+      if (s.id === 1 || s.isMasterAdmin) return false;
+      const rName = String(s.role || '').toLowerCase();
+      const rCode = String(s.role_code || '').toLowerCase();
+      if (rName.includes('admin') || rCode === 'admin') return false;
+      if (rName.includes('manager') || rCode === 'manager') return false;
+      if (rName.includes('support') || rCode === 'support') return false;
+      return s.role_id === 4 || rCode === 'rider' || rName.includes('rider') || rName.includes('delivery');
+    });
   }, [staff]);
 
   const activeStaff = React.useMemo(() => {
@@ -981,6 +983,14 @@ export default function OrdersManager({ userRole }) {
   const executeStepUpdate = (id, step, statusKey, isActive, existingOrder, extraFields = {}) => {
     const isNowDelivered = statusKey === "Delivered" || step === 2;
     const isNowCancelled = statusKey === "Cancelled" || step === -1;
+
+    if (existingOrder && isOrder1HourLocked(existingOrder) && !isNowDelivered && !isNowCancelled) {
+      alert(isHindi
+        ? '🔒 यह ऑर्डर लॉक है! रद्द (Cancelled) या डिलीवर किए गए ऑर्डर में बदलाव नहीं किया जा सकता।'
+        : '🔒 This order is permanently locked! Cancelled or delivered orders cannot be modified.');
+      return;
+    }
+
     const payload = {
       step: isNowCancelled ? -1 : step,
       status: statusKey,
@@ -2068,12 +2078,16 @@ export default function OrdersManager({ userRole }) {
                     <div className="p-3.5 rounded-xl bg-slate-950 border border-rose-500/30 text-rose-300 space-y-2">
                       <div className="flex items-center gap-2 text-xs font-black uppercase text-rose-400">
                         <Lock className="h-4 w-4" />
-                        <span>Order Delivered — Permanently Locked</span>
+                        <span>{isOrderCancelled(selectedOrder) ? 'Order Cancelled — Permanently Locked' : 'Order Delivered — Permanently Locked'}</span>
                       </div>
                       <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
                         {isHindi
-                          ? '🔒 यह ऑर्डर डिलीवर हो चुका है और स्थायी रूप से लॉक है! डिलीवर होने के बाद कोई भी स्थिति, उत्पाद, या विवरण नहीं बदला जा सकता।'
-                          : '🔒 This order has been delivered and is permanently locked! Nothing can be changed after delivery.'}
+                          ? (isOrderCancelled(selectedOrder)
+                              ? '🔒 यह ऑर्डर रद्द (Cancelled) हो चुका है और स्थायी रूप से लॉक है! रद्द किए गए ऑर्डर में कोई बदलाव या प्रेषण नहीं किया जा सकता।'
+                              : '🔒 यह ऑर्डर डिलीवर हो चुका है और स्थायी रूप से लॉक है! डिलीवर होने के बाद कोई भी स्थिति, उत्पाद, या विवरण नहीं बदला जा सकता।')
+                          : (isOrderCancelled(selectedOrder)
+                              ? '🔒 This order was cancelled and is permanently locked! Status or details of cancelled orders cannot be modified.'
+                              : '🔒 This order has been delivered and is permanently locked! Nothing can be changed after delivery.')}
                       </p>
                     </div>
                   ) : (
@@ -2156,11 +2170,11 @@ export default function OrdersManager({ userRole }) {
                             handleAgentDetailsChange('deliveryStaffId', chosen.id);
                           }
                         }}
-                        disabled={userRole === 'customer'}
-                        className="w-full bg-slate-950 border border-cyan-500/30 text-cyan-200 rounded-xl px-3 py-2 text-xs outline-none cursor-pointer font-bold"
+                        disabled={userRole === 'customer' || isOrder1HourLocked(selectedOrder)}
+                        className="w-full bg-slate-950 border border-cyan-500/30 text-cyan-200 rounded-xl px-3 py-2 text-xs outline-none cursor-pointer font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <option value="">-- Choose Registered Delivery Executive --</option>
-                        {staff?.filter(s => s.role_id === 4 || s.role_code === 'rider' || s.permissions?.includes('delivery') || (s.role && String(s.role).toLowerCase().includes('rider')) || (s.role && String(s.role).toLowerCase().includes('delivery'))).map(s => (
+                        {deliveryStaffList.map(s => (
                           <option key={s.id} value={s.id}>
                             🛵 {s.name} ({s.mobile})
                           </option>
@@ -2174,9 +2188,9 @@ export default function OrdersManager({ userRole }) {
                         type="text" 
                         value={selectedOrder.deliveryPartnerName || ''}
                         onChange={(e) => handleAgentDetailsChange('deliveryPartnerName', e.target.value)}
-                        disabled={userRole === 'customer'}
+                        disabled={userRole === 'customer' || isOrder1HourLocked(selectedOrder)}
                         placeholder="Rider / Delivery Agent Name"
-                        className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white"
+                        className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white disabled:opacity-50"
                       />
                     </div>
 

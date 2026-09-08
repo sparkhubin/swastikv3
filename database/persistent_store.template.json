@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-09-08T08:32:20.777Z",
+  "updatedAt": "2026-09-08T09:17:45.584Z",
   "tables": {
     "product": [
       {
@@ -140,7 +140,7 @@
         "original_price": 299,
         "discount_tag": "₹200 OFF",
         "image_url": "SW-SW0007.webp",
-        "stock_count": 97,
+        "stock_count": 96,
         "unit": "1 kg",
         "unit_prices": "1 kg:99",
         "pack_en": "1 kg",
@@ -203,7 +203,7 @@
         "original_price": 84,
         "discount_tag": "₹14 OFF",
         "image_url": "SW-SW0010.webp",
-        "stock_count": 97,
+        "stock_count": 96,
         "unit": "1 kg",
         "unit_prices": "1 kg:70",
         "pack_en": "1 kg",
@@ -54884,7 +54884,7 @@
         "payment_method": "COD",
         "payment_status": "PAID",
         "created_at": "2026-09-08 08:02:07",
-        "updated_at": "2026-09-08 08:02:07",
+        "updated_at": "2026-09-08 08:48:56",
         "total": 299,
         "delivery_staff_id": null,
         "cod_status": "PENDING_CLEARANCE",
@@ -54924,7 +54924,7 @@
         "payment_method": "RAZORPAY_ONLINE",
         "payment_status": "PAID",
         "created_at": "2026-09-08 08:02:07",
-        "updated_at": "2026-09-08 08:02:07",
+        "updated_at": "2026-09-08 08:48:56",
         "total": 106.65,
         "delivery_staff_id": 1,
         "cod_status": "CLEARED_TO_ADMIN",
@@ -54964,9 +54964,89 @@
         "payment_method": "COD",
         "payment_status": "UNPAID",
         "created_at": "2026-09-08 08:02:07",
-        "updated_at": "2026-09-08 08:02:07",
+        "updated_at": "2026-09-08 08:48:56",
         "total": 356.3,
         "delivery_staff_id": 3,
+        "cod_status": "PENDING_CLEARANCE",
+        "cod_settled_at": null,
+        "cod_cleared_by": null,
+        "cod_settlement_note": null
+      },
+      {
+        "id": "SW-7291",
+        "customer_id": 106,
+        "user_id": 106,
+        "order_date": "2026-09-08T08:48:25.597Z",
+        "is_active": 1,
+        "step_level": 1,
+        "status_label": "In Transit",
+        "subtotal": 169,
+        "delivery_fee": 30,
+        "gst_amount": 8.45,
+        "grand_total": 207.45,
+        "delivery_partner_name": "Rahul Verma",
+        "delivery_partner_phone": "9898989898",
+        "dispatch_hub": "Noida Sector 62 & 63 Hub",
+        "eta_status": "15 Mins",
+        "shipping_address": "[Noida Sector 62 & 63 - Sector 63] India\nD25 Jinendra Vihar",
+        "customer_name": "Balram Patidar",
+        "customer_phone": "+91 7000165361",
+        "customer_email": "bilspatidar@gmail.com",
+        "is_marg_bill": 0,
+        "points_earned": 0,
+        "pdf_url": "",
+        "referral_discount": 0,
+        "applied_points": 0,
+        "coupon_discount": 0,
+        "coupon_code": "",
+        "celebration_discount": 0,
+        "celebration_offer_name": "",
+        "payment_method": "cod",
+        "payment_status": "UNPAID",
+        "created_at": "2026-09-08 08:48:25",
+        "updated_at": "2026-09-08 08:53:50",
+        "total": 207.45,
+        "delivery_staff_id": null,
+        "cod_status": "PENDING_CLEARANCE",
+        "cod_settled_at": null,
+        "cod_cleared_by": null,
+        "cod_settlement_note": null
+      },
+      {
+        "id": "SW-6201",
+        "customer_id": 106,
+        "user_id": 106,
+        "order_date": "2026-09-08T08:48:45.775Z",
+        "is_active": 0,
+        "step_level": -1,
+        "status_label": "Cancelled",
+        "subtotal": 155,
+        "delivery_fee": 30,
+        "gst_amount": 7.75,
+        "grand_total": 192.75,
+        "delivery_partner_name": "Suresh Mehra",
+        "delivery_partner_phone": "9811122334",
+        "dispatch_hub": "Noida Sector 62 & 63 Hub",
+        "eta_status": "15 Mins",
+        "shipping_address": "[Noida Sector 62 & 63 - Sector 63] India\nD25 Jinendra Vihar",
+        "customer_name": "Balram Patidar",
+        "customer_phone": "+91 7000165361",
+        "customer_email": "bilspatidar@gmail.com",
+        "is_marg_bill": 0,
+        "points_earned": 0,
+        "pdf_url": "",
+        "referral_discount": 0,
+        "applied_points": 0,
+        "coupon_discount": 0,
+        "coupon_code": "",
+        "celebration_discount": 0,
+        "celebration_offer_name": "",
+        "payment_method": "CASHFREE_ONLINE",
+        "payment_status": "PAID",
+        "created_at": "2026-09-08 08:48:56",
+        "updated_at": "2026-09-08 08:53:33",
+        "total": 192.75,
+        "delivery_staff_id": 2,
         "cod_status": "PENDING_CLEARANCE",
         "cod_settled_at": null,
         "cod_cleared_by": null,
@@ -54983,6 +55063,46 @@
         "price": 15,
         "qty": 1,
         "weight_label": "200ml"
+      },
+      {
+        "id": 2,
+        "order_id": "SW-7291",
+        "product_id": 7,
+        "name_en": "20-20 FLAX SEED 200GM",
+        "name_hi": "20-20 FLAX SEED 200GM",
+        "price": 99,
+        "qty": 1,
+        "weight_label": "1 kg"
+      },
+      {
+        "id": 3,
+        "order_id": "SW-7291",
+        "product_id": 10,
+        "name_en": "420 CHANA PAPAD 200G",
+        "name_hi": "420 CHANA PAPAD 200G",
+        "price": 70,
+        "qty": 1,
+        "weight_label": "1 kg"
+      },
+      {
+        "id": 4,
+        "order_id": "SW-6201",
+        "product_id": 10,
+        "name_en": "420 CHANA PAPAD 200G",
+        "name_hi": "420 CHANA PAPAD 200G",
+        "price": 70,
+        "qty": 1,
+        "weight_label": "1 kg"
+      },
+      {
+        "id": 5,
+        "order_id": "SW-6201",
+        "product_id": 12,
+        "name_en": "420 KHAMAN MIX 500G",
+        "name_hi": "420 KHAMAN MIX 500G",
+        "price": 85,
+        "qty": 1,
+        "weight_label": "1 kg"
       }
     ],
     "customer": [
@@ -55002,25 +55122,7 @@
         "dob": "",
         "anniversary": "",
         "created_at": "2026-09-08 08:02:06",
-        "updated_at": "2026-09-08 08:32:19"
-      },
-      {
-        "id": 102,
-        "name": "Rahul Sharma",
-        "phone": "+91 98765 43210",
-        "email": "rahul.sharma@gmail.com",
-        "address": "B-12, Sector 62, Noida, UP",
-        "status": "Active",
-        "registered_at": "2026-02-01",
-        "order_count": 2,
-        "total_spent": 750,
-        "points": 150,
-        "is_prime_active": 0,
-        "prime_membership_no": "",
-        "dob": "",
-        "anniversary": "",
-        "created_at": "2026-09-08 08:02:06",
-        "updated_at": "2026-09-08 08:32:19"
+        "updated_at": "2026-09-08 09:17:21"
       },
       {
         "id": 103,
@@ -55038,7 +55140,7 @@
         "dob": "",
         "anniversary": "",
         "created_at": "2026-09-08 08:02:06",
-        "updated_at": "2026-09-08 08:32:19"
+        "updated_at": "2026-09-08 09:17:21"
       },
       {
         "id": 104,
@@ -55056,7 +55158,7 @@
         "dob": "",
         "anniversary": "",
         "created_at": "2026-09-08 08:02:06",
-        "updated_at": "2026-09-08 08:32:19"
+        "updated_at": "2026-09-08 09:17:21"
       },
       {
         "id": 105,
@@ -55074,7 +55176,7 @@
         "dob": "",
         "anniversary": "",
         "created_at": "2026-09-08 08:02:07",
-        "updated_at": "2026-09-08 08:32:19"
+        "updated_at": "2026-09-08 09:17:21"
       },
       {
         "id": 106,
@@ -55084,15 +55186,15 @@
         "address": "[Noida Sector 62 & 63 - Sector 63] xsxsxxvv443444@#$$$##$###$",
         "status": "Active",
         "registered_at": "2026-09-06 10:36:30",
-        "order_count": 3,
-        "total_spent": 761.95,
+        "order_count": 5,
+        "total_spent": 1162.15,
         "points": 100,
         "is_prime_active": 0,
         "prime_membership_no": "",
         "dob": "",
         "anniversary": "",
         "created_at": "2026-09-08 08:02:07",
-        "updated_at": "2026-09-08 08:32:19"
+        "updated_at": "2026-09-08 09:17:21"
       }
     ],
     "user": [
@@ -55126,7 +55228,7 @@
       },
       {
         "id": 3,
-        "full_name": "Vikram Singh",
+        "full_name": "Test Delete User",
         "phone_number": "9876543210",
         "password_hash": "staff",
         "role_id": 4,
@@ -55134,9 +55236,9 @@
         "permissions": "[\"delivery\",\"orders\"]",
         "status": "Active",
         "is_master_admin": 0,
-        "delivery_address": null,
+        "delivery_address": "B-12, Sector 62, Noida, UP",
         "created_at": "2026-09-06 11:17:36",
-        "updated_at": "2026-09-07 09:15:00"
+        "updated_at": "2026-09-08 09:17:32"
       },
       {
         "id": 4,
@@ -55149,8 +55251,8 @@
         "status": "Active",
         "is_master_admin": 0,
         "delivery_address": null,
-        "created_at": "2026-09-06 11:17:36",
-        "updated_at": "2026-09-07 09:15:00"
+        "created_at": "2026-09-08 09:12:32",
+        "updated_at": "2026-09-08 09:12:32"
       }
     ],
     "partner": [
@@ -55213,13 +55315,23 @@
     "app_settings": [
       {
         "key_name": "swastik_customers",
-        "value_text": "[{\"id\":101,\"name\":\"Balram Patidar\",\"phone\":\"+91 99999 88888\",\"email\":\"balram@swastik.local\",\"address\":\"Sector 15, Flat 402, Noida, UP\",\"status\":\"Active\",\"registeredAt\":\"2026-01-15\",\"orderCount\":4,\"totalSpent\":1850,\"points\":350,\"isPrimeActive\":true,\"primeMembershipNo\":\"SW-PRIME-101\",\"dob\":\"\",\"anniversary\":\"\"},{\"id\":102,\"name\":\"Rahul Sharma\",\"phone\":\"+91 98765 43210\",\"email\":\"rahul.sharma@gmail.com\",\"address\":\"B-12, Sector 62, Noida, UP\",\"status\":\"Active\",\"registeredAt\":\"2026-02-01\",\"orderCount\":2,\"totalSpent\":750,\"points\":150,\"isPrimeActive\":false,\"primeMembershipNo\":\"\",\"dob\":\"\",\"anniversary\":\"\"},{\"id\":103,\"name\":\"Priya Patel\",\"phone\":\"+91 91234 56789\",\"email\":\"priya.p@yahoo.com\",\"address\":\"House 55, Indirapuram, Ghaziabad\",\"status\":\"Active\",\"registeredAt\":\"2026-02-10\",\"orderCount\":1,\"totalSpent\":420,\"points\":100,\"isPrimeActive\":false,\"primeMembershipNo\":\"\",\"dob\":\"\",\"anniversary\":\"\"},{\"id\":104,\"name\":\"Amit Verma\",\"phone\":\"+91 98111 22334\",\"email\":\"amit.verma@outlook.com\",\"address\":\"Flat 204, Gaur City, Greater Noida West\",\"status\":\"Active\",\"registeredAt\":\"2026-02-18\",\"orderCount\":3,\"totalSpent\":1200,\"points\":200,\"isPrimeActive\":false,\"primeMembershipNo\":\"\",\"dob\":\"\",\"anniversary\":\"\"},{\"id\":105,\"name\":\"main suwastik\",\"phone\":\"+91 99999 99999\",\"email\":\"simulatedcustomer@example.com\",\"address\":\"Sector 15, Noida, UP\",\"status\":\"Active\",\"registeredAt\":\"2026-06-02\",\"orderCount\":2,\"totalSpent\":983,\"points\":100,\"isPrimeActive\":false,\"primeMembershipNo\":\"\",\"dob\":\"\",\"anniversary\":\"\"},{\"id\":106,\"name\":\"Balram Patidar\",\"phone\":\"+91 7000165361\",\"email\":\"bilspatidar@gmail.com\",\"address\":\"[Noida Sector 62 & 63 - Sector 63] xsxsxxvv443444@#$$$##$###$\",\"status\":\"Active\",\"registeredAt\":\"2026-09-06 10:36:30\",\"orderCount\":3,\"totalSpent\":761.95,\"points\":100,\"isPrimeActive\":false,\"primeMembershipNo\":\"\",\"dob\":\"\",\"anniversary\":\"\"}]",
-        "updated_at": "2026-09-08 08:32:19"
+        "value_text": "[{\"id\":101,\"name\":\"Balram Patidar\",\"phone\":\"+91 99999 88888\",\"email\":\"balram@swastik.local\",\"address\":\"Sector 15, Flat 402, Noida, UP\",\"status\":\"Active\",\"registeredAt\":\"2026-01-15\",\"orderCount\":4,\"totalSpent\":1850,\"points\":350,\"isPrimeActive\":true,\"primeMembershipNo\":\"SW-PRIME-101\",\"dob\":\"\",\"anniversary\":\"\"},{\"id\":103,\"name\":\"Priya Patel\",\"phone\":\"+91 91234 56789\",\"email\":\"priya.p@yahoo.com\",\"address\":\"House 55, Indirapuram, Ghaziabad\",\"status\":\"Active\",\"registeredAt\":\"2026-02-10\",\"orderCount\":1,\"totalSpent\":420,\"points\":100,\"isPrimeActive\":false,\"primeMembershipNo\":\"\",\"dob\":\"\",\"anniversary\":\"\"},{\"id\":104,\"name\":\"Amit Verma\",\"phone\":\"+91 98111 22334\",\"email\":\"amit.verma@outlook.com\",\"address\":\"Flat 204, Gaur City, Greater Noida West\",\"status\":\"Active\",\"registeredAt\":\"2026-02-18\",\"orderCount\":3,\"totalSpent\":1200,\"points\":200,\"isPrimeActive\":false,\"primeMembershipNo\":\"\",\"dob\":\"\",\"anniversary\":\"\"},{\"id\":105,\"name\":\"main suwastik\",\"phone\":\"+91 99999 99999\",\"email\":\"simulatedcustomer@example.com\",\"address\":\"Sector 15, Noida, UP\",\"status\":\"Active\",\"registeredAt\":\"2026-06-02\",\"orderCount\":2,\"totalSpent\":983,\"points\":100,\"isPrimeActive\":false,\"primeMembershipNo\":\"\",\"dob\":\"\",\"anniversary\":\"\"},{\"id\":106,\"name\":\"Balram Patidar\",\"phone\":\"+91 7000165361\",\"email\":\"bilspatidar@gmail.com\",\"address\":\"[Noida Sector 62 & 63 - Sector 63] xsxsxxvv443444@#$$$##$###$\",\"status\":\"Active\",\"registeredAt\":\"2026-09-06 10:36:30\",\"orderCount\":5,\"totalSpent\":1162.15,\"points\":100,\"isPrimeActive\":false,\"primeMembershipNo\":\"\",\"dob\":\"\",\"anniversary\":\"\"}]",
+        "updated_at": "2026-09-08 09:17:32"
       },
       {
         "key_name": "swastik_data_deletion_requests",
         "value_text": "[{\"id\":\"DEL-758676-249\",\"customerId\":106,\"name\":\"Balram Patidar\",\"phone\":\"+91 7000165361\",\"email\":\"bilspatidar@gmail.com\",\"reason\":\"Privacy and data concerns\",\"notes\":\"\",\"status\":\"Rejected\",\"requestedAt\":\"2026-09-07T08:12:38.676Z\",\"processedAt\":\"2026-09-07T08:15:32.451Z\",\"adminNotes\":\"Request declined due to active pending order or account verification requirement.\"}]",
         "updated_at": "2026-09-08 08:02:07"
+      },
+      {
+        "key_name": "swastik_categories",
+        "value_text": "[{\"id\":\"all\",\"nameEn\":\"All Essentials\",\"nameHi\":\"सभी आवश्यक वस्तुएं\",\"icon\":\"✨\",\"image\":\"https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400\"},{\"id\":\"chocolate\",\"nameEn\":\"CHOCOLATE ITEM\",\"nameHi\":\"CHOCOLATE ITEM\",\"icon\":\"🍫\",\"image\":\"https://images.unsplash.com/photo-1548907040-4d42b52125ca?auto=format&fit=crop&q=80&w=400\"},{\"id\":\"beverage\",\"nameEn\":\"BEVERAGE ITEM\",\"nameHi\":\"पेय पदार्थ आइटम\",\"icon\":\"🧃\",\"image\":\"https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&q=80&w=400\"},{\"id\":\"babycare\",\"nameEn\":\"BABY CARE ITEM LIST\",\"nameHi\":\"बेबी केयर आइटम सूची\",\"icon\":\"🍼\",\"image\":\"https://images.unsplash.com/photo-1519689680058-324335c77ebe?auto=format&fit=crop&q=80&w=400\"},{\"id\":\"swastik\",\"nameEn\":\"SWSTIK PRODUCT LIST\",\"nameHi\":\"स्वास्तिक उत्पाद सूची\",\"icon\":\"✨\",\"image\":\"https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400\"}]",
+        "updated_at": "2026-09-08 08:52:01"
+      },
+      {
+        "key_name": "swastik_deleted_customers",
+        "value_text": "[{\"id\":102,\"phone\":\"9876543210\",\"deletedAt\":\"2026-09-08T09:17:32.653Z\"}]",
+        "updated_at": "2026-09-08 09:17:32"
       }
     ],
     "payment_settings": [
@@ -56978,6 +57090,162 @@
         "type": "new_order",
         "is_read": 0,
         "created_at": "2026-09-07 09:02:17"
+      },
+      {
+        "id": 134,
+        "recipient_role": "admin",
+        "recipient_phone": "",
+        "order_id": "SW-7291",
+        "title_en": "🛒 New Order Received! (#SW-7291)",
+        "title_hi": "🛒 नया ऑर्डर प्राप्त हुआ! (#SW-7291)",
+        "message_en": "New order of ₹207.45 received from BALRAM PATIDAR. Payment: COD.",
+        "message_hi": "BALRAM PATIDAR से ₹207.45 का नया ऑर्डर प्राप्त हुआ। भुगतान: COD।",
+        "type": "new_order",
+        "is_read": 0,
+        "created_at": "2026-09-08 08:48:25"
+      },
+      {
+        "id": 135,
+        "recipient_role": "customer",
+        "recipient_phone": "+91 7000165361",
+        "order_id": "SW-7291",
+        "title_en": "🎉 Order Confirmed! (#SW-7291)",
+        "title_hi": "🎉 ऑर्डर कन्फर्म! (#SW-7291)",
+        "message_en": "Thank you for your order of ₹207.45! Your grocery items are being packed.",
+        "message_hi": "₹207.45 का ऑर्डर देने के लिए धन्यवाद! आपका सामान तैयार किया जा रहा है।",
+        "type": "new_order",
+        "is_read": 0,
+        "created_at": "2026-09-08 08:48:25"
+      },
+      {
+        "id": 136,
+        "recipient_role": "delivery",
+        "recipient_phone": "",
+        "order_id": "SW-7291",
+        "title_en": "🛵 New Delivery Available (#SW-7291)",
+        "title_hi": "🛵 नया डिलीवरी कार्य उपलब्ध (#SW-7291)",
+        "message_en": "New order available for pickup/delivery at [Noida Sector 62 & 63 - Sector 63] India\nD25 Jinendra Vihar for BALRAM PATIDAR (₹207.45).",
+        "message_hi": "BALRAM PATIDAR के लिए [Noida Sector 62 & 63 - Sector 63] India\nD25 Jinendra Vihar पर नया डिलीवरी कार्य उपलब्ध (₹207.45)।",
+        "type": "new_order",
+        "is_read": 0,
+        "created_at": "2026-09-08 08:48:25"
+      },
+      {
+        "id": 137,
+        "recipient_role": "admin",
+        "recipient_phone": "",
+        "order_id": "SW-6201",
+        "title_en": "🛒 New Order Received! (#SW-6201)",
+        "title_hi": "🛒 नया ऑर्डर प्राप्त हुआ! (#SW-6201)",
+        "message_en": "New order of ₹192.75 received from BALRAM PATIDAR. Payment: CASHFREE_ONLINE.",
+        "message_hi": "BALRAM PATIDAR से ₹192.75 का नया ऑर्डर प्राप्त हुआ। भुगतान: CASHFREE_ONLINE।",
+        "type": "new_order",
+        "is_read": 0,
+        "created_at": "2026-09-08 08:48:56"
+      },
+      {
+        "id": 138,
+        "recipient_role": "customer",
+        "recipient_phone": "+91 7000165361",
+        "order_id": "SW-6201",
+        "title_en": "🎉 Order Confirmed! (#SW-6201)",
+        "title_hi": "🎉 ऑर्डर कन्फर्म! (#SW-6201)",
+        "message_en": "Thank you for your order of ₹192.75! Your grocery items are being packed.",
+        "message_hi": "₹192.75 का ऑर्डर देने के लिए धन्यवाद! आपका सामान तैयार किया जा रहा है।",
+        "type": "new_order",
+        "is_read": 0,
+        "created_at": "2026-09-08 08:48:56"
+      },
+      {
+        "id": 139,
+        "recipient_role": "delivery",
+        "recipient_phone": "",
+        "order_id": "SW-6201",
+        "title_en": "🛵 New Delivery Available (#SW-6201)",
+        "title_hi": "🛵 नया डिलीवरी कार्य उपलब्ध (#SW-6201)",
+        "message_en": "New order available for pickup/delivery at [Noida Sector 62 & 63 - Sector 63] India\nD25 Jinendra Vihar for BALRAM PATIDAR (₹192.75).",
+        "message_hi": "BALRAM PATIDAR के लिए [Noida Sector 62 & 63 - Sector 63] India\nD25 Jinendra Vihar पर नया डिलीवरी कार्य उपलब्ध (₹192.75)।",
+        "type": "new_order",
+        "is_read": 0,
+        "created_at": "2026-09-08 08:48:56"
+      },
+      {
+        "id": 140,
+        "recipient_role": "customer",
+        "recipient_phone": "+91 7000165361",
+        "order_id": "SW-6201",
+        "title_en": "📦 Order #SW-6201 Status: Cancelled",
+        "title_hi": "📦 ऑर्डर #SW-6201 स्थिति: Cancelled",
+        "message_en": "Your order status has been updated to \"Cancelled\". Partner: Suresh Mehra.",
+        "message_hi": "आपके ऑर्डर की स्थिति \"Cancelled\" हो गई है। डिलीवरी प्रतिनिधि: Suresh Mehra।",
+        "type": "order_update",
+        "is_read": 0,
+        "created_at": "2026-09-08 08:53:33"
+      },
+      {
+        "id": 141,
+        "recipient_role": "admin",
+        "recipient_phone": "",
+        "order_id": "SW-6201",
+        "title_en": "✏️ Order #SW-6201 Updated",
+        "title_hi": "✏️ ऑर्डर #SW-6201 में बदलाव",
+        "message_en": "Order #SW-6201 status changed to \"Cancelled\". Assigned partner: Suresh Mehra.",
+        "message_hi": "ऑर्डर #SW-6201 की स्थिति बदल कर \"Cancelled\" की गई। पार्टनर: Suresh Mehra।",
+        "type": "order_update",
+        "is_read": 0,
+        "created_at": "2026-09-08 08:53:33"
+      },
+      {
+        "id": 142,
+        "recipient_role": "delivery",
+        "recipient_phone": "",
+        "order_id": "SW-6201",
+        "title_en": "🛵 Task Update (#SW-6201)",
+        "title_hi": "🛵 कार्य अपडेट (#SW-6201)",
+        "message_en": "Order #SW-6201 updated to status \"Cancelled\".",
+        "message_hi": "ऑर्डर #SW-6201 का स्टेटस बदलकर \"Cancelled\" हो गया है।",
+        "type": "order_update",
+        "is_read": 0,
+        "created_at": "2026-09-08 08:53:33"
+      },
+      {
+        "id": 143,
+        "recipient_role": "customer",
+        "recipient_phone": "+91 7000165361",
+        "order_id": "SW-7291",
+        "title_en": "📦 Order #SW-7291 Status: In Transit",
+        "title_hi": "📦 ऑर्डर #SW-7291 स्थिति: In Transit",
+        "message_en": "Your order status has been updated to \"In Transit\". Partner: Rahul Verma.",
+        "message_hi": "आपके ऑर्डर की स्थिति \"In Transit\" हो गई है। डिलीवरी प्रतिनिधि: Rahul Verma।",
+        "type": "order_update",
+        "is_read": 0,
+        "created_at": "2026-09-08 08:53:50"
+      },
+      {
+        "id": 144,
+        "recipient_role": "admin",
+        "recipient_phone": "",
+        "order_id": "SW-7291",
+        "title_en": "✏️ Order #SW-7291 Updated",
+        "title_hi": "✏️ ऑर्डर #SW-7291 में बदलाव",
+        "message_en": "Order #SW-7291 status changed to \"In Transit\". Assigned partner: Rahul Verma.",
+        "message_hi": "ऑर्डर #SW-7291 की स्थिति बदल कर \"In Transit\" की गई। पार्टनर: Rahul Verma।",
+        "type": "order_update",
+        "is_read": 0,
+        "created_at": "2026-09-08 08:53:50"
+      },
+      {
+        "id": 145,
+        "recipient_role": "delivery",
+        "recipient_phone": "",
+        "order_id": "SW-7291",
+        "title_en": "🛵 Task Update (#SW-7291)",
+        "title_hi": "🛵 कार्य अपडेट (#SW-7291)",
+        "message_en": "Order #SW-7291 updated to status \"In Transit\".",
+        "message_hi": "ऑर्डर #SW-7291 का स्टेटस बदलकर \"In Transit\" हो गया है।",
+        "type": "order_update",
+        "is_read": 0,
+        "created_at": "2026-09-08 08:53:50"
       }
     ],
     "role": [

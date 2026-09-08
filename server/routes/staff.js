@@ -110,7 +110,7 @@ router.get("/users", async (req, res) => {
   try {
     const users = await db.query(`
       SELECT u.id, u.full_name, u.phone_number, u.email, u.role_id, r.name as role_name, r.description as role_description,
-             u.status, u.is_master_admin, u.order_count, u.total_spent, u.points, u.is_prime_active, u.created_at
+             u.status, u.is_master_admin, u.delivery_address, u.created_at, u.updated_at
       FROM "user" u
       LEFT JOIN role r ON u.role_id = r.id
       ORDER BY u.id ASC

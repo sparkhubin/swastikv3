@@ -1136,53 +1136,91 @@ export const db = {
     }
   },
 
-  // Save full persistent snapshot to disk for zero-data-loss deployments
-  async savePersistentSnapshot() {
-    try {
-      const fs = await import("fs");
-      const path = await import("path");
-      const snapshotPath = path.join(process.cwd(), "database", "persistent_store.json");
+  // Debounced snapshot saving to protect disk I/O and prevent concurrent file corruption
+  _snapshotTimeout: null,
+  _snapshotPromise: null,
 
-      const products = await this.query("SELECT * FROM product");
-      const orders = await this.query('SELECT * FROM "order"');
-      const orderItems = await this.query("SELECT * FROM order_item");
-      const customers = await this.query("SELECT * FROM customer WHERE id IS NOT NULL AND id > 0");
-      const users = await this.query('SELECT * FROM "user"');
-      const partners = await this.query("SELECT * FROM partner");
-      const reviews = await this.query("SELECT * FROM review");
-      const appSettings = await this.query("SELECT * FROM app_settings");
-      const paymentSettings = await this.query("SELECT * FROM payment_settings");
-      const margSettings = await this.query("SELECT * FROM marg_settings");
-      const whatsappSettings = await this.query("SELECT * FROM whatsapp_settings");
-      const notifications = await this.query("SELECT * FROM notification");
-      const roles = await this.query("SELECT * FROM role");
-
-      const snapshot = {
-        updatedAt: new Date().toISOString(),
-        tables: {
-          product: products,
-          order: orders,
-          order_item: orderItems,
-          customer: customers,
-          user: users,
-          partner: partners,
-          review: reviews,
-          app_settings: appSettings,
-          payment_settings: paymentSettings,
-          marg_settings: margSettings,
-          whatsapp_settings: whatsappSettings,
-          notification: notifications,
-          role: roles
-        }
-      };
-
-      const tempPath = `${snapshotPath}.tmp`;
-      fs.writeFileSync(tempPath, JSON.stringify(snapshot, null, 2), "utf-8");
-      fs.renameSync(tempPath, snapshotPath);
-      console.log(`✓ Persistent snapshot updated at ${snapshotPath} (${orders.length} orders, ${products.length} products, ${customers.length} customers, ${notifications.length} notifications)`);
-    } catch (err) {
-      console.warn("Notice in savePersistentSnapshot:", err.message);
+  async savePersistentSnapshot(immediate = false) {
+    if (!immediate && this._snapshotTimeout) {
+      clearTimeout(this._snapshotTimeout);
     }
+
+    const runSave = async () => {
+      try {
+        const fs = await import("fs");
+        const path = await import("path");
+        const snapshotDir = path.join(process.cwd(), "database");
+        const snapshotPath = path.join(snapshotDir, "persistent_store.json");
+
+        if (!fs.existsSync(snapshotDir)) {
+          fs.mkdirSync(snapshotDir, { recursive: true });
+        }
+
+        const products = await this.query("SELECT * FROM product");
+        const orders = await this.query('SELECT * FROM "order"');
+        const orderItems = await this.query("SELECT * FROM order_item");
+        const customers = await this.query("SELECT * FROM customer WHERE id IS NOT NULL AND id > 0");
+        const users = await this.query('SELECT * FROM "user"');
+        const partners = await this.query("SELECT * FROM partner");
+        const reviews = await this.query("SELECT * FROM review");
+        const appSettings = await this.query("SELECT * FROM app_settings");
+        const paymentSettings = await this.query("SELECT * FROM payment_settings");
+        const margSettings = await this.query("SELECT * FROM marg_settings");
+        const whatsappSettings = await this.query("SELECT * FROM whatsapp_settings");
+        const notifications = await this.query("SELECT * FROM notification");
+        const roles = await this.query("SELECT * FROM role");
+
+        // Safety check: Never overwrite a populated persistent store with an empty one
+        if (fs.existsSync(snapshotPath)) {
+          try {
+            const existingRaw = fs.readFileSync(snapshotPath, "utf-8");
+            const existingData = JSON.parse(existingRaw);
+            const existingProds = existingData?.tables?.product?.length || 0;
+            if (products.length === 0 && existingProds > 0) {
+              console.warn(`⚠️ Skipped snapshot overwrite: DB returned 0 products while existing store has ${existingProds} products.`);
+              return;
+            }
+          } catch (pe) {}
+        }
+
+        const snapshot = {
+          updatedAt: new Date().toISOString(),
+          tables: {
+            product: products,
+            order: orders,
+            order_item: orderItems,
+            customer: customers,
+            user: users,
+            partner: partners,
+            review: reviews,
+            app_settings: appSettings,
+            payment_settings: paymentSettings,
+            marg_settings: margSettings,
+            whatsapp_settings: whatsappSettings,
+            notification: notifications,
+            role: roles
+          }
+        };
+
+        const tempPath = `${snapshotPath}.tmp.${Date.now()}`;
+        fs.writeFileSync(tempPath, JSON.stringify(snapshot, null, 2), "utf-8");
+        fs.renameSync(tempPath, snapshotPath);
+        console.log(`✓ Persistent snapshot saved at ${snapshotPath} (${orders.length} orders, ${products.length} products, ${customers.length} customers)`);
+      } catch (err) {
+        console.warn("Notice in savePersistentSnapshot:", err.message);
+      }
+    };
+
+    if (immediate) {
+      return runSave();
+    }
+
+    return new Promise((resolve) => {
+      this._snapshotTimeout = setTimeout(async () => {
+        await runSave();
+        resolve();
+      }, 250);
+    });
   },
 
   // Rehydrate state on fresh deployment
@@ -1192,9 +1230,21 @@ export const db = {
       const path = await import("path");
       const snapshotPath = path.join(process.cwd(), "database", "persistent_store.json");
 
-      if (!fs.existsSync(snapshotPath)) return;
+      let targetPath = snapshotPath;
+      const templatePath = path.join(process.cwd(), "database", "persistent_store.template.json");
 
-      const raw = fs.readFileSync(snapshotPath, "utf-8");
+      if (!fs.existsSync(targetPath)) {
+        if (fs.existsSync(templatePath)) {
+          targetPath = templatePath;
+          try {
+            fs.copyFileSync(templatePath, snapshotPath);
+          } catch (e) {}
+        } else {
+          return;
+        }
+      }
+
+      const raw = fs.readFileSync(targetPath, "utf-8");
       const data = JSON.parse(raw);
       if (!data || !data.tables) return;
 
