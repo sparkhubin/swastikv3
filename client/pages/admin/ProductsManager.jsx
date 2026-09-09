@@ -99,15 +99,19 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
 
   useEffect(() => {
     let isMounted = true;
+  
     if (!products || products.length === 0) {
       setIsLoading(true);
     }
+  
     fetchProducts(true).finally(() => {
       if (isMounted) setIsLoading(false);
     });
-    return () => { isMounted = false; };
+  
+    return () => {
+      isMounted = false;
+    };
   }, [fetchProducts]);
-
   // Subview state: 'catalog' | 'bulk-stock' | 'bulk-import'
   const [activeSubView, setActiveSubView] = useState(initialView || 'catalog');
 
@@ -158,11 +162,19 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
   const { withImageCount, noImageCount } = React.useMemo(() => {
     let withImg = 0;
     let noImg = 0;
+  
     products.forEach(p => {
-      if (hasCustomProductImage(p)) withImg++;
-      else noImg++;
+      if (Number(p.isImage || 0) === 1) {
+        withImg++;
+      } else {
+        noImg++;
+      }
     });
-    return { withImageCount: withImg, noImageCount: noImg };
+  
+    return {
+      withImageCount: withImg,
+      noImageCount: noImg
+    };
   }, [products]);
 
   // Stock statistics
@@ -637,10 +649,12 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
                          (p.brand && p.brand.trim().toLowerCase() === filterBrand.trim().toLowerCase()) ||
                          (p.subEn && p.subEn.trim().toLowerCase() === filterBrand.trim().toLowerCase());
 
-    const hasImg = hasCustomProductImage(p);
-    const imageMatches = filterImageStatus === 'all' || 
-                         (filterImageStatus === 'with-image' && hasImg) ||
-                         (filterImageStatus === 'no-image' && !hasImg);
+    const hasImg = Number(p.isImage || 0) === 1;
+
+    const imageMatches =
+                           filterImageStatus === 'all' ||
+                           (filterImageStatus === 'with-image' && hasImg) ||
+                           (filterImageStatus === 'no-image' && !hasImg);
 
     const stockCount = getStockCount(p);
     const stockMatches = filterStockStatus === 'all' ||
@@ -1331,6 +1345,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
                       className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-700"
                     />
                     <R2ImageUploader 
+                      code={productForm.code}
                       onUploadComplete={handleImageUploaded} 
                       initialImageUrl={productForm.image}
                     />
@@ -2384,6 +2399,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
                         className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-slate-300 font-mono outline-none focus:border-cyan-400"
                       />
                       <R2ImageUploader
+                        code={quickEditProduct.code}
                         onUploadComplete={(url) => setQuickEditProduct(prev => ({ ...prev, image: url }))}
                         initialImageUrl={quickEditProduct.image}
                       />

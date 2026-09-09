@@ -49,10 +49,23 @@ router.post("/upload", upload.single("file"), async (req, res) => {
     else fileExt = ".jpg";
   }
 
-  const uniqueId = Math.floor(100000 + Math.random() * 900000);
-  const fileName = `uploads_${uniqueId}${fileExt}`;
-  const contentType = file.mimetype || (fileExt === ".webp" ? "image/webp" : (fileExt === ".png" ? "image/png" : "image/jpeg"));
+  const productCode = String(req.body.code || "").trim();
 
+  const uniqueId = Math.floor(100000 + Math.random() * 900000);
+  
+  const fileName = productCode
+    ? `${productCode}.webp`
+    : `uploads_${uniqueId}${fileExt}`;
+  
+  const contentType = productCode
+    ? "image/webp"
+    : (file.mimetype || (
+        fileExt === ".webp"
+          ? "image/webp"
+          : fileExt === ".png"
+            ? "image/png"
+            : "image/jpeg"
+      ));
   if (isR2ConfiguredAndValid()) {
     console.log(`Uploading ${fileName} to Cloudflare R2 bucket: ${process.env.CLOUDFLARE_R2_BUCKET_NAME}`);
     try {

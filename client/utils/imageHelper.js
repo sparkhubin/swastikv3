@@ -82,7 +82,7 @@ export function resolveImageUrl(url) {
 /**
  * Checks whether a product has an actual assigned / custom product image
  */
-export function hasCustomProductImage(product) {
+export function hasCustomProductImageNotuse(product) {
   if (!product) return false;
   const raw = product.imageUrl || product.image || '';
   if (!raw || typeof raw !== 'string') return false;
@@ -93,53 +93,143 @@ export function hasCustomProductImage(product) {
   return true;
 }
 
+export function hasCustomProductImage(product) {
+  if (!product) return false;
+
+ // console.log("check isImage:", product.isImage);
+
+  return Number(product.isImage || 0) === 1;
+}
+/**
+ * Resolves candidate image URLs for a product
+ */
+// export function getCandidateImages(product, r2PublicUrl) {
+//   if (!product) return [];
+//   const candidates = [];
+//   const base = getImageBaseUrl();
+//   const raw = (product.imageUrl || product.image || '').trim();
+//   const cleanName = extractCleanImageName(raw);
+
+//   // 1. If an exact assigned image path or filename exists, prioritize it directly
+//   if (cleanName) {
+//     if (cleanName.startsWith('http://') || cleanName.startsWith('https://')) {
+//       candidates.push(cleanName);
+//     } else {
+//       candidates.push(`${base}/${cleanName}`);
+//     }
+//     // If the image already has an extension, don't spam 20 speculative extensions
+//     if (/\.(webp|jpg|jpeg|png|gif|svg)$/i.test(cleanName)) {
+//       return candidates;
+//     }
+//   }
+
+//   // 2. Resolve by product code (e.g. SP000001, SW-SW0001)
+//   const code = (product.code || product.Code || '').trim();
+//   if (code) {
+//     const candidateCodes = [code];
+//     if (code.toUpperCase().startsWith('SW-')) {
+//       candidateCodes.push(code.replace(/^SW-/i, ''));
+//     }
+
+//     const basesToCheck = [base];
+//     if (r2PublicUrl && r2PublicUrl.replace(/\/$/, '') !== base) {
+//       basesToCheck.push(r2PublicUrl.replace(/\/$/, ''));
+//     }
+
+//     for (const b of basesToCheck) {
+//       for (const c of candidateCodes) {
+//         const encoded = encodeURIComponent(c);
+//         candidates.push(`${b}/${encoded}.webp`);
+//         candidates.push(`${b}/${encoded}.jpg`);
+//         candidates.push(`${b}/${encoded}.png`);
+//       }
+//     }
+//   }
+
+//   return candidates;
+// }
+
 /**
  * Resolves candidate image URLs for a product
  */
 export function getCandidateImages(product, r2PublicUrl) {
   if (!product) return [];
+
   const candidates = [];
   const base = getImageBaseUrl();
+
+  const r2Base = r2PublicUrl
+    ? r2PublicUrl.replace(/\/+$/, '')
+    : '';
+
   const raw = (product.imageUrl || product.image || '').trim();
   const cleanName = extractCleanImageName(raw);
 
-  // 1. If an exact assigned image path or filename exists, prioritize it directly
+  // ==========================================================
+  // 1. DATABASE HAS AN EXPLICIT IMAGE
+  // ==========================================================
   if (cleanName) {
-    if (cleanName.startsWith('http://') || cleanName.startsWith('https://')) {
+    if (
+      cleanName.startsWith('http://') ||
+      cleanName.startsWith('https://')
+    ) {
       candidates.push(cleanName);
     } else {
+      // Explicit DB image:
+      // Try R2 first, then local uploads
+      if (r2Base) {
+        candidates.push(
+          `${r2Base}/${encodeURIComponent(cleanName)}`
+        );
+      }
+
       candidates.push(`${base}/${cleanName}`);
-    }
-    // If the image already has an extension, don't spam 20 speculative extensions
-    if (/\.(webp|jpg|jpeg|png|gif|svg)$/i.test(cleanName)) {
-      return candidates;
     }
   }
 
-  // 2. Resolve by product code (e.g. SP000001, SW-SW0001)
+  // ==========================================================
+  // 2. NO DATABASE IMAGE
+  //
+  // Try image using PRODUCT CODE.
+  //
+  // Example:
+  // SW-SW0007
+  //      ↓
+  // SW-SW0007.webp
+  // ==========================================================
   const code = (product.code || product.Code || '').trim();
+
   if (code) {
     const candidateCodes = [code];
+
+    // Keep your existing SW fallback
     if (code.toUpperCase().startsWith('SW-')) {
       candidateCodes.push(code.replace(/^SW-/i, ''));
     }
 
-    const basesToCheck = [base];
-    if (r2PublicUrl && r2PublicUrl.replace(/\/$/, '') !== base) {
-      basesToCheck.push(r2PublicUrl.replace(/\/$/, ''));
-    }
-
-    for (const b of basesToCheck) {
+    // R2 FIRST
+    if (r2Base) {
       for (const c of candidateCodes) {
         const encoded = encodeURIComponent(c);
-        candidates.push(`${b}/${encoded}.webp`);
-        candidates.push(`${b}/${encoded}.jpg`);
-        candidates.push(`${b}/${encoded}.png`);
+
+        candidates.push(`${r2Base}/${encoded}.webp`);
+        candidates.push(`${r2Base}/${encoded}.jpg`);
+        candidates.push(`${r2Base}/${encoded}.png`);
       }
+    }
+
+    // Local /uploads SECOND
+    for (const c of candidateCodes) {
+      const encoded = encodeURIComponent(c);
+
+      candidates.push(`${base}/${encoded}.webp`);
+      candidates.push(`${base}/${encoded}.jpg`);
+      candidates.push(`${base}/${encoded}.png`);
     }
   }
 
-  return candidates;
+  // Remove duplicates
+  return [...new Set(candidates)];
 }
 
 export function resolveProductImage(product, r2PublicUrl, size = 300) {

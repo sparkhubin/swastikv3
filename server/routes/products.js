@@ -33,13 +33,37 @@ export function cleanImageStorageValue(raw, code = '') {
 router.get("/products", async (req, res) => {
   try {
     const category = req.query.category;
-    let rows;
+    const isImageParam = req.query.is_image;
+
+    let sql = "SELECT * FROM product";
+    const params = [];
+    const conditions = [];
+
     if (category) {
-      rows = await db.query("SELECT * FROM product WHERE category = ? ORDER BY id ASC", [category]);
-    } else {
-      rows = await db.query("SELECT * FROM product ORDER BY id ASC");
+      conditions.push("category = ?");
+      params.push(category);
     }
+
+    if (isImageParam !== undefined) {
+      const value =
+        isImageParam === "1" || isImageParam.toLowerCase() === "true"
+          ? 1
+          : 0;
+
+      conditions.push("is_image = ?");
+      params.push(value);
+    }
+
+    if (conditions.length) {
+      sql += " WHERE " + conditions.join(" AND ");
+    }
+
+    sql += " ORDER BY id ASC";
+
+    const rows = await db.query(sql, params);
+
     res.json(rows.map(mapProduct));
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -50,16 +74,17 @@ router.post("/products", async (req, res) => {
     const p = req.body;
     const gstVal = p.gstPercent !== undefined ? Number(p.gstPercent) : (p.gst_percent !== undefined ? Number(p.gst_percent) : 5);
     const cleanedImg = cleanImageStorageValue(p.imageUrl || p.image || "", p.code || "");
+    const isImage = cleanedImg ? 1 : 0;
     const resId = await db.execute(
       `INSERT INTO product (
         code, name_en, name_hi, category, sub_en, sub_hi, 
-        price, original_price, discount_tag, image_url, stock_count, 
+        price, original_price, discount_tag, image_url, is_image, stock_count,
         unit, unit_prices, pack_en, pack_hi, gst_percent
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         p.code || "", p.nameEn || p.name || "", p.nameHi || p.name || "", p.category || "swastik",
         p.subEn || p.brand || "General", p.subHi || p.brand || "General", p.price || 0,
-        p.originalPrice || null, p.discountTag || "", cleanedImg, p.stockCount || 100,
+        p.originalPrice || null, p.discountTag || "", cleanedImg,isImage, p.stockCount || 100,
         p.unit || "", p.unitPrices || "", p.packEn || "", p.packHi || "", gstVal
       ]
     );
@@ -78,16 +103,17 @@ router.post("/products", async (req, res) => {
         const p = req.body;
         const gstVal = p.gstPercent !== undefined ? Number(p.gstPercent) : (p.gst_percent !== undefined ? Number(p.gst_percent) : 5);
         const cleanedImg = cleanImageStorageValue(p.imageUrl || p.image || "", p.code || "");
+        const isImage = cleanedImg ? 1 : 0;
         const retryResId = await db.execute(
           `INSERT INTO product (
             code, name_en, name_hi, category, sub_en, sub_hi, 
-            price, original_price, discount_tag, image_url, stock_count, 
+            price, original_price, discount_tag, image_url, is_image, stock_count,
             unit, unit_prices, pack_en, pack_hi, gst_percent
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             p.code || "", p.nameEn || p.name || "", p.nameHi || p.name || "", p.category || "swastik",
             p.subEn || p.brand || "General", p.subHi || p.brand || "General", p.price || 0,
-            p.originalPrice || null, p.discountTag || "", cleanedImg, p.stockCount || 100,
+            p.originalPrice || null, p.discountTag || "", cleanedImg,isImage, p.stockCount || 100,
             p.unit || "", p.unitPrices || "", p.packEn || "", p.packHi || "", gstVal
           ]
         );
@@ -403,6 +429,7 @@ router.post("/products/bulk-upload-before", async (req, res) => {
 
           const cleanedIncomingImage = cleanImageStorageValue(image, finalCode);
           const finalImage = cleanedIncomingImage || cleanImageStorageValue(existing.image_url, finalCode);
+          const isImage = finalImage ? 1 : 0;
           const finalPrice = price > 0 ? price : (existing.price || 0);
           const finalOrigPrice = originalPrice !== null ? originalPrice : existing.original_price;
           const finalDiscount = discount || existing.discount_tag || "";
@@ -417,7 +444,7 @@ router.post("/products/bulk-upload-before", async (req, res) => {
           await db.execute(
             `UPDATE product SET 
               code = ?, name_en = ?, name_hi = ?, category = ?, sub_en = ?, sub_hi = ?, 
-              price = ?, original_price = ?, discount_tag = ?, image_url = ?, stock_count = ?, 
+              price = ?, original_price = ?, discount_tag = ?, image_url = ?, is_image = ?, stock_count = ?,
               unit = ?, unit_prices = ?, pack_en = ?, pack_hi = ?, gst_percent = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?`,
             [
@@ -431,6 +458,7 @@ router.post("/products/bulk-upload-before", async (req, res) => {
               finalOrigPrice,
               finalDiscount,
               finalImage,
+              isImage,
               finalStock,
               finalUnit,
               finalUnitPrices,
@@ -466,15 +494,16 @@ router.post("/products/bulk-upload-before", async (req, res) => {
         const packHi = packEn;
         const finalUnitPrices = raw.unitPrices || `${packEn}:${price}`;
 
+        const isImage = finalImage ? 1 : 0;
         const insertRes = await db.execute(
           `INSERT INTO product (
             code, name_en, name_hi, category, sub_en, sub_hi, 
-            price, original_price, discount_tag, image_url, stock_count, 
+            price, original_price, discount_tag, image_url, is_image, stock_count,
             unit, unit_prices, pack_en, pack_hi, gst_percent
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             finalCode, name, name, category, brandTag, brandTag,
-            price, originalPrice, discount, finalImage, stockCount,
+            price, originalPrice, discount, finalImage,isImage, stockCount,
             unit, finalUnitPrices, packEn, packHi, gstPercent
           ]
         );
@@ -492,6 +521,7 @@ router.post("/products/bulk-upload-before", async (req, res) => {
           original_price: originalPrice,
           discount_tag: discount,
           image_url: finalImage,
+          is_image: isImage,
           stock_count: stockCount,
           unit,
           unit_prices: finalUnitPrices,
@@ -914,20 +944,11 @@ router.post("/products/bulk-upload", async (req, res) => {
       // You can later upload/replace images separately.
       // ==========================================================
 
-      const image = String(
-        raw["Product Illustration Image URL"] ??
-        raw["Image"] ??
-        raw["ImageUrl"] ??
-        raw.image ??
-        raw.imageUrl ??
-        ""
-      ).trim();
 
-      const finalImage =
-        image.length > 5
-          ? image
-          : "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400";
+      //const finalImage = image.length > 5 ? image : "";
+      const finalImage = "";
 
+      const isImage = finalImage ? 1 : 0;
       // ==========================================================
       // 14. PRODUCT CODE
       //
@@ -971,6 +992,7 @@ router.post("/products/bulk-upload", async (req, res) => {
           original_price,
           discount_tag,
           image_url,
+          is_image,
           stock_count,
           unit,
           unit_prices,
@@ -978,7 +1000,7 @@ router.post("/products/bulk-upload", async (req, res) => {
           pack_hi,
           gst_percent
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           finalCode,
           name,
@@ -990,6 +1012,7 @@ router.post("/products/bulk-upload", async (req, res) => {
           originalPrice,
           discount,
           finalImage,
+          isImage,
           stockCount,
           unit,
           finalUnitPrices,
@@ -1029,6 +1052,7 @@ router.post("/products/bulk-upload", async (req, res) => {
         original_price: originalPrice,
         discount_tag: discount,
         image_url: finalImage,
+        is_image: isImage,
         stock_count: stockCount,
         unit,
         unit_prices: finalUnitPrices,
@@ -1221,6 +1245,7 @@ router.put("/products/:id", async (req, res) => {
     const discountTag = p.discountTag !== undefined ? p.discountTag : current.discount_tag;
     const rawImg = p.imageUrl !== undefined ? p.imageUrl : (p.image !== undefined ? p.image : current.image_url);
     const imageUrl = cleanImageStorageValue(rawImg, code);
+    const isImage = imageUrl ? 1 : 0;
     const stockCount = p.stockCount !== undefined ? p.stockCount : (p.stock !== undefined ? p.stock : current.stock_count);
     const unit = p.unit !== undefined ? p.unit : current.unit;
     const unitPrices = p.unitPrices !== undefined ? p.unitPrices : current.unit_prices;
@@ -1231,12 +1256,12 @@ router.put("/products/:id", async (req, res) => {
     await db.execute(
       `UPDATE product SET 
         code = ?, name_en = ?, name_hi = ?, category = ?, sub_en = ?, sub_hi = ?, 
-        price = ?, original_price = ?, discount_tag = ?, image_url = ?, stock_count = ?, 
+        price = ?, original_price = ?, discount_tag = ?, image_url = ?,  is_image = ?, stock_count = ?, 
         unit = ?, unit_prices = ?, pack_en = ?, pack_hi = ?, gst_percent = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?`,
       [
         code, nameEn, nameHi, category, subEn, subHi,
-        price, originalPrice, discountTag, imageUrl, stockCount,
+        price, originalPrice, discountTag, imageUrl, isImage, stockCount,
         unit, unitPrices, packEn, packHi, gstVal, id
       ]
     );
@@ -1264,6 +1289,7 @@ router.put("/products/:id", async (req, res) => {
         const discountTag = p.discountTag !== undefined ? p.discountTag : current.discount_tag;
         const rawImg = p.imageUrl !== undefined ? p.imageUrl : (p.image !== undefined ? p.image : current.image_url);
         const imageUrl = cleanImageStorageValue(rawImg, code);
+        const isImage = imageUrl ? 1 : 0;
         const stockCount = p.stockCount !== undefined ? p.stockCount : (p.stock !== undefined ? p.stock : current.stock_count);
         const unit = p.unit !== undefined ? p.unit : current.unit;
         const unitPrices = p.unitPrices !== undefined ? p.unitPrices : current.unit_prices;
@@ -1274,12 +1300,12 @@ router.put("/products/:id", async (req, res) => {
         await db.execute(
           `UPDATE product SET 
             code = ?, name_en = ?, name_hi = ?, category = ?, sub_en = ?, sub_hi = ?, 
-            price = ?, original_price = ?, discount_tag = ?, image_url = ?, stock_count = ?, 
+            price = ?, original_price = ?, discount_tag = ?, image_url = ?, is_image = ?, stock_count = ?, 
             unit = ?, unit_prices = ?, pack_en = ?, pack_hi = ?, gst_percent = ?, updated_at = CURRENT_TIMESTAMP
           WHERE id = ?`,
           [
             code, nameEn, nameHi, category, subEn, subHi,
-            price, originalPrice, discountTag, imageUrl, stockCount,
+            price, originalPrice, discountTag, imageUrl, isImage, stockCount,
             unit, unitPrices, packEn, packHi, gstVal, req.params.id
           ]
         );

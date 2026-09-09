@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Upload, FileImage, Clipboard, Check, Loader2, Sparkles, Zap, Image as ImageIcon } from 'lucide-react';
 import { optimizeImageForWeb, formatBytes } from '../../utils/imageOptimizer';
 
-export default function R2ImageUploader({ onUploadComplete, onUploadSuccess, initialImageUrl, initialUrl }) {
+export default function R2ImageUploader({ onUploadComplete, onUploadSuccess, initialImageUrl, initialUrl, code }) {
   const [imageDragActive, setImageDragActive] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -79,6 +79,10 @@ export default function R2ImageUploader({ onUploadComplete, onUploadSuccess, ini
 
       const formData = new FormData();
       formData.append('file', fileToUpload);
+
+      if (code) {
+        formData.append('code', String(code).trim());
+      }
 
       const response = await fetch('/api/upload', {
         method: 'POST',

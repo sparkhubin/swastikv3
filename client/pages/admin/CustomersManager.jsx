@@ -1299,14 +1299,14 @@ export default function CustomersManager() {
                         <td className="p-4">
                           <div className="flex flex-col items-center gap-2">
                             {/* Direct WhatsApp Messaging Button */}
-                            <button 
+                            {/* <button 
                               type="button"
                               onClick={() => openDirectWa(cust, 'welcome')}
                               className="w-full max-w-[130px] px-2.5 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 hover:border-emerald-500/50 text-emerald-300 hover:text-emerald-200 text-[9px] font-black uppercase tracking-wider rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-95 shadow-sm"
                             >
                               <MessageSquare className="h-3 w-3 text-emerald-400" />
                               <span>WhatsApp Msg</span>
-                            </button>
+                            </button> */}
 
                             {/* CRM Dynamic Drawer Trigger */}
                             <button 
@@ -2239,14 +2239,14 @@ export default function CustomersManager() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button
+                {/* <button
                   type="button"
                   onClick={() => openDirectWa(selectedDetailCust, 'welcome')}
                   className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-black uppercase tracking-wider rounded-xl flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-sm"
                 >
                   <MessageSquare className="h-3.5 w-3.5 text-emerald-400" />
                   <span>WhatsApp Chat</span>
-                </button>
+                </button> */}
                 <button 
                   type="button"
                   onClick={() => setSelectedDetailCust(null)}

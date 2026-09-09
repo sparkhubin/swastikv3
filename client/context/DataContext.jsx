@@ -743,15 +743,21 @@ export function DataProvider({ children }) {
   }, []);
 
   // 3. Products Loader (Only fetched on Home, Shop, Cart, or Products Manager)
-  const fetchProducts = useCallback(async (force = false) => {
+  const fetchProducts = useCallback(async (force = false, isImage = null) => {
     if (loadedMap.current.products && !force) return productsRef.current;
     if (inFlightMap.current.products) return inFlightMap.current.products;
-
+  
     inFlightMap.current.products = (async () => {
       try {
-        const prodRes = await fetch('/api/products');
+        const url = isImage !== null
+          ? `/api/products?is_image=${isImage ? 1 : 0}`
+          : '/api/products';
+  
+        const prodRes = await fetch(url);
+  
         if (prodRes.ok) {
           const data = await prodRes.json();
+  
           if (Array.isArray(data) && data.length > 0) {
             setProducts(data);
             loadedMap.current.products = true;
@@ -763,8 +769,10 @@ export function DataProvider({ children }) {
       } finally {
         delete inFlightMap.current.products;
       }
+  
       return productsRef.current || [];
     })();
+  
     return inFlightMap.current.products;
   }, []);
 
@@ -795,7 +803,7 @@ export function DataProvider({ children }) {
   }, []);
 
   // 5. Customers Loader (Only fetched on Customers Manager or Checkout Customer lookup)
-  const fetchCustomers = useCallback(async (force = false) => {
+  const fetchCustomers_DELETEIT = useCallback(async (force = false) => {
     if (loadedMap.current.customers && !force) return customersRef.current;
     if (inFlightMap.current.customers) return inFlightMap.current.customers;
 
@@ -818,6 +826,35 @@ export function DataProvider({ children }) {
       }
       return customersRef.current || [];
     })();
+    return inFlightMap.current.customers;
+  }, []);
+
+  const fetchCustomers = useCallback(async () => {
+    if (inFlightMap.current.customers) {
+      return inFlightMap.current.customers;
+    }
+  
+    inFlightMap.current.customers = (async () => {
+      try {
+        const custRes = await fetch('/api/customers');
+  
+        if (custRes.ok) {
+          const custData = await custRes.json();
+  
+          if (Array.isArray(custData)) {
+            setCustomers(custData);
+            return custData;
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to fetch customers:", e);
+      } finally {
+        delete inFlightMap.current.customers;
+      }
+  
+      return customersRef.current || [];
+    })();
+  
     return inFlightMap.current.customers;
   }, []);
 

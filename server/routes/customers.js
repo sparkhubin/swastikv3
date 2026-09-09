@@ -87,115 +87,97 @@ async function removeCustomerFromDeleted(phone) {
   } catch (e) {}
 }
 
-// GET /api/customers - Retrieve all customers, merged with orders & users
+
+
 router.get("/customers", async (req, res) => {
   try {
     const deletedRecords = await getDeletedCustomerRecords();
-    const deletedIds = new Set(deletedRecords.map(d => Number(d.id)));
-    const deletedPhones = new Set(deletedRecords.map(d => d.phone).filter(Boolean));
 
-    let customerList = await getStoredCustomers();
+    const deletedIds = new Set(
+      deletedRecords.map(d => Number(d.id))
+    );
 
-    // Filter out any previously deleted customers
-    customerList = customerList.filter(c => {
-      if (deletedIds.has(Number(c.id))) return false;
-      const cleanP = cleanPhone(c.phone).slice(-10);
-      if (cleanP && deletedPhones.has(cleanP)) return false;
-      return true;
-    });
+    const deletedPhones = new Set(
+      deletedRecords
+        .map(d => cleanPhone(d.phone).slice(-10))
+        .filter(Boolean)
+    );
 
-    // Seed from real customer table if empty
-    if (customerList.length === 0) {
-      try {
-        const dbCusts = await db.query('SELECT * FROM customer');
-        if (Array.isArray(dbCusts) && dbCusts.length > 0) {
-          customerList = dbCusts.map(c => ({
-            id: c.id,
-            name: c.name,
-            phone: c.phone,
-            email: c.email,
-            address: c.address || '',
-            status: c.status || 'Active',
-            registeredAt: c.created_at ? String(c.created_at).split('T')[0] : '2026-01-10',
-            orderCount: 0,
-            totalSpent: 0,
-            points: 100,
-            isPrimeActive: false,
-            dob: '',
-            anniversary: ''
-          }));
+    const customers = await db.query(`
+       SELECT
+        c.id,
+        c.name,
+        c.phone,
+        c.email,
+        c.address,
+        c.status,
+        c.registered_at,
+        c.points,
+        c.is_prime_active,
+        c.prime_membership_no,
+        c.dob,
+        c.anniversary,
+        c.created_at,
+        c.updated_at,
+
+        COUNT(o.id) AS orderCount,
+
+        COALESCE(SUM(o.grand_total),0) AS totalSpent
+
+    FROM customer c
+
+    LEFT JOIN "order" o
+          ON o.customer_id = c.id      -- ONLY customer_id
+
+    GROUP BY c.id
+
+    ORDER BY c.id DESC;
+    `);
+
+    const customerList = customers
+      .filter(c => {
+        if (deletedIds.has(Number(c.id))) return false;
+
+        const cleanP = cleanPhone(c.phone).slice(-10);
+
+        if (cleanP && deletedPhones.has(cleanP)) {
+          return false;
         }
-      } catch (err) {}
-    }
 
-    // Auto-discover customers from order history
-    try {
-      const orders = await db.query('SELECT * FROM "order" ORDER BY id DESC');
-      if (Array.isArray(orders) && orders.length > 0) {
-        let changed = false;
-        for (const o of orders) {
-          const rawPhone = o.customer_phone || "";
-          const phoneDigits = cleanPhone(rawPhone);
-          if (!phoneDigits || phoneDigits.length < 5) continue;
-          const ten = phoneDigits.slice(-10);
-          if (deletedPhones.has(ten)) continue;
-          
-          const rawName = o.customer_name || "Customer";
-          if (rawName.toLowerCase().includes("simulated") && customerList.some(c => cleanPhone(c.phone).endsWith(phoneDigits.slice(-10)))) {
-            continue;
-          }
+        return true;
+      })
+      .map(c => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        email: c.email,
+        address: c.address || '',
+        status: c.status || 'Active',
 
-          const existingIndex = customerList.findIndex(c => cleanPhone(c.phone).endsWith(phoneDigits.slice(-10)));
-          if (existingIndex >= 0) {
-            // Update order count and stats if needed
-            const existing = customerList[existingIndex];
-            if (!existing.address && o.shipping_address) {
-              existing.address = o.shipping_address;
-              changed = true;
-            }
-            if (!existing.email && o.customer_email) {
-              existing.email = o.customer_email;
-              changed = true;
-            }
-            if (rawName && (!existing.name || existing.name.startsWith("Customer "))) {
-              existing.name = rawName;
-              changed = true;
-            }
-          } else {
-            // Add discovered customer
-            const newId = customerList.length > 0 ? Math.max(...customerList.map(c => Number(c.id) || 0)) + 1 : 101;
-            const regDate = o.order_date ? String(o.order_date).split('T')[0] : new Date().toISOString().split('T')[0];
-            const newCustomer = {
-              id: newId,
-              name: rawName || `Customer ${phoneDigits.slice(-4)}`,
-              phone: rawPhone.startsWith('+') ? rawPhone : (phoneDigits.length === 10 ? `+91 ${phoneDigits}` : rawPhone),
-              email: o.customer_email || `${(rawName || 'customer').toLowerCase().replace(/\s+/g, '')}@${process.env.STORE_DOMAIN || 'example.com'}`,
-              address: o.shipping_address || "",
-              status: 'Active',
-              registeredAt: regDate,
-              orderCount: 1,
-              totalSpent: Number(o.grand_total || o.total_amount || 0),
-              points: 100,
-              isPrimeActive: false,
-              dob: "",
-              anniversary: ""
-            };
-            customerList.push(newCustomer);
-            changed = true;
-          }
-        }
-        if (changed) {
-          await saveStoredCustomers(customerList);
-        }
-      }
-    } catch (e) {
-      console.warn("Could not merge order customers:", e.message);
-    }
+        registeredAt: c.created_at
+          ? String(c.created_at).split('T')[0]
+          : '',
+
+        // LIVE values from order table
+        orderCount: Number(c.orderCount || 0),
+        totalSpent: Number(c.totalSpent || 0),
+
+        points: c.points || 100,
+        isPrimeActive: Boolean(c.is_prime_active),
+        dob: c.dob || '',
+        anniversary: c.anniversary || '',
+
+        primeMembershipNo: c.prime_membership_no || ''
+      }));
 
     res.json(customerList);
+
   } catch (err) {
     console.error("Error in GET /api/customers:", err);
-    res.status(500).json({ error: err.message });
+
+    res.status(500).json({
+      error: err.message
+    });
   }
 });
 

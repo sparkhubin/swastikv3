@@ -552,6 +552,7 @@ export const db = {
           { name: "original_price", sqlite: "REAL DEFAULT 0.0", pg: "DECIMAL(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
           { name: "discount_tag", sqlite: "VARCHAR(100) DEFAULT ''", pg: "VARCHAR(100) DEFAULT ''", my: "VARCHAR(100) DEFAULT ''" },
           { name: "image_url", sqlite: "TEXT DEFAULT ''", pg: "TEXT DEFAULT ''", my: "TEXT" },
+          { name: "is_image", sqlite: "INTEGER NOT NULL DEFAULT 0", pg: "INTEGER NOT NULL DEFAULT 0", my: "TINYINT NOT NULL DEFAULT 0" },
           { name: "stock_count", sqlite: "INT DEFAULT 100", pg: "INT DEFAULT 100", my: "INT DEFAULT 100" },
           { name: "unit", sqlite: "VARCHAR(255) DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
           { name: "unit_prices", sqlite: "TEXT DEFAULT ''", pg: "TEXT DEFAULT ''", my: "TEXT" },
@@ -812,60 +813,85 @@ export const db = {
 
   async seedProductsIfEmpty(fallbackProducts) {
     try {
-      const existing = await this.query("SELECT code, name_en FROM product");
-      const existingCodes = new Set(existing.map(row => String(row.code || row.name_en || "").trim().toLowerCase()));
-
+      // Only seed fallback products when the product table is completely empty.
+      // Never recreate products that were intentionally deleted.
+      const countResult = await this.query(
+        "SELECT COUNT(*) as cnt FROM product"
+      );
+  
+      const productCount = Number(countResult[0]?.cnt || 0);
+  
+      if (productCount > 0) {
+        console.log(
+          `✓ Product table already contains ${productCount} products. Skipping fallback product seeding.`
+        );
+        return;
+      }
+  
+      if (!Array.isArray(fallbackProducts) || fallbackProducts.length === 0) {
+        console.log("✓ No fallback products available for seeding.");
+        return;
+      }
+  
       let nextId = 1;
-      const maxIdResult = await this.query("SELECT MAX(id) as max_id FROM product");
-      if (maxIdResult && maxIdResult[0] && maxIdResult[0].max_id) {
-        nextId = Number(maxIdResult[0].max_id) + 1;
-      }
-
-      const productsToInsert = [];
-      for (const p of fallbackProducts) {
-        const codeKey = String(p.code || p.nameEn || p.name || "").trim().toLowerCase();
-        if (!existingCodes.has(codeKey)) {
-          productsToInsert.push(p);
+  
+      const productsToInsert = fallbackProducts;
+  
+      console.log(
+        `🌱 Product table is empty. Seeding ${productsToInsert.length} fallback products...`
+      );
+  
+      for (const p of productsToInsert) {
+        const currentId =
+          p.id && p.id >= nextId ? p.id : nextId++;
+  
+        if (currentId >= nextId) {
+          nextId = currentId + 1;
         }
+  
+        await this.execute(
+          `INSERT INTO product (
+            id,
+            code,
+            name_en,
+            name_hi,
+            category,
+            sub_en,
+            sub_hi,
+            price,
+            original_price,
+            discount_tag,
+            image_url,
+            stock_count,
+            unit,
+            unit_prices,
+            pack_en,
+            pack_hi
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            currentId,
+            p.code || "",
+            p.nameEn || p.name || "",
+            p.nameHi || p.name || "",
+            p.category || "swastik",
+            p.subEn || p.brand || "General",
+            p.subHi || p.brand || "General",
+            p.price || 0,
+            p.originalPrice || null,
+            p.discountTag || "",
+            p.imageUrl || p.image || "",
+            p.stockCount || 100,
+            p.unit || "",
+            p.unitPrices || "",
+            p.packEn || "",
+            p.packHi || ""
+          ]
+        );
       }
-
-      if (productsToInsert.length > 0) {
-        console.log(`🌱 Seeding ${productsToInsert.length} missing products into Database...`);
-        for (const p of productsToInsert) {
-          const currentId = p.id && p.id >= nextId ? p.id : nextId++;
-          if (currentId >= nextId) {
-            nextId = currentId + 1;
-          }
-          await this.execute(
-            `INSERT INTO product (
-              id, code, name_en, name_hi, category, sub_en, sub_hi, 
-              price, original_price, discount_tag, image_url, stock_count, 
-              unit, unit_prices, pack_en, pack_hi
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              currentId,
-              p.code || "",
-              p.nameEn || p.name || "",
-              p.nameHi || p.name || "",
-              p.category || "swastik",
-              p.subEn || p.brand || "General",
-              p.subHi || p.brand || "General",
-              p.price || 0,
-              p.originalPrice || null,
-              p.discountTag || "",
-              p.imageUrl || p.image || "",
-              p.stockCount || 100,
-              p.unit || "",
-              p.unitPrices || "",
-              p.packEn || "",
-              p.packHi || ""
-            ]
-          );
-        }
-        console.log(`✓ Missing product seeding completed! Uploaded ${productsToInsert.length} items.`);
-      } else {
-        console.log("✓ All fallback products are already present in Database.");
-      }
+  
+      console.log(
+        `✓ Fallback product seeding completed! Inserted ${productsToInsert.length} products.`
+      );
     } catch (err) {
       console.error("Error seeding products:", err.message);
     }

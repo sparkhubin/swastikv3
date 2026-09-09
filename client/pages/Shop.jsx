@@ -40,7 +40,7 @@ export default function Shop({ categoryFilterState, onCategoryFilterChange, sear
   const [searchQuery, setSearchQuery] = useState(searchQueryProp || '');
 
   React.useEffect(() => {
-    fetchProducts();
+    fetchProducts(true,1);
   }, [fetchProducts]);
 
   React.useEffect(() => {

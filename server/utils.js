@@ -345,6 +345,7 @@ export function mapProduct(p) {
     discount: p.discount_tag || "",
     imageUrl: p.image_url,
     image: p.image_url,
+    isImage: Number(p.is_image || 0),
     stockCount: p.stock_count,
     unit: p.unit,
     unitPrices: p.unit_prices,

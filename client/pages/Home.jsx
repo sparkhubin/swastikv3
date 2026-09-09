@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useData } from '../context/DataContext';
-import ProductCard from '../components/ProductCard';
-import { hasCustomProductImage } from '../utils/imageHelper';
 import { getGoogleMapsEmbedUrl } from '../utils/mapUtils';
+import Shop from './Shop';
 import { 
   Flame, 
   MapPin, 
@@ -32,13 +31,19 @@ const hasValidKey = Boolean(API_KEY) && API_KEY !== 'YOUR_API_KEY';
 
 export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
   const { t, language } = useLanguage();
-  const { products, reviews, slides: dynamicSlides, contactSettings, categories: dynamicCategories, offers, fetchProducts, fetchReviews, fetchSettings } = useData();
-
+  const {
+    reviews,
+    slides: dynamicSlides,
+    contactSettings,
+    categories: dynamicCategories,
+    offers,
+    fetchReviews,
+    fetchSettings
+  } = useData();
   useEffect(() => {
-    fetchProducts();
     fetchReviews();
     fetchSettings();
-  }, [fetchProducts, fetchReviews, fetchSettings]);
+  }, [fetchReviews, fetchSettings]);
 
   const [activeSlide, setActiveSlide] = useState(0);
   const [activeTestimonial, setActiveTestimonial] = useState(0);
@@ -163,16 +168,7 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
         { id: 'personal', label: language === 'hi' ? 'व्यक्तिगत देखभाल' : 'Personal Care', icon: "🧴" }
       ];
 
-  // Featured first 4 items list (prioritizing products with actual photos)
-  const candidateProducts = useMemo(() => {
-    if (contactSettings?.showOnlyWithPhoto) {
-      return products.filter(hasCustomProductImage);
-    }
-    const withPhoto = products.filter(hasCustomProductImage);
-    const withoutPhoto = products.filter(p => !hasCustomProductImage(p));
-    return [...withPhoto, ...withoutPhoto];
-  }, [products, contactSettings?.showOnlyWithPhoto]);
-  const featuredList = candidateProducts.slice(0, 4);
+
 
   const storeLat = contactSettings?.latitude !== undefined ? Number(contactSettings.latitude) : 28.5708;
   const storeLng = contactSettings?.longitude !== undefined ? Number(contactSettings.longitude) : 77.3259;
@@ -423,33 +419,12 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
         </div>
       </section>
 
-      {/* 4. Featured Products Grid */}
-      <section className="px-4 md:px-8">
-        <div className="flex justify-between items-end mb-5">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-emerald-600" />
-            <h3 className="font-black text-lg md:text-xl text-slate-900 tracking-tight">
-              {t('featuredProducts')}
-            </h3>
-          </div>
-          <button 
-            onClick={() => {
-              onCategorySelect('all');
-              onViewChange('shop');
-            }}
-            className="flex items-center text-xs font-extrabold text-emerald-700 hover:text-emerald-800 transition-all tracking-wider uppercase gap-0.5"
-          >
-            <span>{t('viewAll')}</span>
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4" id="featured-products-grid">
-          {featuredList.map(prod => (
-            <ProductCard key={prod.id} product={prod} />
-          ))}
-        </div>
-      </section>
+        <Shop
+        categoryFilterState="all"
+        onCategoryFilterChange={onCategorySelect}
+        searchQueryProp=""
+        onSearchQueryChange={() => {}}
+      />
 
       {/* 5. Customer Testimonials Slider */}
       <section className="bg-slate-100/90 border-t border-b border-slate-200 py-10 px-4 md:px-8">
