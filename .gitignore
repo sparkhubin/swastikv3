@@ -36,3 +36,11 @@ local.properties
 
 # Build outputs
 android/app/build/
+
+
+
+# Local backup files
+*.bak
+*.backup
+*.step1
+*.before_*

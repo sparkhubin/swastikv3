@@ -28,12 +28,12 @@ const initialContactMessages = [
 
 // In-app directory for customers database
 const initialCustomers = [
-  { id: 101, name: 'Balram Patidar', phone: '+91 99999 88888', email: 'balram@swastik.local', registeredAt: '2026-01-10', orderCount: 1, totalSpent: 450, status: 'Active', dob: '', anniversary: '' },
-  { id: 102, name: 'Rahul Sharma', phone: '+91 98765 43210', email: 'rahul.sharma@gmail.com', registeredAt: '2026-02-14', orderCount: 2, totalSpent: 1140, status: 'Active', dob: '1993-05-10', anniversary: '2015-07-14' },
-  { id: 103, name: 'Priya Patel', phone: '+91 91234 56789', email: 'priya.p@yahoo.com', registeredAt: '2026-02-10', orderCount: 1, totalSpent: 420, status: 'Active', dob: '', anniversary: '' },
-  { id: 104, name: 'Amit Verma', phone: '+91 98111 22334', email: 'amit.verma@outlook.com', registeredAt: '2026-02-18', orderCount: 3, totalSpent: 1200, status: 'Active', dob: '1990-07-14', anniversary: '' },
-  { id: 105, name: 'main suwastik', phone: '+91 99999 99999', email: 'simulatedcustomer@example.com', registeredAt: '2026-03-01', orderCount: 2, totalSpent: 850, status: 'Active', dob: '', anniversary: '' },
-  { id: 106, name: 'Balram Patidar', phone: '+91 7000165361', email: 'bilspatidar@gmail.com', registeredAt: '2026-03-05', orderCount: 2, totalSpent: 1250, status: 'Active', dob: '', anniversary: '' }
+  { id: 101, name: 'Balram Patidar', phone: '+91 99999 88888', email: 'balram@swastik.local', registeredAt: '2026-01-10', status: 'Active', dob: '', anniversary: '' },
+  { id: 102, name: 'Rahul Sharma', phone: '+91 98765 43210', email: 'rahul.sharma@gmail.com', registeredAt: '2026-02-14', status: 'Active', dob: '1993-05-10', anniversary: '2015-07-14' },
+  { id: 103, name: 'Priya Patel', phone: '+91 91234 56789', email: 'priya.p@yahoo.com', registeredAt: '2026-02-10', status: 'Active', dob: '', anniversary: '' },
+  { id: 104, name: 'Amit Verma', phone: '+91 98111 22334', email: 'amit.verma@outlook.com', registeredAt: '2026-02-18', status: 'Active', dob: '1990-07-14', anniversary: '' },
+  { id: 105, name: 'main suwastik', phone: '+91 99999 99999', email: 'simulatedcustomer@example.com', registeredAt: '2026-03-01',status: 'Active', dob: '', anniversary: '' },
+  { id: 106, name: 'Balram Patidar', phone: '+91 7000165361', email: 'bilspatidar@gmail.com', registeredAt: '2026-03-05', status: 'Active', dob: '', anniversary: '' }
 ];
 
 // Environment-driven dynamic store settings
@@ -441,9 +441,7 @@ export function DataProvider({ children }) {
     return safeJsonParse('swastik_contact_messages', initialContactMessages);
   });
 
-  const [customers, setCustomers] = useState(() => {
-    return safeJsonParse('swastik_customers', initialCustomers);
-  });
+  const [customers, setCustomers] = useState(initialCustomers);
 
   const [staff, setStaff] = useState(() => {
     try {
@@ -613,10 +611,6 @@ export function DataProvider({ children }) {
     saveSettingToDb('swastik_contact_messages', contactMessages);
   }, [contactMessages]);
 
-  useEffect(() => {
-    localStorage.setItem('swastik_customers', JSON.stringify(customers));
-    saveSettingToDb('swastik_customers', customers);
-  }, [customers]);
 
   useEffect(() => {
     localStorage.setItem('swastik_data_deletion_requests', JSON.stringify(dataDeletionRequests));
@@ -815,7 +809,6 @@ export function DataProvider({ children }) {
           if (Array.isArray(custData) && custData.length > 0) {
             setCustomers(custData);
             loadedMap.current.customers = true;
-            try { localStorage.setItem('swastik_customers', JSON.stringify(custData)); } catch (_) {}
             return custData;
           }
         }
@@ -1243,38 +1236,7 @@ export function DataProvider({ children }) {
           });
         }
 
-        // Dynamic automatic customer directory updates when order is submitted
-        const custPhone = order.customerPhone;
-        const custName = order.customerName;
-        if (custPhone && custName) {
-          setCustomers(prevCust => {
-            const clean = (ph) => ph ? ph.replace(/[^0-9]/g, "") : "";
-            const targetClean = clean(custPhone);
-            const existing = prevCust.find(c => clean(c.phone).endsWith(targetClean.slice(-10)));
-
-            const itemTotal = order.total || order.subtotal || 0;
-            if (existing) {
-              return prevCust.map(c => c.id === existing.id ? {
-                ...c,
-                orderCount: (c.orderCount || 0) + 1,
-                totalSpent: (c.totalSpent || 0) + itemTotal
-              } : c);
-            } else {
-              const newId = prevCust.length > 0 ? Math.max(...prevCust.map(c => c.id)) + 1 : 101;
-              const newC = {
-                id: newId,
-                name: custName,
-                phone: custPhone,
-                email: `${custName.toLowerCase().replace(/\s+/g, "")}@gmail.com`,
-                registeredAt: new Date().toISOString().split('T')[0],
-                orderCount: 1,
-                totalSpent: itemTotal,
-                status: 'Active'
-              };
-              return [...prevCust, newC];
-            }
-          });
-        }
+   
 
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('swastik:refresh-notifications'));
@@ -1497,13 +1459,9 @@ export function DataProvider({ children }) {
           dob: custData.dob !== undefined ? custData.dob : (current.dob || ""),
           anniversary: custData.anniversary !== undefined ? custData.anniversary : (current.anniversary || ""),
           password: custData.password !== undefined ? custData.password : (current.password || ""),
-          image: custData.image !== undefined ? custData.image : (current.image || ""),
-          orderCount: custData.orderCount !== undefined ? custData.orderCount : (current.orderCount || 0),
-          totalSpent: custData.totalSpent !== undefined ? custData.totalSpent : (current.totalSpent || 0)
-        };
+          image: custData.image !== undefined ? custData.image : (current.image || "")        };
         const updatedList = [...prev];
         updatedList[existingIdx] = targetCust;
-        localStorage.setItem('swastik_customers', JSON.stringify(updatedList));
         return updatedList;
       } else {
         const newId = prev.length > 0 ? Math.max(...prev.map(c => Number(c.id) || 0)) + 1 : 101;
@@ -1524,19 +1482,15 @@ export function DataProvider({ children }) {
           anniversary: custData.anniversary || "",
           password: custData.password || "",
           image: custData.image || "",
-          registeredAt: custData.registeredAt || new Date().toISOString().split('T')[0],
-          orderCount: custData.orderCount || 0,
-          totalSpent: custData.totalSpent || 0
+          registeredAt: custData.registeredAt || new Date().toISOString().split('T')[0]
         };
         const updatedList = [targetCust, ...prev];
-        localStorage.setItem('swastik_customers', JSON.stringify(updatedList));
         return updatedList;
       }
     });
 
     // Notify listeners
     window.dispatchEvent(new Event('storage'));
-    window.dispatchEvent(new CustomEvent('swastik_customers_updated', { detail: custData }));
 
     // Send to backend REST API
     try {
@@ -1562,7 +1516,6 @@ export function DataProvider({ children }) {
 
     setCustomers(prev => {
       const updatedList = prev.map(c => c.id === custId ? { ...c, ...updated } : c);
-      localStorage.setItem('swastik_customers', JSON.stringify(updatedList));
       return updatedList;
     });
 
@@ -1611,8 +1564,6 @@ export function DataProvider({ children }) {
     const custId = Number(id);
     setCustomers(prev => {
       const updatedList = prev.filter(c => c.id !== custId && String(c.id) !== String(id));
-      localStorage.setItem('swastik_customers', JSON.stringify(updatedList));
-      saveSettingToDb('swastik_customers', updatedList);
       return updatedList;
     });
 

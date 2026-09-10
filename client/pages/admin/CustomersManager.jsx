@@ -999,8 +999,6 @@ export default function CustomersManager() {
             address: o.shippingAddress || "",
             status: 'Active',
             registeredAt: regDate,
-            orderCount: 1,
-            totalSpent: Number(o.total || o.subtotal || 0),
             points: 100,
             isPrimeActive: false,
             dob: "",
@@ -1049,11 +1047,12 @@ export default function CustomersManager() {
       return false;
     });
 
-    const seedOrderIds = ["SW-9831", "SW-9824"];
-    const newOrders = custOrders.filter(o => !seedOrderIds.includes(o.id));
+    const totalOrdersCount = custOrders.length;
 
-    const totalOrdersCount = (cust.orderCount || 0) + newOrders.length;
-    const totalSpentSum = (cust.totalSpent || 0) + newOrders.reduce((sum, o) => sum + (o.total || o.subtotal || 0), 0);
+    const totalSpentSum = custOrders.reduce(
+      (sum, o) => sum + Number(o.grandTotal ?? o.total ?? o.subtotal ?? 0),
+      0
+    );
 
     let lastDate = "";
     if (custOrders.length > 0) {

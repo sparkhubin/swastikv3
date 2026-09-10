@@ -3,48 +3,67 @@ import { db } from "../../database/db.js";
 
 const router = express.Router();
 
+
+
+
 // Helper to clean phone numbers
 function cleanPhone(ph) {
   if (!ph) return "";
   return String(ph).replace(/[^0-9]/g, "");
 }
 
-// Helper to fetch customers from app_settings
-async function getStoredCustomers() {
-  try {
-    const rows = await db.query("SELECT value_text FROM app_settings WHERE key_name = 'swastik_customers'");
-    if (rows.length > 0 && rows[0].value_text) {
-      const parsed = JSON.parse(rows[0].value_text);
-      if (Array.isArray(parsed)) return parsed;
-    }
-  } catch (e) {
-    console.error("Error reading stored customers:", e);
+async function addCustomerPoint({
+  customerId,
+  points,
+  type,
+  referenceId = "",
+  description = "",
+  referrerCustomerId = null,
+  referredCustomerId = null
+}) {
+  const amount = Number(points);
+
+  if (!customerId || !Number.isFinite(amount) || amount === 0) {
+    return;
   }
-  return [];
+
+  await db.execute(
+    `INSERT INTO customer_points
+      (customer_id, points, type, reference_id, description,
+       referrer_customer_id, referred_customer_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      Number(customerId),
+      amount,
+      type,
+      referenceId,
+      description,
+      referrerCustomerId ? Number(referrerCustomerId) : null,
+      referredCustomerId ? Number(referredCustomerId) : null
+    ]
+  );
+
+  const balanceRows = await db.query(
+    `SELECT COALESCE(SUM(points), 0) AS balance
+     FROM customer_points
+     WHERE customer_id = ?`,
+    [Number(customerId)]
+  );
+
+  const balance = Number(balanceRows[0]?.balance || 0);
+
+  await db.execute(
+    `UPDATE customer
+     SET points = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+    [balance, Number(customerId)]
+  );
+
+  return balance;
 }
 
-// Helper to save customers to app_settings
-async function saveStoredCustomers(customers) {
-  try {
-    const valueString = JSON.stringify(customers);
-    const existing = await db.query("SELECT key_name FROM app_settings WHERE key_name = 'swastik_customers'");
-    if (existing.length > 0) {
-      await db.execute(
-        "UPDATE app_settings SET value_text = ?, updated_at = CURRENT_TIMESTAMP WHERE key_name = 'swastik_customers'",
-        [valueString]
-      );
-    } else {
-      await db.execute(
-        "INSERT INTO app_settings (key_name, value_text) VALUES ('swastik_customers', ?)",
-        [valueString]
-      );
-    }
-    return true;
-  } catch (e) {
-    console.error("Error saving customers to DB:", e);
-    return false;
-  }
-}
+// Customer data is stored only in the relational `customer` table.
+// `swastik_customers` JSON/app_settings is no longer used.
 
 // Helpers to track deleted customers so auto-discovery does not re-add them
 async function getDeletedCustomerRecords() {
@@ -162,7 +181,7 @@ router.get("/customers", async (req, res) => {
         orderCount: Number(c.orderCount || 0),
         totalSpent: Number(c.totalSpent || 0),
 
-        points: c.points || 100,
+        points: c.points || 0,
         isPrimeActive: Boolean(c.is_prime_active),
         dob: c.dob || '',
         anniversary: c.anniversary || '',
@@ -185,90 +204,132 @@ router.get("/customers", async (req, res) => {
 router.post("/customers", async (req, res) => {
   try {
     const custData = req.body;
+    const isRegistration = custData.operation === "register";
     if (!custData || (!custData.phone && !custData.phoneNumber && !custData.mobile)) {
       return res.status(400).json({ error: "Missing customer mobile/phone number." });
     }
 
     const rawPhone = custData.phone || custData.phoneNumber || custData.mobile || "";
     const phoneDigits = cleanPhone(rawPhone);
+    const email = String(custData.email || "").trim().toLowerCase();
     const formattedPhone = rawPhone.startsWith('+') ? rawPhone : (phoneDigits.length === 10 ? `+91 ${phoneDigits}` : rawPhone);
     const rawName = (custData.name || custData.fullName || `Customer ${phoneDigits.slice(-4)}`).trim();
 
-    let customerList = await getStoredCustomers();
-    const existingIndex = customerList.findIndex(c => cleanPhone(c.phone).endsWith(phoneDigits.slice(-10)));
+    // Customer table is the single source of truth
+    const existingRows = await db.query(
+      "SELECT * FROM customer WHERE phone = ? OR phone LIKE ? ORDER BY id ASC LIMIT 1",
+      [phoneDigits.slice(-10), `%${phoneDigits.slice(-10)}`]
+    );
+
+        // Registration must never update an existing customer.
+    if (isRegistration && existingRows.length > 0) {
+      return res.status(409).json({
+        error: "This mobile number is already registered.",
+        code: "PHONE_EXISTS"
+      });
+    }
+
+    if (isRegistration && email) {
+      const existingEmail = await db.query(
+        `SELECT id
+         FROM customer
+         WHERE LOWER(TRIM(email)) = ?
+         LIMIT 1`,
+        [email]
+      );
+    
+      if (existingEmail.length > 0) {
+        return res.status(409).json({
+          error: "This email address is already registered.",
+          code: "EMAIL_EXISTS"
+        });
+      }
+    }
 
     let savedCust;
-    if (existingIndex >= 0) {
-      // Update existing record
-      const prev = customerList[existingIndex];
+
+    if (existingRows.length > 0) {
+      const prev = existingRows[0];
+
       savedCust = {
-        ...prev,
-        ...custData,
         id: prev.id,
         name: rawName || prev.name,
         phone: formattedPhone || prev.phone,
-        email: custData.email !== undefined ? custData.email : prev.email,
+        email: custData.email !== undefined ? custData.email : (prev.email || ""),
         address: custData.address !== undefined ? custData.address : (prev.address || ""),
-        points: custData.points !== undefined ? custData.points : (prev.points || 0),
-        firstLoginPointsAwarded: custData.firstLoginPointsAwarded !== undefined ? custData.firstLoginPointsAwarded : prev.firstLoginPointsAwarded,
-        referralPointsAwarded: custData.referralPointsAwarded !== undefined ? custData.referralPointsAwarded : prev.referralPointsAwarded,
-        isPrimeActive: custData.isPrimeActive !== undefined ? Boolean(custData.isPrimeActive) : Boolean(prev.isPrimeActive),
-        primeMembershipNo: custData.primeMembershipNo !== undefined ? custData.primeMembershipNo : (prev.primeMembershipNo || ""),
+        status: custData.status || prev.status || "Active",
+        points: prev.points ?? 0,
+        isPrimeActive: custData.isPrimeActive !== undefined
+          ? Boolean(custData.isPrimeActive)
+          : Boolean(prev.is_prime_active),
+        primeMembershipNo: custData.primeMembershipNo !== undefined
+          ? custData.primeMembershipNo
+          : (prev.prime_membership_no || ""),
         dob: custData.dob !== undefined ? custData.dob : (prev.dob || ""),
-        anniversary: custData.anniversary !== undefined ? custData.anniversary : (prev.anniversary || ""),
-        password: custData.password !== undefined ? custData.password : (prev.password || ""),
-        image: custData.image !== undefined ? custData.image : (prev.image || ""),
-        status: custData.status || prev.status || 'Active',
-        orderCount: custData.orderCount !== undefined ? custData.orderCount : (prev.orderCount || 0),
-        totalSpent: custData.totalSpent !== undefined ? custData.totalSpent : (prev.totalSpent || 0),
-        updatedAt: new Date().toISOString()
+        anniversary: custData.anniversary !== undefined
+          ? custData.anniversary
+          : (prev.anniversary || ""),
+        registeredAt: prev.registered_at
+          ? String(prev.registered_at)
+          : new Date().toISOString().split("T")[0]
       };
-      customerList[existingIndex] = savedCust;
     } else {
-      // Create new customer
-      const newId = customerList.length > 0 ? Math.max(...customerList.map(c => Number(c.id) || 0)) + 1 : 101;
+      const idRows = await db.query(
+        "SELECT COALESCE(MAX(id), 100) + 1 AS nextId FROM customer"
+      );
+
+      const newId = Number(idRows[0]?.nextId || 101);
+
       savedCust = {
         id: newId,
         name: rawName,
         phone: formattedPhone,
-        email: custData.email || `${rawName.toLowerCase().replace(/\s+/g, '')}@${process.env.STORE_DOMAIN || 'example.com'}`,
+        email: custData.email || `${rawName.toLowerCase().replace(/\s+/g, "")}@${process.env.STORE_DOMAIN || "example.com"}`,
         address: custData.address || "",
-        status: custData.status || 'Active',
-        points: custData.points !== undefined ? custData.points : 100,
-        firstLoginPointsAwarded: custData.firstLoginPointsAwarded !== undefined ? custData.firstLoginPointsAwarded : 100,
-        referralPointsAwarded: custData.referralPointsAwarded || 0,
-        referredBy: custData.referredBy || "",
+        status: custData.status || "Active",
+        points: 0,
         isPrimeActive: Boolean(custData.isPrimeActive),
         primeMembershipNo: custData.primeMembershipNo || "",
         dob: custData.dob || "",
         anniversary: custData.anniversary || "",
-        password: custData.password || "",
-        image: custData.image || "",
-        registeredAt: custData.registeredAt || new Date().toISOString().split('T')[0],
-        orderCount: custData.orderCount || 0,
-        totalSpent: custData.totalSpent || 0,
-        createdAt: new Date().toISOString()
+        registeredAt: custData.registeredAt || new Date().toISOString().split("T")[0]
       };
-      customerList.unshift(savedCust);
     }
 
     await removeCustomerFromDeleted(formattedPhone || phoneDigits);
-    await saveStoredCustomers(customerList);
 
     // Also upsert into relational SQL 'customer' table
     try {
       const exCust = await db.query("SELECT id FROM customer WHERE id = ?", [savedCust.id]);
       if (exCust && exCust.length > 0) {
         await db.execute(
-          `UPDATE customer SET name = ?, phone = ?, email = ?, address = ?, status = ?, order_count = ?, total_spent = ?, points = ?, is_prime_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-          [savedCust.name, savedCust.phone, savedCust.email || "", savedCust.address || "", savedCust.status || "Active", savedCust.orderCount || 0, savedCust.totalSpent || 0, savedCust.points || 100, savedCust.isPrimeActive ? 1 : 0, savedCust.id]
+`UPDATE customer SET name = ?, phone = ?, email = ?, address = ?, status = ?, points = ?, is_prime_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+[
+  savedCust.name,
+  savedCust.phone,
+  savedCust.email || "",
+  savedCust.address || "",
+  savedCust.status || "Active",
+  savedCust.points || 0,
+  savedCust.isPrimeActive ? 1 : 0,
+  savedCust.id
+]
         );
       } else {
         await db.execute(
-          `INSERT INTO customer (id, name, phone, email, address, status, registered_at, order_count, total_spent, points, is_prime_active)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [savedCust.id, savedCust.name, savedCust.phone, savedCust.email || "", savedCust.address || "", savedCust.status || "Active", savedCust.registeredAt || new Date().toISOString(), savedCust.orderCount || 0, savedCust.totalSpent || 0, savedCust.points || 100, savedCust.isPrimeActive ? 1 : 0]
-        );
+          `INSERT INTO customer (id, name, phone, email, address, status, registered_at, points, is_prime_active)
+ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+ [
+  savedCust.id,
+  savedCust.name,
+  savedCust.phone,
+  savedCust.email || "",
+  savedCust.address || "",
+  savedCust.status || "Active",
+  savedCust.registeredAt || new Date().toISOString(),
+  savedCust.points || 0,
+  savedCust.isPrimeActive ? 1 : 0
+]        );
       }
     } catch (cErr) {
       console.warn("Notice syncing SQL customer table:", cErr.message);
@@ -292,9 +353,101 @@ router.post("/customers", async (req, res) => {
       console.warn("Could not sync to 'user' SQL table:", e.message);
     }
 
-    if (db.savePersistentSnapshot) await db.savePersistentSnapshot();
+          // ============================================================
+      // POINT REWARDS — ONLY FOR NEW REGISTRATION
+            // ============================================================
+          // ============================================================
+      // POINT REWARDS — ONLY WHEN A NEW CUSTOMER IS CREATED
+      // ============================================================
+      // WELCOME points are created in customer_points, never directly
+      // in customer.points. customer.points is only the cached balance.
+      //
+      // This applies to:
+      //   1. operation: "register"
+      //   2. first-time operation: "upsert"
+      //
+      // Existing customers receive NO welcome points.
 
-    res.json({ success: true, customer: savedCust, totalCustomers: customerList.length });
+      if (!existingRows.length) {
+        const welcomePoints = Number(custData.welcomePoints || 0);
+        const referralPoints = Number(custData.referralPoints || 0);
+
+        // ----------------------------------------------------------
+        // WELCOME POINTS
+        // ----------------------------------------------------------
+        if (welcomePoints > 0) {
+          await addCustomerPoint({
+            customerId: savedCust.id,
+            points: welcomePoints,
+            type: "WELCOME",
+            description: isRegistration
+              ? "Welcome points on first registration"
+              : "Welcome points on first OTP login"
+          });
+        }
+
+        // ----------------------------------------------------------
+        // REFERRAL POINTS
+        // ----------------------------------------------------------
+        // Referral reward belongs to the customer who referred the
+        // newly created customer.
+        const referrerCustomerId = Number(
+          custData.referrerCustomerId || 0
+        );
+
+        if (
+          isRegistration &&
+          referrerCustomerId > 0 &&
+          referralPoints > 0
+        ) {
+          // Make sure the referrer actually exists.
+          const referrer = await db.query(
+            "SELECT id FROM customer WHERE id = ? LIMIT 1",
+            [referrerCustomerId]
+          );
+
+          if (referrer.length > 0) {
+            await addCustomerPoint({
+              customerId: referrerCustomerId,
+              points: referralPoints,
+              type: "REFERRAL",
+              description: "Referral reward",
+              referrerCustomerId: referrerCustomerId,
+              referredCustomerId: savedCust.id
+            });
+          }
+        }
+
+        // ----------------------------------------------------------
+        // REFRESH NEW CUSTOMER BALANCE
+        // ----------------------------------------------------------
+        const freshCustomer = await db.query(
+          "SELECT * FROM customer WHERE id = ? LIMIT 1",
+          [savedCust.id]
+        );
+
+        if (freshCustomer.length > 0) {
+          savedCust.points = Number(
+            freshCustomer[0].points || 0
+          );
+        }
+      }
+
+      // Save the latest customer/points state.
+      if (db.savePersistentSnapshot) {
+        await db.savePersistentSnapshot();
+      }
+
+      res.json({
+        success: true,
+        customer: savedCust
+      });
+
+      res.json({
+        success: true,
+        customer: savedCust
+      });
+
   } catch (err) {
     console.error("Error in POST /api/customers:", err);
     res.status(500).json({ error: err.message });
@@ -306,26 +459,42 @@ router.put("/customers/:id", async (req, res) => {
   try {
     const custId = Number(req.params.id);
     const updates = req.body;
-    let customerList = await getStoredCustomers();
-    
-    const index = customerList.findIndex(c => Number(c.id) === custId);
-    if (index === -1) {
+
+    const existingRows = await db.query(
+      "SELECT * FROM customer WHERE id = ?",
+      [custId]
+    );
+
+    if (!existingRows.length) {
       return res.status(404).json({ error: "Customer not found." });
     }
 
-    const current = customerList[index];
+    const current = existingRows[0];
+
     const updated = {
-      ...current,
-      ...updates,
       id: current.id,
-      updatedAt: new Date().toISOString()
+      name: updates.name !== undefined ? updates.name : current.name,
+      phone: updates.phone !== undefined ? updates.phone : current.phone,
+      email: updates.email !== undefined ? updates.email : (current.email || ""),
+      address: updates.address !== undefined ? updates.address : (current.address || ""),
+      status: updates.status !== undefined ? updates.status : (current.status || "Active"),
+      points: updates.points !== undefined ? updates.points : (current.points ?? 0),
+      isPrimeActive: updates.isPrimeActive !== undefined
+        ? Boolean(updates.isPrimeActive)
+        : Boolean(current.is_prime_active),
+      primeMembershipNo: updates.primeMembershipNo !== undefined
+        ? updates.primeMembershipNo
+        : (current.prime_membership_no || ""),
+      dob: updates.dob !== undefined ? updates.dob : (current.dob || ""),
+      anniversary: updates.anniversary !== undefined
+        ? updates.anniversary
+        : (current.anniversary || ""),
+      registeredAt: current.registered_at
+        ? String(current.registered_at)
+        : ""
     };
-    customerList[index] = updated;
 
-    // 1. Save to app_settings
-    await saveStoredCustomers(customerList);
-
-    // 2. Save/Update in relational SQL 'customer' table
+    // Save/update the relational customer table.
     try {
       const exCust = await db.query("SELECT id FROM customer WHERE id = ?", [custId]);
       if (exCust.length > 0) {
@@ -336,8 +505,6 @@ router.put("/customers/:id", async (req, res) => {
             email = ?,
             address = ?,
             status = ?,
-            order_count = ?,
-            total_spent = ?,
             points = ?,
             is_prime_active = ?,
             prime_membership_no = ?,
@@ -351,9 +518,7 @@ router.put("/customers/:id", async (req, res) => {
             updated.email || "",
             updated.address || "",
             updated.status || "Active",
-            updated.orderCount || 0,
-            updated.totalSpent || 0,
-            updated.points || 100,
+            updated.points || 0,
             updated.isPrimeActive ? 1 : 0,
             updated.primeMembershipNo || "",
             updated.dob || "",
@@ -363,7 +528,7 @@ router.put("/customers/:id", async (req, res) => {
         );
       } else {
         await db.execute(
-          `INSERT INTO customer (id, name, phone, email, address, status, registered_at, order_count, total_spent, points, is_prime_active, prime_membership_no, dob, anniversary)
+          `INSERT INTO customer (id, name, phone, email, address, status, registered_at, points, is_prime_active, prime_membership_no, dob, anniversary)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             custId,
@@ -373,9 +538,7 @@ router.put("/customers/:id", async (req, res) => {
             updated.address || "",
             updated.status || "Active",
             updated.registeredAt || new Date().toISOString(),
-            updated.orderCount || 0,
-            updated.totalSpent || 0,
-            updated.points || 100,
+            updated.points || 0,
             updated.isPrimeActive ? 1 : 0,
             updated.primeMembershipNo || "",
             updated.dob || "",
@@ -463,10 +626,17 @@ router.put("/customers/:id", async (req, res) => {
 router.delete("/customers/:id", async (req, res) => {
   try {
     const custId = Number(req.params.id);
-    let customerList = await getStoredCustomers();
-    const targetCust = customerList.find(c => Number(c.id) === custId);
-    customerList = customerList.filter(c => Number(c.id) !== custId);
-    await saveStoredCustomers(customerList);
+
+    const targetRows = await db.query(
+      "SELECT id, phone FROM customer WHERE id = ?",
+      [custId]
+    );
+
+    if (!targetRows.length) {
+      return res.status(404).json({ error: "Customer not found." });
+    }
+
+    const targetCust = targetRows[0];
 
     await recordCustomerDeletion(custId, targetCust?.phone || "");
 
@@ -695,18 +865,26 @@ router.post("/data-deletion-requests/:id/approve", async (req, res) => {
     const targetReq = requests[reqIndex];
     const targetPhoneDigits = cleanPhone(targetReq.phone);
 
-    // 1. Remove from stored customers list
-    let customerList = await getStoredCustomers();
-    const initialCustCount = customerList.length;
-    customerList = customerList.filter(c => {
-      if (targetReq.customerId && Number(c.id) === Number(targetReq.customerId)) return false;
-      if (targetPhoneDigits && cleanPhone(c.phone).endsWith(targetPhoneDigits.slice(-10))) return false;
-      if (targetReq.email && c.email && c.email.toLowerCase() === targetReq.email.toLowerCase()) return false;
-      return true;
-    });
-
-    if (customerList.length !== initialCustCount) {
-      await saveStoredCustomers(customerList);
+    // 1. Remove customer from the relational `customer` table.
+    try {
+      if (targetReq.customerId) {
+        await db.execute(
+          "DELETE FROM customer WHERE id = ?",
+          [Number(targetReq.customerId)]
+        );
+      } else if (targetPhoneDigits && targetPhoneDigits.length >= 10) {
+        await db.execute(
+          "DELETE FROM customer WHERE phone LIKE ?",
+          [`%${targetPhoneDigits.slice(-10)}`]
+        );
+      } else if (targetReq.email) {
+        await db.execute(
+          "DELETE FROM customer WHERE LOWER(email) = LOWER(?)",
+          [targetReq.email]
+        );
+      }
+    } catch (customerErr) {
+      console.warn("Could not delete from customer table:", customerErr.message);
     }
 
     // 2. Remove / Anonymize from SQL 'user' table

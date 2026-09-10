@@ -412,8 +412,6 @@ export const db = {
         address ${textType},
         status VARCHAR(50) DEFAULT 'Active',
         registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        order_count INT DEFAULT 0,
-        total_spent ${numericType} DEFAULT 0,
         points INT DEFAULT 100,
         is_prime_active ${booleanType} DEFAULT ${isPg ? 'FALSE' : 0},
         prime_membership_no VARCHAR(100) DEFAULT '',
@@ -423,6 +421,19 @@ export const db = {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );`,
 
+            // 14. Customer Points History
+            `CREATE TABLE IF NOT EXISTS customer_points (
+              id ${serialType},
+              customer_id INT NOT NULL,
+              points INT NOT NULL,
+              type VARCHAR(50) NOT NULL,
+              reference_id VARCHAR(100) DEFAULT '',
+              description ${textType} DEFAULT '',
+              referrer_customer_id INT,
+              referred_customer_id INT,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );`,
+            
       // 14. WhatsApp Settings Table
       `CREATE TABLE IF NOT EXISTS whatsapp_settings (
         id INT PRIMARY KEY DEFAULT 1,
@@ -616,8 +627,6 @@ export const db = {
           { name: "email", sqlite: "VARCHAR(255) DEFAULT ''", pg: "VARCHAR(255) DEFAULT ''", my: "VARCHAR(255) DEFAULT ''" },
           { name: "address", sqlite: "TEXT DEFAULT ''", pg: "TEXT DEFAULT ''", my: "TEXT" },
           { name: "status", sqlite: "VARCHAR(50) DEFAULT 'Active'", pg: "VARCHAR(50) DEFAULT 'Active'", my: "VARCHAR(50) DEFAULT 'Active'" },
-          { name: "order_count", sqlite: "INT DEFAULT 0", pg: "INT DEFAULT 0", my: "INT DEFAULT 0" },
-          { name: "total_spent", sqlite: "REAL DEFAULT 0.0", pg: "DECIMAL(10,2) DEFAULT 0.0", my: "DECIMAL(10,2) DEFAULT 0.0" },
           { name: "points", sqlite: "INT DEFAULT 100", pg: "INT DEFAULT 100", my: "INT DEFAULT 100" },
           { name: "is_prime_active", sqlite: "INT DEFAULT 0", pg: "BOOLEAN DEFAULT FALSE", my: "INT DEFAULT 0" },
           { name: "prime_membership_no", sqlite: "VARCHAR(100) DEFAULT ''", pg: "VARCHAR(100) DEFAULT ''", my: "VARCHAR(100) DEFAULT ''" },
@@ -1022,8 +1031,6 @@ export const db = {
           address: "Sector 15, Flat 402, Noida, UP",
           status: "Active",
           registeredAt: "2026-01-15",
-          orderCount: 4,
-          totalSpent: 1850,
           points: 350,
           isPrimeActive: true,
           primeMembershipNo: "SW-PRIME-101"
@@ -1036,8 +1043,6 @@ export const db = {
           address: "B-12, Sector 62, Noida, UP",
           status: "Active",
           registeredAt: "2026-02-01",
-          orderCount: 2,
-          totalSpent: 750,
           points: 150,
           isPrimeActive: false
         },
@@ -1049,8 +1054,6 @@ export const db = {
           address: "House 55, Indirapuram, Ghaziabad",
           status: "Active",
           registeredAt: "2026-02-10",
-          orderCount: 1,
-          totalSpent: 420,
           points: 100,
           isPrimeActive: false
         },
@@ -1062,8 +1065,6 @@ export const db = {
           address: "Flat 204, Gaur City, Greater Noida West",
           status: "Active",
           registeredAt: "2026-02-18",
-          orderCount: 3,
-          totalSpent: 1200,
           points: 200,
           isPrimeActive: false
         }
@@ -1098,8 +1099,6 @@ export const db = {
             address: row.address || "",
             status: row.status || "Active",
             registeredAt: row.registered_at || new Date().toISOString(),
-            orderCount: Number(row.order_count || 0),
-            totalSpent: Number(row.total_spent || 0),
             points: Number(row.points || 100),
             isPrimeActive: Boolean(row.is_prime_active),
             primeMembershipNo: row.prime_membership_no || "",
@@ -1122,42 +1121,6 @@ export const db = {
         }
       }
 
-      // If customer table was empty, check app_settings for swastik_customers or fallback
-      if (custByPhone.size === 0) {
-        let loaded = [];
-        try {
-          const rows = await this.query("SELECT value_text FROM app_settings WHERE key_name = 'swastik_customers'");
-          if (rows.length > 0 && rows[0].value_text) {
-            const parsed = JSON.parse(rows[0].value_text);
-            if (Array.isArray(parsed) && parsed.length > 0) loaded = parsed;
-          }
-        } catch (e) {}
-
-        if (loaded.length === 0) loaded = defaultCustomers;
-
-        for (const c of loaded) {
-          const cleanP = String(c.phone || "").replace(/\D/g, "").slice(-10);
-          if (cleanP && !custByPhone.has(cleanP)) {
-            custByPhone.set(cleanP, {
-              id: c.id && Number(c.id) > 0 ? Number(c.id) : ++maxCustId,
-              name: c.name,
-              phone: c.phone,
-              email: c.email || "",
-              address: c.address || "",
-              status: c.status || "Active",
-              registeredAt: c.registeredAt || new Date().toISOString(),
-              orderCount: Number(c.orderCount || 0),
-              totalSpent: Number(c.totalSpent || 0),
-              points: Number(c.points || 100),
-              isPrimeActive: Boolean(c.isPrimeActive),
-              primeMembershipNo: c.primeMembershipNo || "",
-              dob: c.dob || "",
-              anniversary: c.anniversary || ""
-            });
-          }
-        }
-      }
-
       // Ensure every customer has a unique ID and recalculate accurate order count & total spent from orders
       const cleanCustomerList = [];
       for (const [cleanP, cust] of custByPhone.entries()) {
@@ -1166,22 +1129,6 @@ export const db = {
           cust.id = maxCustId;
         }
 
-        // Query real stats from order table
-        try {
-          const stats = await this.query(
-            `SELECT COUNT(*) as ord_cnt, SUM(COALESCE(grand_total, total, 0)) as spent 
-             FROM "order" 
-             WHERE customer_id = ? 
-                OR user_id = ?
-                OR REPLACE(REPLACE(REPLACE(customer_phone, ' ', ''), '-', ''), '+', '') LIKE ?
-                OR customer_phone = ?`,
-            [cust.id, cust.id, `%${cleanP}%`, cust.phone]
-          );
-          if (stats && stats.length > 0 && stats[0].ord_cnt > 0) {
-            cust.orderCount = Number(stats[0].ord_cnt);
-            cust.totalSpent = Number(stats[0].spent || 0);
-          }
-        } catch (stErr) {}
 
         cleanCustomerList.push(cust);
       }
@@ -1199,31 +1146,20 @@ export const db = {
           const ex = await this.query("SELECT id FROM customer WHERE id = ?", [c.id]);
           if (ex && ex.length > 0) {
             await this.execute(
-              `UPDATE customer SET name = ?, phone = ?, email = ?, address = ?, status = ?, order_count = ?, total_spent = ?, points = ?, is_prime_active = ?, prime_membership_no = ?, dob = ?, anniversary = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-              [c.name, c.phone, c.email || '', c.address || '', c.status || 'Active', c.orderCount, c.totalSpent, c.points, c.isPrimeActive ? 1 : 0, c.primeMembershipNo || '', c.dob || '', c.anniversary || '', c.id]
+              `UPDATE customer SET name = ?, phone = ?, email = ?, address = ?, status = ?, points = ?, is_prime_active = ?, prime_membership_no = ?, dob = ?, anniversary = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+              [c.name, c.phone, c.email || '', c.address || '', c.status || 'Active', c.points, c.isPrimeActive ? 1 : 0, c.primeMembershipNo || '', c.dob || '', c.anniversary || '', c.id]
             );
           } else {
             await this.execute(
-              `INSERT INTO customer (id, name, phone, email, address, status, registered_at, order_count, total_spent, points, is_prime_active, prime_membership_no, dob, anniversary)
+              `INSERT INTO customer (id, name, phone, email, address, status, registered_at, points, is_prime_active, prime_membership_no, dob, anniversary)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [c.id, c.name, c.phone, c.email || '', c.address || '', c.status || 'Active', c.registeredAt || new Date().toISOString(), c.orderCount, c.totalSpent, c.points, c.isPrimeActive ? 1 : 0, c.primeMembershipNo || '', c.dob || '', c.anniversary || '']
+              [c.id, c.name, c.phone, c.email || '', c.address || '', c.status || 'Active', c.registeredAt || new Date().toISOString(), c.points, c.isPrimeActive ? 1 : 0, c.primeMembershipNo || '', c.dob || '', c.anniversary || '']
             );
           }
         } catch (syncErr) {
           console.warn("Notice updating clean customer:", syncErr.message);
         }
       }
-
-      // Always synchronize app_settings copy
-      try {
-        const jsonVal = JSON.stringify(cleanCustomerList);
-        const exSettings = await this.query("SELECT key_name FROM app_settings WHERE key_name = 'swastik_customers'");
-        if (exSettings.length > 0) {
-          await this.execute("UPDATE app_settings SET value_text = ?, updated_at = CURRENT_TIMESTAMP WHERE key_name = 'swastik_customers'", [jsonVal]);
-        } else {
-          await this.execute("INSERT INTO app_settings (key_name, value_text) VALUES ('swastik_customers', ?)", [jsonVal]);
-        }
-      } catch (e) {}
 
       // ENFORCE PROPER ID MAPPING ON ALL ORDERS
       for (const c of cleanCustomerList) {
@@ -1447,11 +1383,11 @@ export const db = {
             const ex = await this.query("SELECT id FROM customer WHERE id = ?", [c.id]);
             if (ex.length === 0) {
               await this.execute(
-                `INSERT INTO customer (id, name, phone, email, address, status, registered_at, order_count, total_spent, points, is_prime_active, prime_membership_no, dob, anniversary)
+                `INSERT INTO customer (id, name, phone, email, address, status, registered_at, is_prime_active, prime_membership_no, dob, anniversary)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                   c.id, c.name, c.phone, c.email || '', c.address || '', c.status || 'Active',
-                  c.registered_at || new Date().toISOString(), c.order_count || 0, c.total_spent || 0,
+                  c.registered_at || new Date().toISOString(),
                   c.points || 100, c.is_prime_active ? 1 : 0, c.prime_membership_no || '', c.dob || '', c.anniversary || ''
                 ]
               );

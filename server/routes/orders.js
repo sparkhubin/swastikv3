@@ -254,48 +254,6 @@ router.post("/orders", async (req, res) => {
         }
       }
 
-      // Update customer stats in customer and user tables
-      try {
-        const orderVal = Number(o.total || o.grandTotal || o.grand_total || 0);
-        let targetCustId = effectiveCustId;
-        if (!targetCustId && effectiveCustPhone) {
-          const cleanP = String(effectiveCustPhone).replace(/\D/g, "").slice(-10);
-          if (cleanP) {
-            const found = await db.query(
-              'SELECT id FROM customer WHERE (REPLACE(REPLACE(REPLACE(phone, " ", ""), "-", ""), "+", "") LIKE ? OR phone = ?) AND id IS NOT NULL LIMIT 1',
-              [`%${cleanP}%`, effectiveCustPhone]
-            );
-            if (found && found.length > 0 && found[0].id) {
-              targetCustId = Number(found[0].id);
-            }
-          }
-        }
-
-        if (targetCustId) {
-          await db.execute(
-            'UPDATE customer SET order_count = COALESCE(order_count, 0) + 1, total_spent = COALESCE(total_spent, 0) + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-            [orderVal, targetCustId]
-          );
-          await db.execute(
-            'UPDATE "user" SET order_count = COALESCE(order_count, 0) + 1, total_spent = COALESCE(total_spent, 0) + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-            [orderVal, targetCustId]
-          );
-          await db.execute('UPDATE "order" SET customer_id = ?, user_id = ? WHERE id = ?', [targetCustId, targetCustId, targetOrderId]);
-        } else if (effectiveCustPhone) {
-          const cleanP = String(effectiveCustPhone).replace(/\D/g, "").slice(-10);
-          if (cleanP) {
-            const maxRow = await db.query("SELECT MAX(id) as max_id FROM customer");
-            const newCustId = Math.max(100, Number(maxRow[0]?.max_id || 100)) + 1;
-            await db.execute(
-              'INSERT INTO customer (id, name, phone, email, address, status, registered_at, order_count, total_spent, points, is_prime_active) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 1, ?, 100, 0)',
-              [newCustId, effectiveCustName || `Customer ${cleanP.slice(-4)}`, effectiveCustPhone, effectiveCustEmail || "", o.shippingAddress || "", "Active", orderVal]
-            );
-            await db.execute('UPDATE "order" SET customer_id = ?, user_id = ? WHERE id = ?', [newCustId, newCustId, targetOrderId]);
-          }
-        }
-      } catch (custStatErr) {
-        console.warn("Notice updating customer order stats:", custStatErr.message);
-      }
     }
 
     if (Array.isArray(o.items)) {
