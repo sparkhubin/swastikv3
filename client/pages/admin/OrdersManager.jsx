@@ -427,46 +427,26 @@ export default function OrdersManager({ userRole }) {
   const [deliveryVerifyRiderCash, setDeliveryVerifyRiderCash] = useState(true);
   const [deliveryVerifyStaffId, setDeliveryVerifyStaffId] = useState('');
 
-  // Security Password Modal State for Order Deletion
+  // Authenticated confirmation state for order deletion
   const [orderToDelete, setOrderToDelete] = useState(null);
-  const [deleteAdminPassword, setDeleteAdminPassword] = useState('');
-  const [deletePasswordError, setDeletePasswordError] = useState('');
+  const [deleteOrderError, setDeleteOrderError] = useState('');
 
-  const handleConfirmDeleteOrder = () => {
+  const handleConfirmDeleteOrder = async () => {
     if (!orderToDelete) return;
 
-    const pwd = deleteAdminPassword.trim();
-    if (!pwd) {
-      setDeletePasswordError(isHindi ? "कृपया एडमिन पासवर्ड दर्ज करें!" : "Please enter admin password!");
+    setDeleteOrderError('');
+    const result = await deleteOrder(orderToDelete.id);
+    if (!result?.success) {
+      setDeleteOrderError(result?.error || (isHindi ? 'आदेश हटाया नहीं जा सका।' : 'The order could not be deleted.'));
       return;
     }
-
-    const isMasterAdmin = pwd === 'admin123' || pwd === 'admin' || pwd === 'swastik';
-    const isStaffValid = (staff || []).some(s => s.password === pwd);
-
-    if (!isMasterAdmin && !isStaffValid) {
-      setDeletePasswordError(isHindi ? "❌ अमान्य एडमिन पासवर्ड! आदेश नहीं हटाया जा सका।" : "❌ Incorrect Admin Password! Access Denied.");
-      return;
-    }
-
-    // If order was delivered over 1 hour ago, require Super Admin credentials
-    const isLocked = isOrder1HourLocked(orderToDelete);
-    if (isLocked && !isMasterAdmin) {
-      setDeletePasswordError(isHindi 
-        ? "🔒 डिलीवर किए गए ऑर्डर को हटाने के लिए सुपर एडमिन पासवर्ड (admin123 / admin) आवश्यक है।" 
-        : "🔒 Deleting delivered orders requires Super Admin master password (admin123 / admin).");
-      return;
-    }
-
-    deleteOrder(orderToDelete.id);
 
     if (selectedOrder && (selectedOrder.id === orderToDelete.id || String(selectedOrder.id) === String(orderToDelete.id))) {
       setSelectedOrder(null);
     }
 
     setOrderToDelete(null);
-    setDeleteAdminPassword('');
-    setDeletePasswordError('');
+    setDeleteOrderError('');
   };
 
   // Edit existing order state
@@ -1575,11 +1555,10 @@ export default function OrdersManager({ userRole }) {
                         <button
                           onClick={() => {
                             setOrderToDelete(o);
-                            setDeleteAdminPassword('');
-                            setDeletePasswordError('');
+                            setDeleteOrderError('');
                           }}
                           className="p-1.5 px-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 rounded-lg font-black text-[9px] uppercase tracking-wider inline-flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
-                          title="Delete Order (Admin Password Required)"
+                          title="Delete Order"
                         >
                           <Trash2 className="h-3 w-3" />
                         </button>
@@ -2043,8 +2022,7 @@ export default function OrdersManager({ userRole }) {
                           type="button"
                           onClick={() => {
                             setOrderToDelete(selectedOrder);
-                            setDeleteAdminPassword('');
-                            setDeletePasswordError('');
+                            setDeleteOrderError('');
                           }}
                           className="px-3 py-1.5 rounded-xl font-bold text-[10px] uppercase flex items-center gap-1 border bg-red-500/20 text-red-300 border-red-500/30 hover:bg-red-500/30 transition-all cursor-pointer active:scale-95"
                         >
@@ -2705,15 +2683,14 @@ export default function OrdersManager({ userRole }) {
         </div>
       )}
 
-      {/* Admin Password Verification Modal for Order Deletion */}
+      {/* Authenticated confirmation modal for order deletion */}
       {orderToDelete && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-slate-900 border border-red-500/40 rounded-3xl max-w-md w-full p-6 shadow-2xl relative text-white space-y-4">
             <button
               onClick={() => {
                 setOrderToDelete(null);
-                setDeleteAdminPassword('');
-                setDeletePasswordError('');
+                setDeleteOrderError('');
               }}
               className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white bg-slate-950 rounded-full border border-white/10 cursor-pointer"
             >
@@ -2729,7 +2706,7 @@ export default function OrdersManager({ userRole }) {
                   {isHindi ? "सुरक्षा सत्यापन - आदेश हटाएँ" : "Admin Security Verification"}
                 </h3>
                 <p className="text-[10px] text-slate-400">
-                  {isHindi ? "आदेश हटाने के लिए एडमिन पासवर्ड दर्ज करें" : "Enter admin password to permanently delete this order"}
+                  {isHindi ? "आपका प्रमाणित स्टाफ सत्र इस कार्रवाई को अधिकृत करेगा" : "Your authenticated staff session will authorize this action"}
                 </p>
               </div>
             </div>
@@ -2745,40 +2722,18 @@ export default function OrdersManager({ userRole }) {
               </p>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">
-                {isHindi ? "एडमिन लॉगिन पासवर्ड *" : "Admin Password *"}
-              </label>
-              <input
-                type="password"
-                placeholder={isHindi ? "पासवर्ड दर्ज करें (उदा. admin123)..." : "Enter admin password (e.g. admin123)..."}
-                value={deleteAdminPassword}
-                onChange={(e) => {
-                  setDeleteAdminPassword(e.target.value);
-                  setDeletePasswordError('');
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleConfirmDeleteOrder();
-                  }
-                }}
-                autoFocus
-                className="w-full px-4 py-2.5 bg-slate-950 border border-white/15 rounded-xl text-xs text-white placeholder-slate-500 outline-none focus:border-red-400 transition-all font-mono"
-              />
-              {deletePasswordError && (
-                <p className="text-[11px] font-bold text-red-400 mt-1 flex items-center gap-1">
-                  {deletePasswordError}
-                </p>
-              )}
-            </div>
+            {deleteOrderError && (
+              <p className="text-[11px] font-bold text-red-400 flex items-center gap-1">
+                {deleteOrderError}
+              </p>
+            )}
 
             <div className="flex items-center gap-3 pt-2">
               <button
                 type="button"
                 onClick={() => {
                   setOrderToDelete(null);
-                  setDeleteAdminPassword('');
-                  setDeletePasswordError('');
+                  setDeleteOrderError('');
                 }}
                 className="w-1/2 py-2.5 bg-slate-950 hover:bg-slate-800 text-slate-300 border border-white/10 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
               >

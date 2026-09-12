@@ -1,6 +1,7 @@
 import express from "express";
 import { db } from "../../database/db.js";
 import { mapPartner } from "../utils.js";
+import { requirePermission, requireStaffAuth } from "../auth.js";
 
 const router = express.Router();
 
@@ -27,7 +28,7 @@ router.get("/partners/:id", async (req, res) => {
   }
 });
 
-router.post("/partners", async (req, res) => {
+router.post("/partners", requireStaffAuth, requirePermission("partners"), async (req, res) => {
   try {
     const pt = req.body;
     const resId = await db.execute(
@@ -51,7 +52,7 @@ router.post("/partners", async (req, res) => {
   }
 });
 
-router.put("/partners/:id", async (req, res) => {
+router.put("/partners/:id", requireStaffAuth, requirePermission("partners"), async (req, res) => {
   try {
     const id = Number(req.params.id);
     const pt = req.body;
@@ -88,7 +89,7 @@ router.put("/partners/:id", async (req, res) => {
   }
 });
 
-router.delete("/partners/:id", async (req, res) => {
+router.delete("/partners/:id", requireStaffAuth, requirePermission("partners"), async (req, res) => {
   try {
     const id = Number(req.params.id);
     await db.execute("DELETE FROM partner WHERE id = ?", [id]);

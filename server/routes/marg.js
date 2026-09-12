@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { db } from "../../database/db.js";
+import { requirePermission, requireStaffAuth } from "../auth.js";
 import { 
   upload, 
   isR2ConfiguredAndValid, 
@@ -11,6 +12,7 @@ import {
 } from "../utils.js";
 
 const router = express.Router();
+router.use("/marg", requireStaffAuth, requirePermission("settings"));
 
 // Get MARG Settings
 router.get("/marg/settings", async (req, res) => {

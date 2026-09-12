@@ -1,7 +1,9 @@
 import express from "express";
 import { db } from "../../database/db.js";
+import { requirePermission, requireStaffAuth } from "../auth.js";
 
 const router = express.Router();
+router.use("/database", requireStaffAuth, requirePermission("settings"));
 
 // 1. Export Full Database Backup JSON
 router.get("/database/backup", async (req, res) => {
@@ -57,10 +59,10 @@ router.get("/database/backup", async (req, res) => {
 
 // 2. Restore Database from Backup JSON
 router.post("/database/restore", async (req, res) => {
-  const { password, backupData } = req.body;
+  const { backupData } = req.body;
 
-  if (password !== "admin123") {
-    return res.status(401).json({ error: "Invalid Admin Password! Restore operation denied." });
+  if (!req.staff?.isMasterAdmin && req.staff?.role_code !== "admin") {
+    return res.status(403).json({ error: "Only a super administrator can restore a database backup." });
   }
 
   if (!backupData || !backupData.tables) {

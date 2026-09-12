@@ -1,6 +1,7 @@
 import express from "express";
 import { db } from "../../database/db.js";
 import { mapReview } from "../utils.js";
+import { requirePermission, requireStaffAuth } from "../auth.js";
 
 const router = express.Router();
 
@@ -34,7 +35,7 @@ router.post("/reviews", async (req, res) => {
   }
 });
 
-router.put("/reviews/:id/reply", async (req, res) => {
+router.put("/reviews/:id/reply", requireStaffAuth, requirePermission("reviews"), async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { response } = req.body;
@@ -46,7 +47,7 @@ router.put("/reviews/:id/reply", async (req, res) => {
   }
 });
 
-router.delete("/reviews/:id", async (req, res) => {
+router.delete("/reviews/:id", requireStaffAuth, requirePermission("reviews"), async (req, res) => {
   try {
     const id = Number(req.params.id);
     await db.execute("DELETE FROM review WHERE id = ?", [id]);

@@ -108,16 +108,7 @@ export default function R2ImageUploader({ onUploadComplete, onUploadSuccess, ini
     } catch (err) {
       clearInterval(interval);
       console.error("Upload error:", err);
-      // Premium Mock/Simulation URL fallback as safety
-      const randomId = Math.floor(1000 + Math.random() * 9000);
-      const simulatedUrl = `https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400&sig=${randomId}`;
-      setUploadedUrl(simulatedUrl);
-      if (onUploadComplete) {
-        onUploadComplete(simulatedUrl);
-      }
-      if (onUploadSuccess) {
-        onUploadSuccess(simulatedUrl);
-      }
+      setUploadedUrl('');
     } finally {
       setTimeout(() => {
         setIsUploading(false);

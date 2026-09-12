@@ -1,5 +1,6 @@
 import express from "express";
 import { db } from "../../database/db.js";
+import { requirePermission, requireStaffAuth } from "../auth.js";
 
 const router = express.Router();
 
@@ -22,7 +23,7 @@ router.get("/settings", async (req, res) => {
 });
 
 // Save or update a dynamic setting in the database
-router.post("/settings", async (req, res) => {
+router.post("/settings", requireStaffAuth, requirePermission("settings"), async (req, res) => {
   const { key, value } = req.body;
   if (!key) {
     return res.status(400).json({ error: "Missing 'key' in request body." });

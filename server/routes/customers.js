@@ -1,5 +1,6 @@
 import express from "express";
 import { db } from "../../database/db.js";
+import { requirePermission, requireStaffAuth } from "../auth.js";
 
 const router = express.Router();
 
@@ -703,7 +704,7 @@ async function saveStoredDeletionRequests(requests) {
 }
 
 // GET /api/data-deletion-requests - Retrieve all requests
-router.get("/data-deletion-requests", async (req, res) => {
+router.get("/data-deletion-requests", requireStaffAuth, requirePermission("customers"), async (req, res) => {
   try {
     const requests = await getStoredDeletionRequests();
     // Dynamically resolve real customer name and details from customer table
@@ -851,7 +852,7 @@ router.post("/data-deletion-requests", async (req, res) => {
 });
 
 // POST /api/data-deletion-requests/:id/approve - Admin approves & permanently deletes customer data
-router.post("/data-deletion-requests/:id/approve", async (req, res) => {
+router.post("/data-deletion-requests/:id/approve", requireStaffAuth, requirePermission("customers"), async (req, res) => {
   try {
     const requestId = req.params.id;
     const { adminNotes } = req.body || {};
@@ -930,7 +931,7 @@ router.post("/data-deletion-requests/:id/approve", async (req, res) => {
 });
 
 // POST /api/data-deletion-requests/:id/reject - Admin rejects request
-router.post("/data-deletion-requests/:id/reject", async (req, res) => {
+router.post("/data-deletion-requests/:id/reject", requireStaffAuth, requirePermission("customers"), async (req, res) => {
   try {
     const requestId = req.params.id;
     const { adminNotes } = req.body || {};
@@ -960,7 +961,7 @@ router.post("/data-deletion-requests/:id/reject", async (req, res) => {
 });
 
 // DELETE /api/data-deletion-requests/:id - Delete record of the request
-router.delete("/data-deletion-requests/:id", async (req, res) => {
+router.delete("/data-deletion-requests/:id", requireStaffAuth, requirePermission("customers"), async (req, res) => {
   try {
     const requestId = req.params.id;
     let requests = await getStoredDeletionRequests();

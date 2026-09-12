@@ -71,38 +71,6 @@ export default function Shop({ categoryFilterState, onCategoryFilterChange, sear
   const [listeningLanguage, setListeningLanguage] = useState(language === 'hi' ? 'hi-IN' : 'en-IN');
   const [interimTranscript, setInterimTranscript] = useState('');
   const [showVoiceAssistantHelp, setShowVoiceAssistantHelp] = useState(false);
-  const [isSimulatingVoice, setIsSimulatingVoice] = useState(false);
-
-  // Simulated Voice Input Generator
-  const simulateVoiceInput = (text) => {
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch(e) {}
-    }
-    setIsListening(true);
-    setIsSimulatingVoice(true);
-    setInterimTranscript(language === 'hi' ? 'वॉयस सिग्नल कंपाइल हो रहा है...' : 'Processing voice signal...');
-    
-    let currentText = '';
-    let index = 0;
-    
-    setTimeout(() => {
-      const interval = setInterval(() => {
-        if (index < text.length) {
-          currentText += text[index];
-          setInterimTranscript(currentText);
-          index++;
-        } else {
-          clearInterval(interval);
-          setTimeout(() => {
-            setSearchQuery(text);
-            if (onSearchQueryChange) onSearchQueryChange(text);
-            setIsListening(false);
-            setIsSimulatingVoice(false);
-          }, 450);
-        }
-      }, 70);
-    }, 500);
-  };
 
   // Speech Recognition initializer
   const startSpeechRecognition = async (selectedLang) => {
@@ -161,9 +129,8 @@ export default function Shop({ categoryFilterState, onCategoryFilterChange, sear
       window.webkitSpeechRecognition;
 
     if (!SpeechRecognitionAPI) {
-      console.warn("Native speech recognition API not available. Launching simulation...");
+      console.warn("Speech recognition is not available in this browser.");
       setShowVoiceAssistantHelp(true);
-      simulateVoiceInput(langToUse.startsWith('hi') ? "ताजा बासमती चावल" : "Fresh organic apples");
       return;
     }
 
@@ -466,11 +433,6 @@ export default function Shop({ categoryFilterState, onCategoryFilterChange, sear
                   <div>
                     <p className="text-[10px] uppercase font-black tracking-widest text-emerald-800 flex items-center gap-1.5">
                       <span>{language === 'hi' ? 'आवाज़ सहायक सक्रिय है' : 'Voice Assistant Active'}</span>
-                      {isSimulatingVoice && (
-                        <span className="text-[9px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-1 py-0.2 rounded font-mono font-extrabold animate-pulse">
-                          {language === 'hi' ? 'सिम्युलेटर सक्रिय' : 'Simulator Active'}
-                        </span>
-                      )}
                     </p>
                     <p className="text-xs text-slate-800 font-extrabold italic mt-0.5">
                       "{interimTranscript || (language === 'hi' ? 'सुन रहा हूँ...' : 'Listening...')}"
@@ -482,7 +444,6 @@ export default function Shop({ categoryFilterState, onCategoryFilterChange, sear
                   <button
                     type="button"
                     onClick={() => {
-                      if (isSimulatingVoice) return;
                       stopSpeechRecognition();
                       startSpeechRecognition('en-IN');
                     }}
@@ -497,7 +458,6 @@ export default function Shop({ categoryFilterState, onCategoryFilterChange, sear
                   <button
                     type="button"
                     onClick={() => {
-                      if (isSimulatingVoice) return;
                       stopSpeechRecognition();
                       startSpeechRecognition('hi-IN');
                     }}

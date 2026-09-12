@@ -1,5 +1,4 @@
 import React, { createContext, useState, useContext, useEffect, useRef, useCallback } from 'react';
-import { products as initialProducts } from '../data/products';
 import { isOrder1HourLocked } from '../utils/orderLock';
 
 const DataContext = createContext();
@@ -11,29 +10,6 @@ const initialCategories = [
   { id: 'beverage', nameEn: 'BEVERAGE ITEM', nameHi: 'पेय पदार्थ आइटम', icon: '🧃', image: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&q=80&w=400' },
   { id: 'babycare', nameEn: 'BABY CARE ITEM LIST', nameHi: 'बेबी केयर आइटम सूची', icon: '🍼', image: 'https://images.unsplash.com/photo-1519689680058-324335c77ebe?auto=format&fit=crop&q=80&w=400' },
   { id: 'swastik', nameEn: 'SWSTIK PRODUCT LIST', nameHi: 'स्वास्तिक उत्पाद सूची', icon: '✨', image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400' }
-];
-
-// Coupon structures
-const initialOffers = [
-  { id: 1, code: 'SWASTIK50', discountType: 'fixed', value: 50, minOrder: 299, startDate: '2026-01-01', endDate: '2026-12-31', maxUsesPerCustomer: 1, bannerEn: 'Get ₹50 flat discount on your next order!', bannerHi: 'अपने अगले ऑर्डर पर ₹50 की फ्लैट छूट पाएं!', descriptionEn: 'Applicable for cart value above ₹299. Max 1 use per user.', descriptionHi: '₹299 से अधिक के कार्ट मूल्य पर लागू। प्रति ग्राहक 1 बार।' },
-  { id: 2, code: 'FREESHIP', discountType: 'percentage', value: 10, minOrder: 499, startDate: '2026-05-01', endDate: '2026-12-31', maxUsesPerCustomer: 2, bannerEn: 'Unlock 10% off & Free Delivery above ₹499!', bannerHi: '₹499 से ऊपर 10% की छूट और मुफ्त डिलीवरी!', descriptionEn: 'Maximum discount ₹100. Max 2 uses per user.', descriptionHi: 'अधिकतम छूट ₹100। प्रति ग्राहक 2 बार।' },
-  { id: 3, code: 'ORGANICNEW', discountType: 'percentage', value: 15, minOrder: 199, startDate: '2026-06-01', endDate: '2026-12-31', maxUsesPerCustomer: 1, bannerEn: 'Flat 15% discount for organic growers trial!', bannerHi: 'जैविक किसानों के परीक्षण के लिए फ्लैट 15% छूट!', descriptionEn: 'Valid for new buyers block. Max 1 use per user.', descriptionHi: 'नए खरीदारों के लिए माननीय। प्रति ग्राहक 1 बार।' }
-];
-
-// Submission messages from customers
-const initialContactMessages = [
-  { id: 1, name: 'Sanjay Dutt', mobile: '9810123456', subject: 'Bulk Delivery Enquiry', message: 'I want to order 50kg Royal Gala Apples for a family function on coming Saturday. Can you schedule the shipment?', answer: 'Yes! We can coordinate with Rajesh Farms. Our manager will call you for confirmation.', date: 'Today, 10:15 AM' },
-  { id: 2, name: 'Neelam Sen', mobile: '9211054321', subject: 'Refund delay status', message: 'Order SW-9824 got partial refund but standard credit was not credited in my account.', answer: '', date: 'Yesterday' }
-];
-
-// In-app directory for customers database
-const initialCustomers = [
-  { id: 101, name: 'Balram Patidar', phone: '+91 99999 88888', email: 'balram@swastik.local', registeredAt: '2026-01-10', status: 'Active', dob: '', anniversary: '' },
-  { id: 102, name: 'Rahul Sharma', phone: '+91 98765 43210', email: 'rahul.sharma@gmail.com', registeredAt: '2026-02-14', status: 'Active', dob: '1993-05-10', anniversary: '2015-07-14' },
-  { id: 103, name: 'Priya Patel', phone: '+91 91234 56789', email: 'priya.p@yahoo.com', registeredAt: '2026-02-10', status: 'Active', dob: '', anniversary: '' },
-  { id: 104, name: 'Amit Verma', phone: '+91 98111 22334', email: 'amit.verma@outlook.com', registeredAt: '2026-02-18', status: 'Active', dob: '1990-07-14', anniversary: '' },
-  { id: 105, name: 'main suwastik', phone: '+91 99999 99999', email: 'simulatedcustomer@example.com', registeredAt: '2026-03-01',status: 'Active', dob: '', anniversary: '' },
-  { id: 106, name: 'Balram Patidar', phone: '+91 7000165361', email: 'bilspatidar@gmail.com', registeredAt: '2026-03-05', status: 'Active', dob: '', anniversary: '' }
 ];
 
 // Environment-driven dynamic store settings
@@ -79,109 +55,6 @@ const initialContactSettings = {
   freeDeliveryMinAmount: 500,
   showOnlyWithPhoto: false
 };
-
-const initialReviews = [
-  {
-    id: 1,
-    name: "Amit Sharma",
-    rating: 5,
-    commentEn: "Absolutely stellar experience with Swastik Supermarket! The organic fruits are premium quality and the local deliveries always take less than 15 minutes. Highly recommended!",
-    commentHi: "स्वास्तिक सुपरमार्केट के साथ बिल्कुल शानदार अनुभव! जैविक फल प्रीमियम गुणवत्ता के हैं और स्थानीय डिलीवरी हमेशा 15 मिनट से भी कम समय लेती है। अत्यधिक अनुशंसित!",
-    avatarBg: "from-cyan-400 to-blue-500",
-    date: "2 days ago",
-    response: "Thank you Amit! We work directly with local farmers to ensure top-tier freshness."
-  },
-  {
-    id: 2,
-    name: "Pooja Patel",
-    rating: 5,
-    commentEn: "Love the offer zone and multi-lingual layout! I save over ₹1,500 every month. The bilingual English-Hindi interface is so smooth and flawless for my parents to order their dairy essentials.",
-    commentHi: "ऑफ़र ज़ोन और बहुभाषी लेआउट बहुत पसंद आया! मैं हर महीने ₹1,500 से अधिक बचाती हूँ। अंग्रेजी-हिन्दी इंटरफ़ेस बहुत सहज है, जिससे मेरे माता-पिता के लिए डेयरी उत्पाद ऑर्डर करना आसान हो गया है।",
-    avatarBg: "from-pink-500 to-rose-400",
-    date: "1 week ago",
-    response: "Glad to be of service, Pooja! We are continuing to expand our staples and dairy discount sections."
-  },
-  {
-    id: 3,
-    name: "Vikram Malhotra",
-    rating: 4,
-    commentEn: "Exceptional range of daily staples. The organic Toor Dal and Basmati Rice are pure. Minor delay once in transit, but their live chat and delivery support immediately solved and refunded.",
-    commentHi: "दैनिक आवश्यक वस्तुओं की असाधारण श्रृंखला। जैविक तूर दाल और बासमती चावल शुद्ध हैं। एक बार रास्ते में थोड़ी देरी हुई थी, लेकिन उनके लाइव चैट और डिलीवरी सपोर्ट ने तुरंत हल कर दिया।",
-    avatarBg: "from-purple-500 to-indigo-600",
-    date: "3 days ago",
-    response: "Appreciate your feedback, Vikram! We are tightening logistics to assure precise delivery times."
-  }
-];
-
-const initialPartners = [
-  {
-    id: 1,
-    photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200",
-    name: "Rajesh Patidar",
-    designation: "Sourcing Director (Fruits & Vegetables)",
-    about: "Rajesh manages our fresh local grower networks. He is responsible for testing purity, supervising rapid logistics collection timelines, and ensuring organic quality on all botanical essentials."
-  },
-  {
-    id: 2,
-    photo: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200",
-    name: "Sunita Deshmukh",
-    designation: "Organic Dairy Lead",
-    about: "Sunita supervises our direct milk co-operatives and poultry segments in Greater Noida. She has over 15 years of quality control experience and works to assure pristine hormone-free daily dairy products."
-  },
-  {
-    id: 3,
-    photo: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=200",
-    name: "Vikram Sen",
-    designation: "Hyper-Local Logistics Coordinator",
-    about: "Vikram keeps our dispatch hubs and courier networks perfectly synchronized, assuring zero delays in Swastik's rapid checkout SLA. He coordinates active transit pathways across Noida Sectors."
-  }
-];
-
-const initialOrders = [
-  {
-    id: "SW-9831",
-    date: "June 02, 2026",
-    status: "In Transit",
-    isActive: true,
-    step: 1, // 0 = Confirmed, 1 = In Transit, 2 = Delivered
-    subtotal: 449,
-    deliveryFee: 0,
-    gst: 81,
-    total: 530,
-    deliveryStaffId: 3,
-    deliveryPartnerName: "Vikram Singh",
-    deliveryPartnerPhone: "+91 98765 43210",
-    hubName: "Alpha Hub, Sector 12",
-    eta: "15 Mins",
-    customerName: "Balram Patidar",
-    customerPhone: "+91 99999 88888",
-    items: [
-      { id: 3, nameEn: "Long Grain Basmati Rice (5kg)", nameHi: "लॉन्ग ग्रेन बासमती चावल (5 किलो)", price: 449, qty: 1, weight: "5kg" }
-    ]
-  },
-  {
-    id: "SW-9824",
-    date: "May 30, 2026",
-    status: "Delivered",
-    isActive: false,
-    step: 2,
-    subtotal: 350,
-    deliveryFee: 40,
-    gst: 63,
-    total: 453,
-    deliveryStaffId: 4,
-    deliveryPartnerName: "Rahul Verma",
-    deliveryPartnerPhone: "+91 98989 89898",
-    hubName: "Alpha Hub, Sector 12",
-    eta: "Delivered",
-    customerName: "Pooja Patel",
-    customerPhone: "+91 91234 56789",
-    items: [
-      { id: 1, nameEn: "Premium Royal Gala Apples (1kg)", nameHi: "प्रीमियम रॉयल गाला सेब (1 किलो)", price: 180, qty: 1, weight: "1kg" },
-      { id: 14, nameEn: "Greek Yogurt 400g", nameHi: "ग्रीक योगर्ट 400 ग्राम", price: 170, qty: 1, weight: "400g" }
-    ]
-  }
-];
 
 const initialPrivacySections = [
   {
@@ -309,53 +182,6 @@ const initialSlides = [
   }
 ];
 
-const initialStaff = [
-  {
-    id: 1,
-    name: "Balram Patidar",
-    role: "Store Super Admin",
-    role_id: 2,
-    mobile: "9999999999",
-    password: "admin",
-    permissions: [
-      "dashboard", "products", "categories", "orders", "inventory", 
-      "delivery", "customers", "whatsapp", "settings", "pos", "staff", "reports"
-    ],
-    status: "Active",
-    isMasterAdmin: true
-  },
-  {
-    id: 2,
-    name: "Suresh Mehra",
-    role: "Delivery Rider",
-    role_id: 4,
-    mobile: "9811122334",
-    password: "staff",
-    permissions: ["delivery"],
-    status: "Active"
-  },
-  {
-    id: 3,
-    name: "Vikram Singh",
-    role: "Senior Delivery Rider",
-    role_id: 4,
-    mobile: "9876543210",
-    password: "staff",
-    permissions: ["delivery", "orders"],
-    status: "Active"
-  },
-  {
-    id: 4,
-    name: "Rahul Verma",
-    role: "Delivery Rider",
-    role_id: 4,
-    mobile: "9898989898",
-    password: "staff",
-    permissions: ["delivery"],
-    status: "Active"
-  }
-];
-
 // Helper for safely retrieving and parsing JSON from localStorage to prevent crashes
 function safeJsonParse(key, defaultValue) {
   try {
@@ -387,7 +213,7 @@ export function DataProvider({ children }) {
     }
   };
 
-  const [products, setProducts] = useState(initialProducts);
+  const [products, setProducts] = useState([]);
   const [r2PublicUrl, setR2PublicUrl] = useState(() => {
     return localStorage.getItem('swastik_r2_public_url') || '';
   });
@@ -400,13 +226,9 @@ export function DataProvider({ children }) {
     }
   }, [r2PublicUrl]);
 
-  const [reviews, setReviews] = useState(() => {
-    return safeJsonParse('swastik_reviews', initialReviews);
-  });
-  const [partners, setPartners] = useState(initialPartners);
-  const [orders, setOrders] = useState(() => {
-    return safeJsonParse('swastik_orders', initialOrders);
-  });
+  const [reviews, setReviews] = useState([]);
+  const [partners, setPartners] = useState([]);
+  const [orders, setOrders] = useState([]);
 
   // Current active admin role configuration: 'customer' | 'admin' | 'manager'
   const [userRole, setUserRole] = useState(() => {
@@ -434,32 +256,15 @@ export function DataProvider({ children }) {
   });
 
   const [offers, setOffers] = useState(() => {
-    return safeJsonParse('swastik_offers', initialOffers);
+    return safeJsonParse('swastik_offers', []);
   });
 
   const [contactMessages, setContactMessages] = useState(() => {
-    return safeJsonParse('swastik_contact_messages', initialContactMessages);
+    return safeJsonParse('swastik_contact_messages', []);
   });
 
-  const [customers, setCustomers] = useState(initialCustomers);
-
-  const [staff, setStaff] = useState(() => {
-    try {
-      const saved = localStorage.getItem('swastik_staff');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const hasLegacy = parsed.some(s => s.name === 'Ramesh Sharma' || s.name === 'Anita Gupta' || parsed.length > 4);
-          if (!hasLegacy) return parsed;
-        }
-      }
-    } catch (_) {}
-    return initialStaff;
-  });
-
-  useEffect(() => {
-    localStorage.setItem('swastik_staff', JSON.stringify(staff));
-  }, [staff]);
+  const [customers, setCustomers] = useState([]);
+  const [staff, setStaff] = useState([]);
 
   // Data Deletion Requests State (User Requests for Account / Data Erasure)
   const [dataDeletionRequests, setDataDeletionRequests] = useState(() => {
@@ -752,7 +557,7 @@ export function DataProvider({ children }) {
         if (prodRes.ok) {
           const data = await prodRes.json();
   
-          if (Array.isArray(data) && data.length > 0) {
+          if (Array.isArray(data)) {
             setProducts(data);
             loadedMap.current.products = true;
             return data;
@@ -780,7 +585,7 @@ export function DataProvider({ children }) {
         const orderRes = await fetch('/api/orders');
         if (orderRes.ok) {
           const data = await orderRes.json();
-          if (Array.isArray(data) && data.length > 0) {
+          if (Array.isArray(data)) {
             setOrders(data);
             loadedMap.current.orders = true;
             return data;
@@ -797,31 +602,6 @@ export function DataProvider({ children }) {
   }, []);
 
   // 5. Customers Loader (Only fetched on Customers Manager or Checkout Customer lookup)
-  const fetchCustomers_DELETEIT = useCallback(async (force = false) => {
-    if (loadedMap.current.customers && !force) return customersRef.current;
-    if (inFlightMap.current.customers) return inFlightMap.current.customers;
-
-    inFlightMap.current.customers = (async () => {
-      try {
-        const custRes = await fetch('/api/customers');
-        if (custRes.ok) {
-          const custData = await custRes.json();
-          if (Array.isArray(custData) && custData.length > 0) {
-            setCustomers(custData);
-            loadedMap.current.customers = true;
-            return custData;
-          }
-        }
-      } catch (e) {
-        console.warn("Failed to fetch customers:", e);
-      } finally {
-        delete inFlightMap.current.customers;
-      }
-      return customersRef.current || [];
-    })();
-    return inFlightMap.current.customers;
-  }, []);
-
   const fetchCustomers = useCallback(async () => {
     if (inFlightMap.current.customers) {
       return inFlightMap.current.customers;
@@ -861,10 +641,9 @@ export function DataProvider({ children }) {
         const res = await fetch('/api/staff');
         if (res.ok) {
           const list = await res.json();
-          if (Array.isArray(list) && list.length > 0) {
+          if (Array.isArray(list)) {
             setStaff(list);
             loadedMap.current.staff = true;
-            try { localStorage.setItem('swastik_staff', JSON.stringify(list)); } catch (_) {}
             return list;
           }
         }
@@ -914,7 +693,7 @@ export function DataProvider({ children }) {
         const reviewRes = await fetch('/api/reviews');
         if (reviewRes.ok) {
           const data = await reviewRes.json();
-          if (Array.isArray(data) && data.length > 0) {
+          if (Array.isArray(data)) {
             setReviews(data);
             loadedMap.current.reviews = true;
             return data;
@@ -1342,42 +1121,18 @@ export function DataProvider({ children }) {
 
   const deleteOrder = async (id) => {
     try {
-      const target = orders.find(o => o.id === id || String(o.id) === String(id));
-      if (target) {
-        // Restore redeemed loyalty points to customer profile if applicable
-        const redeemedPts = Number(target.appliedPoints || target.pointsRedeemed || 0);
-        const custPhone = target.customerPhone || target.userMobile || target.phone;
-        if (redeemedPts > 0 && custPhone) {
-          setCustomers(prev => prev.map(c => {
-            if (c.mobile === custPhone || c.phone === custPhone) {
-              return { ...c, points: (c.points || 0) + redeemedPts };
-            }
-            return c;
-          }));
-        }
-
-        // Restore product stock if the deleted order was not cancelled
-        const isCancelled = (target.status || "").toLowerCase().includes("cancel") || target.step === -1;
-        if (!isCancelled && Array.isArray(target.items) && target.items.length > 0) {
-          setProducts(prevProducts => {
-            return prevProducts.map(p => {
-              const matchedItem = target.items.find(it => Number(it.productId || it.id) === Number(p.id));
-              if (matchedItem) {
-                const qtyToAdd = Number(matchedItem.quantity || matchedItem.qty || 1);
-                const currentStock = Number(p.stockCount !== undefined ? p.stockCount : (p.stock_count || 0));
-                return { ...p, stockCount: currentStock + qtyToAdd, stock_count: currentStock + qtyToAdd };
-              }
-              return p;
-            });
-          });
-        }
+      const response = await fetch(`/api/orders/${id}`, { method: 'DELETE' });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.error || `Order deletion failed (HTTP ${response.status})`);
       }
 
-      await fetch(`/api/orders/${id}`, { method: 'DELETE' });
       setOrders(prev => prev.filter(o => o.id !== id && String(o.id) !== String(id)));
+      await Promise.all([fetchProducts(true), fetchCustomers()]);
+      return { success: true };
     } catch (e) {
       console.error("Order deletion error:", e);
-      setOrders(prev => prev.filter(o => o.id !== id && String(o.id) !== String(id)));
+      return { success: false, error: e.message };
     }
   };
 
@@ -1684,36 +1439,52 @@ export function DataProvider({ children }) {
   // STAFF & PERMISSIONS SYSTEM
   // ------------------------------------
   const addStaff = async (s) => {
-    const newId = staff.length > 0 ? Math.max(...staff.map(x => x.id)) + 1 : 1;
-    const newRecord = { ...s, id: newId };
-    setStaff(prev => [...prev, newRecord]);
     try {
-      await fetch('/api/staff', {
+      const response = await fetch('/api/staff', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newRecord)
+        body: JSON.stringify(s)
       });
-    } catch (e) {}
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Could not create staff member');
+      setStaff(prev => [...prev.filter(item => item.id !== data.staff.id), data.staff]);
+      return { success: true, staff: data.staff };
+    } catch (e) {
+      console.error('Staff creation failed:', e);
+      return { success: false, error: e.message };
+    }
   };
 
   const updateStaff = async (id, updated) => {
-    setStaff(prev => prev.map(s => s.id === Number(id) ? { ...s, ...updated } : s));
     try {
-      await fetch(`/api/staff/${id}`, {
+      const response = await fetch(`/api/staff/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated)
       });
-    } catch (e) {}
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Could not update staff member');
+      setStaff(prev => prev.map(item => item.id === Number(id) ? data.staff : item));
+      return { success: true, staff: data.staff };
+    } catch (e) {
+      console.error('Staff update failed:', e);
+      return { success: false, error: e.message };
+    }
   };
 
   const deleteStaff = async (id) => {
-    setStaff(prev => prev.filter(s => s.id !== Number(id)));
     try {
-      await fetch(`/api/staff/${id}`, {
+      const response = await fetch(`/api/staff/${id}`, {
         method: 'DELETE'
       });
-    } catch (e) {}
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Could not delete staff member');
+      setStaff(prev => prev.filter(item => item.id !== Number(id)));
+      return { success: true };
+    } catch (e) {
+      console.error('Staff deletion failed:', e);
+      return { success: false, error: e.message };
+    }
   };
 
   const changeStaffPassword = async (mobile, oldPassword, newPassword) => {
@@ -1724,7 +1495,6 @@ export function DataProvider({ children }) {
         body: JSON.stringify({ mobile, oldPassword, newPassword })
       });
       if (res.ok) {
-        setStaff(prev => prev.map(s => s.mobile === mobile ? { ...s, password: newPassword } : s));
         return { success: true };
       } else {
         const text = await res.text();
@@ -1736,9 +1506,8 @@ export function DataProvider({ children }) {
         return { success: false, error: errMsg };
       }
     } catch (e) {
-      console.warn("Backend update bypassed, local offline persistent change instead:", e);
-      setStaff(prev => prev.map(s => s.mobile === mobile ? { ...s, password: newPassword } : s));
-      return { success: true, warning: 'Simulated change offline-first fallback' };
+      console.warn("Password update request failed:", e);
+      return { success: false, error: 'Could not reach the security server' };
     }
   };
 

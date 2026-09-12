@@ -12,8 +12,7 @@ import {
   HardDrive, 
   CheckCircle2, 
   AlertTriangle, 
-  FileJson, 
-  Lock 
+  FileJson
 } from 'lucide-react';
 import R2ImageUploader from './R2ImageUploader';
 
@@ -23,7 +22,6 @@ export default function SecurityManager({ userRole, setUserRole }) {
 
   // Database Backup & Restore States
   const [isDownloading, setIsDownloading] = useState(false);
-  const [restorePassword, setRestorePassword] = useState('');
   const [restoreJsonFile, setRestoreJsonFile] = useState(null);
   const [restoreStatus, setRestoreStatus] = useState({ success: null, message: '' });
   const [isRestoring, setIsRestoring] = useState(false);
@@ -69,11 +67,6 @@ export default function SecurityManager({ userRole, setUserRole }) {
       return;
     }
 
-    if (!restorePassword) {
-      setRestoreStatus({ success: false, message: isHindi ? "सुरक्षा के लिए एडमिन पासवर्ड दर्ज करें!" : "Admin password required for restore authorization." });
-      return;
-    }
-
     setIsRestoring(true);
     try {
       const fileText = await restoreJsonFile.text();
@@ -89,10 +82,7 @@ export default function SecurityManager({ userRole, setUserRole }) {
       const res = await fetch('/api/database/restore', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          password: restorePassword.trim(),
-          backupData
-        })
+        body: JSON.stringify({ backupData })
       });
 
       const responseData = await res.json();
@@ -179,8 +169,7 @@ export default function SecurityManager({ userRole, setUserRole }) {
 
   // OTP Form State
   const [otpPhone, setOtpPhone] = useState('');
-  const [latestOtpCode, setLatestOtpCode] = useState('');
-  const [otpSimLogs, setOtpSimLogs] = useState([]);
+  const [otpLogs, setOtpLogs] = useState([]);
   const [otpSmsSent, setOtpSmsSent] = useState(false);
 
   const triggerOtpSend = async () => {
@@ -195,20 +184,21 @@ export default function SecurityManager({ userRole, setUserRole }) {
         setOtpSmsSent(true);
         const timestamp = new Date().toLocaleTimeString();
         const newLog = `[${timestamp}] Outbound WhatsApp template (reference_no) dispatched to ${otpPhone}. Waiting for user verification.`;
-        setOtpSimLogs(prev => [newLog, ...prev]);
+        setOtpLogs(prev => [newLog, ...prev]);
       } else {
-        alert("WA Gateway refused connection: try inputting a valid 10-digit number");
+        const payload = await res.json().catch(() => ({}));
+        alert(payload.error || "WA Gateway refused the OTP request.");
       }
     } catch(e) {
       console.error(e);
-      setOtpSmsSent(true);
       const timestamp = new Date().toLocaleTimeString();
-      const newLog = `[${timestamp}] Dispatched security OTP to ${otpPhone}.`;
-      setOtpSimLogs(prev => [newLog, ...prev]);
+      const newLog = `[${timestamp}] OTP request failed: ${e.message || 'network error'}`;
+      setOtpSmsSent(false);
+      setOtpLogs(prev => [newLog, ...prev]);
     }
   };
 
-  const verifySimulatedCode = async (enteredCode) => {
+  const verifyOtpCode = async (enteredCode) => {
     const timestamp = new Date().toLocaleTimeString();
     try {
       const res = await fetch('/api/auth/otp/verify', {
@@ -217,25 +207,16 @@ export default function SecurityManager({ userRole, setUserRole }) {
         body: JSON.stringify({ phoneNumber: otpPhone, code: enteredCode })
       });
       if (res.ok) {
-        setOtpSimLogs(prev => [`[${timestamp}] ✓ Auth SUCCESS via Gin GORM for ${otpPhone}`, ...prev]);
-        alert(`OTP Verification successful across backend! Access granted.`);
+        setOtpLogs(prev => [`[${timestamp}] ✓ OTP verified for ${otpPhone}`, ...prev]);
+        alert('OTP verification succeeded.');
         setOtpSmsSent(false);
-        setLatestOtpCode('');
         setOtpPhone('');
       } else {
-        setOtpSimLogs(prev => [`[${timestamp}] ❌ Auth FAILURE: invalid code "${enteredCode}" in Gin session`, ...prev]);
+        setOtpLogs(prev => [`[${timestamp}] ❌ OTP verification rejected for ${otpPhone}`, ...prev]);
       }
     } catch (e) {
       console.error(e);
-      if (enteredCode === latestOtpCode) {
-        setOtpSimLogs(prev => [`[${timestamp}] ✓ Verification SUCCESS (Local Engine) for ${otpPhone}`, ...prev]);
-        alert(`OTP Verification successful! Access granted.`);
-        setOtpSmsSent(false);
-        setLatestOtpCode('');
-        setOtpPhone('');
-      } else {
-        setOtpSimLogs(prev => [`[${timestamp}] ❌ Verification FAILURE (Local Engine): invalid OTP code "${enteredCode}"`, ...prev]);
-      }
+      setOtpLogs(prev => [`[${timestamp}] ❌ OTP verification request failed: ${e.message || 'network error'}`, ...prev]);
     }
   };
 
@@ -247,7 +228,7 @@ export default function SecurityManager({ userRole, setUserRole }) {
           <span>{isHindi ? "व्हाट्सएप ओटीपी और सुराक्षा" : "Identity Gateway & WA Gateway Console"}</span>
         </h2>
         <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">
-          {isHindi ? "ओटीपी जनरेटर की स्थिति देखें" : "Audit OTP handshakes, simulated gateways, and role-based matrix settings"}
+          {isHindi ? "ओटीपी जनरेटर की स्थिति देखें" : "Audit OTP handshakes and role-based matrix settings"}
         </p>
       </div>
 
@@ -290,7 +271,7 @@ export default function SecurityManager({ userRole, setUserRole }) {
         <div className="bg-slate-900 border border-white/5 rounded-3xl p-5 space-y-4">
           <span className="text-[10px] font-black uppercase tracking-widest text-cyan-300 font-mono block flex items-center gap-1.5">
             <Smartphone className="h-4 w-4 text-cyan-300" />
-            <span>WA API OTP Handshake Sim</span>
+            <span>WA API OTP Handshake</span>
           </span>
 
           <div className="space-y-3.5">
@@ -319,14 +300,14 @@ export default function SecurityManager({ userRole, setUserRole }) {
                 <div className="flex gap-2">
                   <input 
                     type="text" 
-                    id="entered-sim-otp"
-                    placeholder="Enter 6-digit code..."
+                    id="entered-otp"
+                    placeholder="Enter 4-digit code..."
                     className="bg-slate-950 border border-pink-400/25 px-3 py-2 rounded-xl text-xs font-semibold uppercase tracking-wider outline-none text-white w-full"
                   />
                   <button 
                     onClick={() => {
-                      const el = document.getElementById('entered-sim-otp');
-                      if (el) verifySimulatedCode(el.value);
+                      const el = document.getElementById('entered-otp');
+                      if (el) verifyOtpCode(el.value);
                     }}
                     className="bg-pink-500 text-white px-4 py-2 text-[10px] uppercase font-black tracking-wider rounded-xl shrink-0 transition-all active:scale-95"
                   >
@@ -338,12 +319,12 @@ export default function SecurityManager({ userRole, setUserRole }) {
 
             {/* Handshake Logs terminal */}
             <div className="space-y-1 text-xs">
-              <span className="text-[8px] font-black tracking-widest text-slate-400 uppercase">Gateway Sim Logger Output:</span>
+              <span className="text-[8px] font-black tracking-widest text-slate-400 uppercase">Gateway Logger Output:</span>
               <div className="bg-slate-950 border border-white/5 rounded-2xl p-3 font-mono text-[9px] text-zinc-400 h-28 overflow-y-auto space-y-1">
-                {otpSimLogs.length === 0 ? (
+                {otpLogs.length === 0 ? (
                   <span className="text-zinc-600 block italic">--- Ready to initiate handshakes ---</span>
                 ) : (
-                  otpSimLogs.map((logStr, idx) => (
+                  otpLogs.map((logStr, idx) => (
                     <p key={idx} className={logStr.includes('✓') ? 'text-emerald-400' : logStr.includes('❌') ? 'text-rose-400' : 'text-zinc-400'}>{logStr}</p>
                   ))
                 )}
@@ -504,12 +485,12 @@ export default function SecurityManager({ userRole, setUserRole }) {
               <span>{isHindi ? "फ़ाइल से डेटाबेस रीस्टोर करें" : "Restore Database from Backup File"}</span>
             </h4>
             <p className="text-[10px] text-slate-400">
-              {isHindi ? "पहले से डाउनलोड किए गए बैकअप JSON फ़ाइल को चुनकर डेटाबेस रीस्टोर करें। एडमिन सुरक्षा पासवर्ड अनिवार्य है।" : "Select a previously downloaded .json backup file. Authorize with admin security password to replace or restore data."}
+              {isHindi ? "पहले से डाउनलोड की गई बैकअप JSON फ़ाइल चुनें। केवल अधिकृत एडमिन सत्र डेटाबेस रीस्टोर कर सकता है।" : "Select a previously downloaded .json backup file. Only an authorized administrator session can restore the database."}
             </p>
           </div>
 
           <form onSubmit={handleRestoreSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <div className="space-y-1.5">
                 <label className="text-[9px] uppercase tracking-widest text-slate-400 block font-black">
                   {isHindi ? "बैकअप JSON फ़ाइल *" : "Select Backup JSON File *"}
@@ -525,22 +506,6 @@ export default function SecurityManager({ userRole, setUserRole }) {
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[9px] uppercase tracking-widest text-slate-400 block font-black">
-                  {isHindi ? "एडमिन सुरक्षा पासवर्ड *" : "Admin Security Password *"}
-                </label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    required
-                    placeholder={isHindi ? "पासवर्ड दर्ज करें (उदा. admin123)..." : "Enter admin password (e.g. admin123)..."}
-                    value={restorePassword}
-                    onChange={(e) => setRestorePassword(e.target.value)}
-                    className="w-full bg-slate-900 border border-white/15 px-3.5 py-2.5 rounded-xl outline-none text-white text-xs font-mono placeholder:text-slate-600"
-                  />
-                  <Lock className="h-3.5 w-3.5 text-slate-500 absolute right-3 top-3" />
-                </div>
-              </div>
             </div>
 
             {restoreStatus.message && (

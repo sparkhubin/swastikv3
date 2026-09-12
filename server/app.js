@@ -4,13 +4,7 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { db } from "../database/db.js";
 import cors from "cors";
-import { 
-  uploadsDir, 
-  fallbackProducts, 
-  fallbackPartners, 
-  fallbackReviews, 
-  fallbackOrders 
-} from "./utils.js";
+import { uploadsDir } from "./utils.js";
 
 // Route imports
 import productsRouter from "./routes/products.js";
@@ -50,7 +44,12 @@ export async function createServer() {
       res.setHeader("Cache-Control", "public, max-age=2592000, immutable");
     }
   }));
-  app.use(express.json());
+  app.use(express.json({
+    limit: "1mb",
+    verify: (req, _res, buffer) => {
+      req.rawBody = Buffer.from(buffer);
+    }
+  }));
 
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -73,14 +72,9 @@ export async function createServer() {
     res.json({ status: "ok" });
   });
 
-  // --- Initialize and Seed SQL Database ---
+  // --- Initialize SQL Database ---
   try {
     await db.init();
-    // Seeding commented out to prevent automatic overrides on production
-    await db.seedProductsIfEmpty(fallbackProducts);
-    await db.seedPartnersIfEmpty(fallbackPartners);
-    await db.seedReviewsIfEmpty(fallbackReviews);
-    await db.seedOrdersIfEmpty(fallbackOrders);
     console.log("🚀 SQL Database system fully initialized!");
   } catch (err) {
     console.error("❌ SQL Database Initialization Failed:", err.message);

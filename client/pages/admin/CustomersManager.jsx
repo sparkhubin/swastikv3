@@ -649,97 +649,15 @@ export default function CustomersManager() {
   const [var2, setVar2] = useState('');
   const [var3, setVar3] = useState('');
 
-  // CLI log output simulated
+  // Provider-backed campaign results
   const [payloadLogs, setPayloadLogs] = useState([]);
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
-  // Automatic Birthday & Anniversary Autopilot greetings state
-  const [autoGreetings, setAutoGreetings] = useState([]);
-  const [autoCampaignLogs, setAutoCampaignLogs] = useState([]);
-  const hasCheckedToday = React.useRef(false);
-
-  React.useEffect(() => {
-    if (hasCheckedToday.current || !customers || customers.length === 0) return;
-    hasCheckedToday.current = true;
-
-    const today = new Date();
-    const todayMonth = today.getMonth() + 1;
-    const todayDay = today.getDate();
-
-    const triggered = [];
-    const logs = [];
-
-    customers.forEach(c => {
-      let isBirthday = false;
-      let isAnniversary = false;
-
-      if (c.dob) {
-        const dobDate = new Date(c.dob);
-        if (!isNaN(dobDate.getTime())) {
-          isBirthday = (dobDate.getMonth() + 1) === todayMonth && dobDate.getDate() === todayDay;
-        }
-      }
-
-      if (c.anniversary) {
-        const annivDate = new Date(c.anniversary);
-        if (!isNaN(annivDate.getTime())) {
-          isAnniversary = (annivDate.getMonth() + 1) === todayMonth && annivDate.getDate() === todayDay;
-        }
-      }
-
-      if (isBirthday || isAnniversary) {
-        triggered.push({
-          customer: c,
-          type: isBirthday ? 'Birthday' : 'Anniversary',
-          firedAt: new Date().toLocaleTimeString(),
-        });
-
-        const couponCode = isBirthday ? 'PRIMEBDAY20' : 'LOVEANNIVERSARY';
-        const discountText = isBirthday ? '20% OFF' : 'Flat ₹150 OFF';
-        const msgText = isBirthday 
-          ? `Hi ${c.name}! 🎉 Swastik Supermarket wishes you a very Happy Birthday! Here is your exclusive 20% discount coupon: ${couponCode} 🎂 Valid for today!`
-          : `Hi ${c.name}! 💍 Swastik Supermarket wishes you a blissful Marriage Anniversary! Enjoy a flat ₹150 off with coupon: ${couponCode} 💕`;
-
-        const outboundPayload = {
-          messaging_product: "whatsapp",
-          to: c.phone,
-          type: "template",
-          template: {
-            name: isBirthday ? "birthday_congratulations_v2" : "marriage_anniversary_greeting",
-            language: { code: "en_US" },
-            components: [
-              {
-                type: "body",
-                parameters: [
-                  { type: "text", text: c.name },
-                  { type: "text", text: discountText },
-                  { type: "text", text: couponCode }
-                ]
-              }
-            ]
-          },
-          simulated_delivery: {
-            destination: `${c.name} (${c.phone})`,
-            api_endpoint: "https://graph.facebook.com/v16.0/10992384/messages",
-            status: "200 ACCEPTED",
-            message_id: `wamid.AUTO_${isBirthday ? 'BDAY' : 'ANNIV'}_${c.id}_${Date.now()}`,
-            status_hook: "https://status.meta-services.com/delivery/swastik-kirana-api",
-            parsed_text: msgText,
-            automatic_trigger: true
-          }
-        };
-
-        logs.push(outboundPayload);
-      }
-    });
-
-    if (triggered.length > 0) {
-      setAutoGreetings(triggered);
-      setAutoCampaignLogs(logs);
-      setPayloadLogs(prev => [...logs, ...prev]);
-    }
-  }, [customers]);
+  // Automatic outbound messaging is intentionally disabled until a server-side,
+  // auditable scheduler exists. Rendering this page must never claim messages sent.
+  const autoGreetings = [];
+  const autoCampaignLogs = [];
 
   const triggerToast = (msg) => {
     setToastMessage(msg);
@@ -907,8 +825,8 @@ export default function CustomersManager() {
 
   const currentTemplate = templates[activeTemplateId];
 
-  // Trigger Broadcast dispatch simulation
-  const handleLaunchCampaign = () => {
+  // Dispatch a campaign through the authenticated server/provider integration.
+  const handleLaunchCampaign = async () => {
     setIsBroadcasting(true);
     setPayloadLogs([]);
 
@@ -931,49 +849,42 @@ export default function CustomersManager() {
       return;
     }
 
-    recipients.forEach((rcp, idx) => {
-      setTimeout(() => {
-        let textParsed = currentTemplate.text
-          .replace('{{1}}', var1 || rcp.name)
-          .replace('{{2}}', var2 || '100')
-          .replace('{{3}}', var3 || 'Today Only');
+    try {
+      const response = await fetch('/api/whatsapp/bulk-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipients: recipients.map(rcp => ({
+            name: rcp.name,
+            phone: rcp.phone,
+            params: [var1 || rcp.name, var2, var3]
+          })),
+          templateName: activeTemplateId,
+          languageCode: 'en_US',
+          fallbackMessage: currentTemplate.text
+        })
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || `Broadcast failed (HTTP ${response.status})`);
 
-        const outboundPayload = {
-          messaging_product: "whatsapp",
-          to: rcp.phone,
-          type: "template",
-          template: {
-            name: activeTemplateId,
-            language: { code: "en_US" },
-            components: [
-              {
-                type: "body",
-                parameters: [
-                  { type: "text", text: var1 || rcp.name },
-                  { type: "text", text: var2 || "100" },
-                  { type: "text", text: var3 || "Today" }
-                ]
-              }
-            ]
-          },
-          simulated_delivery: {
-            destination: `${rcp.name} (${rcp.phone})`,
-            api_endpoint: "https://graph.facebook.com/v16.0/10992384/messages",
-            status: "200 ACCEPTED",
-            message_id: `wamid.HBgLOTE5ODExMDMyNTA1FQIAERgSRTk0REMyNTQzNzc4NjZFMzU0AA==`,
-            status_hook: "https://status.meta-services.com/delivery/swastik-kirana-api",
-            parsed_text: textParsed
-          }
-        };
-
-        setPayloadLogs(prev => [...prev, outboundPayload]);
-
-        if (idx === recipients.length - 1) {
-          setIsBroadcasting(false);
-          triggerToast(`✓ Meta Business WhatsApp broadcast of ${recipients.length} messages completed!`);
+      setPayloadLogs((result.results || []).map(item => ({
+        dispatch_result: {
+          destination: `${item.name || 'Customer'} (${item.phone || ''})`,
+          status: item.status || 'FAILED',
+          provider: item.provider || null,
+          message_id: item.id || null,
+          error: item.error || null
         }
-      }, (idx + 1) * 850);
-    });
+      })));
+      triggerToast(result.failCount
+        ? `${result.successCount || 0} sent; ${result.failCount} failed.`
+        : `✓ ${result.successCount || 0} WhatsApp messages dispatched.`);
+    } catch (error) {
+      setPayloadLogs([]);
+      triggerToast(error.message || 'WhatsApp broadcast failed.');
+    } finally {
+      setIsBroadcasting(false);
+    }
   };
 
   const cleanPhone = (ph) => {
@@ -1862,8 +1773,8 @@ export default function CustomersManager() {
                   {payloadLogs.map((log, idx) => (
                     <div key={idx} className="bg-slate-900 border border-white/5 rounded-xl p-3.5 space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-black text-white uppercase tracking-wider">{log.simulated_delivery.destination}</span>
-                        <span className="text-[9px] font-black font-mono text-emerald-400">{log.simulated_delivery.status}</span>
+                        <span className="text-[10px] font-black text-white uppercase tracking-wider">{log.dispatch_result.destination}</span>
+                        <span className={`text-[9px] font-black font-mono ${log.dispatch_result.status === 'SUCCESS' ? 'text-emerald-400' : 'text-red-400'}`}>{log.dispatch_result.status}</span>
                       </div>
                       
                       <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 font-mono text-[10px] text-pink-300 leading-relaxed overflow-x-auto">
@@ -2102,13 +2013,13 @@ export default function CustomersManager() {
                 <span className="text-[9px] text-amber-400 font-black uppercase tracking-wider block">Autopilot Status</span>
                 <span className="text-emerald-400 flex items-center gap-1.5 uppercase font-black text-xs">
                   <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping inline-block"></span>
-                  Active & Operational
+                  Disabled (scheduler not configured)
                 </span>
               </div>
               <div className="bg-slate-950/60 p-4 rounded-2xl border border-white/5 space-y-1">
-                <span className="text-[9px] text-amber-400 font-black uppercase tracking-wider block">Today's Date (Simulation Context)</span>
+                <span className="text-[9px] text-amber-400 font-black uppercase tracking-wider block">Today's Date</span>
                 <span className="text-white font-mono font-black text-xs">
-                  July 14, 2026 (Swastik system)
+                  {new Date().toLocaleDateString()}
                 </span>
               </div>
               <div className="bg-slate-950/60 p-4 rounded-2xl border border-white/5 space-y-1">
@@ -2127,7 +2038,7 @@ export default function CustomersManager() {
               <div className="flex items-center justify-between border-b border-white/10 pb-3">
                 <div>
                   <h4 className="text-sm font-black text-white uppercase tracking-wider">Today's Celebrations</h4>
-                  <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mt-0.5">Matching current system date: July 14</p>
+                  <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mt-0.5">Automatic dispatch is not configured</p>
                 </div>
                 <span className="text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded font-black tracking-widest font-mono uppercase">
                   Daily Scan
@@ -2137,7 +2048,7 @@ export default function CustomersManager() {
               {autoGreetings.length === 0 ? (
                 <div className="text-center py-12 text-slate-500 italic space-y-1">
                   <p>No customer birthdays or wedding anniversaries fall on today's date.</p>
-                  <p className="text-[10px] text-slate-600 font-sans">Modify customer profiles to set DOB/Anniversary to today (July 14) to see autopilot trigger.</p>
+                  <p className="text-[10px] text-slate-600 font-sans">Automatic dispatch remains disabled until a server-side scheduler is configured.</p>
                 </div>
               ) : (
                 <div className="divide-y divide-white/5 space-y-3">
