@@ -101,37 +101,45 @@ class ErrorBoundary extends Component {
   }
 }
 
-// Intercept fetch requests in local / Capacitor environments to route API calls to a live backend URL
+// Route API calls to the configured backend and attach the active staff session.
 const rawApiUrl = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_API_URL : undefined;
-if (rawApiUrl && (rawApiUrl.startsWith('http://') || rawApiUrl.startsWith('https://'))) {
-  const apiUrl = rawApiUrl.endsWith('/') ? rawApiUrl.slice(0, -1) : rawApiUrl;
-  const originalFetch = window.fetch;
-  const customFetch = function (input, init) {
-    let url = input;
-    if (typeof url === 'string' && url.startsWith('/api/')) {
-      url = `${apiUrl}${url}`;
-    } else if (url instanceof URL && url.pathname.startsWith('/api/')) {
-      url = new URL(`${apiUrl}${url.pathname}${url.search}`);
-    } else if (url && typeof url === 'object' && 'url' in url && typeof url.url === 'string' && url.url.startsWith('/api/')) {
-      const newUrl = `${apiUrl}${url.url}`;
-      url = new Request(newUrl, url);
-    }
-    return originalFetch(url, init);
-  };
+const apiUrl = rawApiUrl && (rawApiUrl.startsWith('http://') || rawApiUrl.startsWith('https://'))
+  ? rawApiUrl.replace(/\/$/, '')
+  : '';
+const originalFetch = window.fetch.bind(window);
+const customFetch = function (input, init = {}) {
+  let url = input;
+  let isApiRequest = false;
 
-  try {
-    Object.defineProperty(window, 'fetch', {
-      value: customFetch,
-      configurable: true,
-      writable: true,
-    });
-  } catch (e) {
-    try {
-      window.fetch = customFetch;
-    } catch (err) {
-      console.warn("Could not intercept window.fetch globally:", err);
+  if (typeof url === 'string' && url.startsWith('/api/')) {
+    isApiRequest = true;
+    if (apiUrl) url = `${apiUrl}${url}`;
+  } else if (url instanceof URL && url.pathname.startsWith('/api/')) {
+    isApiRequest = true;
+    if (apiUrl) url = new URL(`${apiUrl}${url.pathname}${url.search}`);
+  } else if (url instanceof Request && new URL(url.url, window.location.origin).pathname.startsWith('/api/')) {
+    isApiRequest = true;
+    if (apiUrl && url.url.startsWith(window.location.origin)) {
+      url = new Request(`${apiUrl}${new URL(url.url).pathname}${new URL(url.url).search}`, url);
     }
   }
+
+  const headers = new Headers(init.headers || (url instanceof Request ? url.headers : undefined));
+  const token = sessionStorage.getItem('swastik_staff_token');
+  if (isApiRequest && token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  return originalFetch(url, { ...init, headers });
+};
+
+try {
+  Object.defineProperty(window, 'fetch', {
+    value: customFetch,
+    configurable: true,
+    writable: true,
+  });
+} catch (e) {
+  console.warn("Could not install the authenticated API fetch wrapper:", e);
 }
 
 console.log("🚀 [Client main.jsx]: Top-level file execution started. If you see this, the Javascript bundle is downloading and parsing successfully!");

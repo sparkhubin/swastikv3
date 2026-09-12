@@ -1,5 +1,6 @@
 import express from "express";
 import { db } from "../../database/db.js";
+import { requirePermission, requireStaffAuth } from "../auth.js";
 
 const router = express.Router();
 
@@ -130,7 +131,7 @@ router.get("/notifications", async (req, res) => {
 });
 
 // Create a notification manually or system dispatch
-router.post("/notifications", async (req, res) => {
+router.post("/notifications", requireStaffAuth, requirePermission("settings"), async (req, res) => {
   const { 
     recipientRole = "all", 
     recipientPhone = "", 

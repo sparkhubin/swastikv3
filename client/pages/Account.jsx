@@ -701,7 +701,7 @@ export default function Account({ onViewChange }) {
   // Staff Session State & Sync Listener
   const [activeStaffSession, setActiveStaffSession] = useState(() => {
     try {
-      const saved = localStorage.getItem('swastik_logged_in_staff');
+      const saved = sessionStorage.getItem('swastik_logged_in_staff');
       return saved ? JSON.parse(saved) : null;
     } catch (e) {
       return null;
@@ -711,7 +711,7 @@ export default function Account({ onViewChange }) {
   useEffect(() => {
     const handleSync = () => {
       try {
-        const saved = localStorage.getItem('swastik_logged_in_staff');
+        const saved = sessionStorage.getItem('swastik_logged_in_staff');
         setActiveStaffSession(saved ? JSON.parse(saved) : null);
       } catch (e) {
         setActiveStaffSession(null);
@@ -726,7 +726,9 @@ export default function Account({ onViewChange }) {
   }, []);
 
   const handleExitStaffSession = () => {
-    localStorage.removeItem('swastik_logged_in_staff');
+    fetch('/api/auth/staff/logout', { method: 'POST' }).catch(() => {});
+    sessionStorage.removeItem('swastik_logged_in_staff');
+    sessionStorage.removeItem('swastik_staff_token');
     setActiveStaffSession(null);
     window.dispatchEvent(new Event('staff_session_change'));
     window.dispatchEvent(new Event('storage'));
@@ -770,8 +772,11 @@ export default function Account({ onViewChange }) {
 
   // Fetch Payment Gateway configurations dynamically when membership modal opens
   useEffect(() => {
-    fetch('/api/payment/settings')
-      .then(res => res.json())
+    fetch('/api/config')
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then(data => {
         const rzpEnabled = data.razorpayEnabled !== false;
         const cfEnabled = data.enabled !== false;
@@ -810,7 +815,7 @@ export default function Account({ onViewChange }) {
     }
     const defaultName = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEFAULT_USER_NAME) || "Guest User";
     const defaultEmail = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEFAULT_USER_EMAIL) || "user@example.com";
-    const defaultPhone = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEFAULT_USER_PHONE) || "+91 98765 43210";
+    const defaultPhone = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEFAULT_USER_PHONE) || "";
     const defaultAddr = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEFAULT_USER_ADDRESS) || "";
 
     return parsed ? {
@@ -1152,7 +1157,6 @@ export default function Account({ onViewChange }) {
   // --- 3. AUTH LOGICS ---
   const verifyServerOtp = async (phone, enteredCode) => {
     const cleanCode = (enteredCode || '').trim();
-    if (cleanCode === '8765') return true;
     try {
       const res = await fetch('/api/auth/otp/verify', {
         method: 'POST',
@@ -1162,7 +1166,7 @@ export default function Account({ onViewChange }) {
       const data = await res.json();
       return res.ok && data.status === 'verified';
     } catch (e) {
-      return cleanCode === '8765';
+      return false;
     }
   };
 
@@ -1656,7 +1660,7 @@ export default function Account({ onViewChange }) {
     }
   };
 
-  const handlePasswordLogin = (e) => {
+  const handlePasswordLogin = async (e) => {
     e.preventDefault();
     if (!mobileNumber || mobileNumber.length < 10) {
       setAuthError(isHindi ? "कृपया वैध 10 अंकों का मोबाइल दर्ज करें।" : "Please enter valid 10-digit mobile number.");
@@ -1670,37 +1674,28 @@ export default function Account({ onViewChange }) {
     const clean = (ph) => ph ? ph.replace(/[^0-9]/g, "") : "";
     const targetClean = clean(mobileNumber);
 
-    // 1. Check if login credentials match a registered Staff / Delivery Partner account
-    const matchedStaff = (staff || []).find(s => clean(s.mobile).endsWith(targetClean.slice(-10)));
-    if (matchedStaff) {
-      if (matchedStaff.status === 'disabled') {
-        setAuthError(isHindi ? "यह कर्मचारी खाता एडमिन द्वारा निष्क्रिय कर दिया गया है।" : "This staff account has been disabled by Administrator.");
-        setAuthSuccess('');
+    // Staff credentials are always verified by the server.
+    try {
+      const staffResponse = await fetch('/api/auth/staff/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mobile: mobileNumber, password })
+      });
+      if (staffResponse.ok) {
+        const session = await staffResponse.json();
+        sessionStorage.setItem('swastik_staff_token', session.token);
+        sessionStorage.setItem('swastik_logged_in_staff', JSON.stringify(session.user));
+        const perms = session.user.permissions || [];
+        const isSuper = session.user.isMasterAdmin || session.user.role_code === 'admin';
+        const isDeliveryOnly = perms.length === 1 && perms[0] === 'delivery';
+        if (setUserRole) setUserRole(isDeliveryOnly ? 'delivery' : (isSuper ? 'admin' : 'manager'));
+        setActiveStaffSession(session.user);
+        setAuthSuccess(isHindi ? `लॉगिन सफल (${session.user.name})!` : `Staff login successful (${session.user.name}).`);
+        setTimeout(() => onViewChange?.('admin'), 500);
         return;
       }
-      if (matchedStaff.password && matchedStaff.password.trim() !== password.trim() && password.trim() !== 'admin123') {
-        setAuthError(isHindi ? "गलत कर्मचारी पासवर्ड! कृपया सही पासवर्ड दर्ज करें।" : "Incorrect staff password! Please check your credentials.");
-        setAuthSuccess('');
-        return;
-      }
-
-      // Save Staff session & set active role
-      localStorage.setItem('swastik_logged_in_staff', JSON.stringify(matchedStaff));
-      const perms = matchedStaff.permissions || [];
-      const isSuper = matchedStaff.id === 1 || matchedStaff.mobile === '9999999999' || perms.includes('staff');
-      const isDeliveryOnly = perms.length === 1 && perms[0] === 'delivery';
-      const newRole = isDeliveryOnly ? 'delivery' : (isSuper ? 'admin' : 'manager');
-      if (setUserRole) setUserRole(newRole);
-
-      setAuthSuccess(isHindi ? `लॉगिन सफल (${matchedStaff.name})! एडमिन / डिलीवरी डैशबोर्ड पर रीडायरेक्ट हो रहे हैं...` : `Staff Login Success (${matchedStaff.name})! Redirecting to Workspace...`);
-      setAuthError('');
-
-      setTimeout(() => {
-        setIsLoggedIn(true);
-        setAuthSuccess('');
-        if (onViewChange) onViewChange('admin');
-      }, 1000);
-      return;
+    } catch (error) {
+      console.error('Staff authentication request failed:', error);
     }
 
     // 2. Regular Customer Login
@@ -1716,7 +1711,7 @@ export default function Account({ onViewChange }) {
     }
 
     if (existingCust.password && existingCust.password.trim().length > 0) {
-      if (existingCust.password.trim() !== password.trim() && password.trim() !== 'admin123') {
+      if (existingCust.password.trim() !== password.trim()) {
         setAuthError(isHindi 
           ? "गलत पासवर्ड! कृपया सही पासवर्ड दर्ज करें या ओटीपी के माध्यम से लॉग इन करें।" 
           : "Incorrect password! Please enter the correct password or login via OTP.");
@@ -1772,37 +1767,10 @@ export default function Account({ onViewChange }) {
       return;
     }
     
-    try {
-      const res = await fetch('/api/auth/change-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mobile: mobileNumber,
-          oldPassword: "BYPASS_RESET",
-          newPassword: password
-        })
-      });
-      if (res.ok) {
-        setAuthSuccess(isHindi ? "पासवर्ड रीसेट सफल! अब पासवर्ड लॉगिन चुनें।" : "Password altered! Proceeding to standard authentication.");
-        setAuthError('');
-        setTimeout(() => {
-          setAuthMode('login');
-          setAuthType('password');
-          setAuthSuccess('');
-        }, 1500);
-      } else {
-        throw new Error('API change password failed');
-      }
-    } catch (err) {
-      console.warn("Falling back to client password alteration simulation:", err);
-      setAuthSuccess(isHindi ? "पासवर्ड रीसेट सफल! अब पासवर्ड लॉगिन चुनें।" : "Password altered! Proceeding to standard authentication.");
-      setAuthError('');
-      setTimeout(() => {
-        setAuthMode('login');
-        setAuthType('password');
-        setAuthSuccess('');
-      }, 1500);
-    }
+    setAuthError(isHindi
+      ? "स्वयं-सेवा पासवर्ड रीसेट अभी उपलब्ध नहीं है। कृपया व्यवस्थापक से संपर्क करें।"
+      : "Self-service password reset is not available. Please contact an administrator.");
+    setAuthSuccess('');
   };
 
   // --- 4. PROFILE LOGICS ---
@@ -2280,7 +2248,9 @@ export default function Account({ onViewChange }) {
               onClick={() => {
                 setIsLoggedIn(false);
                 localStorage.removeItem('swastik_is_logged_in');
-                localStorage.removeItem('swastik_logged_in_staff');
+                fetch('/api/auth/staff/logout', { method: 'POST' }).catch(() => {});
+                sessionStorage.removeItem('swastik_logged_in_staff');
+                sessionStorage.removeItem('swastik_staff_token');
                 setActiveStaffSession(null);
                 window.dispatchEvent(new Event('staff_session_change'));
                 window.dispatchEvent(new Event('storage'));

@@ -16,7 +16,7 @@ const isMySQLConfigured = process.env.DB_TYPE === "mysql" || !!process.env.MYSQL
 export const db = {
   isPostgres,
   isMySQL: false,
-  isDualSyncEnabled: process.env.MYSQL_SYNC_ENABLED === "true" || true, // Sync to backup SQLite by default if secondary exists
+  isDualSyncEnabled: process.env.MYSQL_SYNC_ENABLED === "true",
 
   async init() {
     // 1. Check if MySQL is configured
@@ -460,91 +460,6 @@ export const db = {
     // Auto-migrate schema columns across all active engines
     await this.migrateSchema();
 
-    // Seed default roles if not present
-    try {
-      const roles = await this.query("SELECT * FROM role");
-      const existingNames = new Set((roles || []).map(r => r.name.toLowerCase()));
-      const defaultRoles = [
-        { id: 1, name: "customer", description: "Standard Customer Account" },
-        { id: 2, name: "admin", description: "Store Super Admin" },
-        { id: 3, name: "manager", description: "Inventory & Stock Incharge" },
-        { id: 4, name: "rider", description: "Delivery Partner / Rider" },
-        { id: 5, name: "support", description: "Customer Support & Orders Desk" }
-      ];
-
-      for (const r of defaultRoles) {
-        if (!existingNames.has(r.name) && !(r.name === "customer" && existingNames.has("user"))) {
-          await this.execute("INSERT INTO role (id, name, description) VALUES (?, ?, ?)", [r.id, r.name, r.description]);
-        }
-      }
-    } catch (e) {}
-
-    // Seed default payment settings if not present
-    try {
-      const pSet = await this.query("SELECT * FROM payment_settings");
-      if (pSet.length === 0) {
-        console.log("🌱 Seeding default payment settings into Database...");
-        await this.execute(
-          "INSERT INTO payment_settings (id, enabled, app_id, secret_key, environment) VALUES (?, ?, ?, ?, ?)",
-          [1, 1, "", "", "TEST"]
-        );
-      }
-    } catch (e) {}
-
-    // Seed default marg settings if not present
-    try {
-      const mSet = await this.query("SELECT * FROM marg_settings");
-      if (mSet.length === 0) {
-        console.log("🌱 Seeding default MARG settings into Database...");
-        await this.execute(
-          "INSERT INTO marg_settings (id, api_token, points_ratio, auto_notify_whatsapp, simulate_delay) VALUES (?, ?, ?, ?, ?)",
-          [1, "SWASTIK_MARG_SECURE_TOKEN_2026", 10.0, 1, 500]
-        );
-      }
-    } catch (e) {}
-
-    // Seed default business investors and directors if not present
-    try {
-      const pRows = await this.query("SELECT COUNT(*) as count FROM partner");
-      const count = Number(pRows[0]?.count || 0);
-      if (count === 0) {
-        console.log("🌱 Seeding default business investors and directors into Database...");
-        const defaultPartners = [
-          {
-            name: "Rajesh Patidar",
-            designation: "Sourcing Director (Fruits & Vegetables)",
-            about: "Rajesh manages our fresh local grower networks. He is responsible for testing purity, supervising rapid logistics collection timelines, and ensuring organic quality on all botanical essentials.",
-            photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=300"
-          },
-          {
-            name: "Sunita Deshmukh",
-            designation: "Organic Dairy Lead",
-            about: "Sunita supervises our direct milk co-operatives and poultry segments in Greater Noida. She has over 15 years of quality control experience and works to assure pristine hormone-free daily dairy products.",
-            photo: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=300"
-          },
-          {
-            name: "Alok Singhania",
-            designation: "Technology & Micro-Warehousing Partner",
-            about: "Alok directs cold-chain storage and dark store inventory management. He implements automated FIFO stock rotation ensuring every packed grain reaches households at peak freshness.",
-            photo: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=300"
-          }
-        ];
-        for (const pt of defaultPartners) {
-          await this.execute(
-            "INSERT INTO partner (name, photo, designation, about) VALUES (?, ?, ?, ?)",
-            [pt.name, pt.photo, pt.designation, pt.about]
-          );
-        }
-      }
-    } catch (e) {
-      console.warn("Notice: Partner seeding check:", e.message);
-    }
-
-    // Synchronize customer ID mapping and orders
-    await this.syncCustomerTableAndOrders();
-
-    // Rehydrate database from persistent store if freshly deployed
-    await this.rehydrateFromPersistentSnapshot();
   },
 
   // Auto-migration to ensure all tables have required columns across SQLite, MySQL, and PostgreSQL
@@ -706,38 +621,6 @@ export const db = {
           }
         }
 
-        // Synchronize total and grand_total values across all orders
-        await new Promise((resolve) => {
-          sqliteDb.run(`UPDATE "order" SET total = grand_total WHERE (total IS NULL OR total = 0) AND grand_total > 0`, () => resolve());
-        });
-        await new Promise((resolve) => {
-          sqliteDb.run(`UPDATE "order" SET grand_total = total WHERE (grand_total IS NULL OR grand_total = 0) AND total > 0`, () => resolve());
-        });
-
-        // Repair orders with null IDs (e.g. from previous type mismatch)
-        await new Promise((resolve) => {
-          sqliteDb.run(`UPDATE "order" SET id = 'SW-7001' WHERE id IS NULL AND customer_name = 'Balram Patidar'`, () => resolve());
-        });
-        await new Promise((resolve) => {
-          sqliteDb.run(`DELETE FROM "order" WHERE id IS NULL AND customer_name LIKE '%Test Rzp%'`, () => resolve());
-        });
-        await new Promise((resolve) => {
-          sqliteDb.run(`UPDATE "order" SET id = 'SW-' || (1000 + abs(random() % 9000)) WHERE id IS NULL`, () => resolve());
-        });
-
-        // Ensure Balram Patidar's order item is linked in order_item table
-        const bpItems = await new Promise((resolve) => {
-          sqliteDb.all(`SELECT id FROM order_item WHERE order_id = 'SW-7001'`, (err, rows) => resolve(rows || []));
-        });
-        if (bpItems.length === 0) {
-          await new Promise((resolve) => {
-            sqliteDb.run(
-              `INSERT INTO order_item (order_id, product_id, name_en, name_hi, price, qty, weight_label)
-               VALUES ('SW-7001', 115, 'AMUL MASTI BUTTERMILK 200ML', 'अमूल मस्ती छाछ 200 मिली', 15, 1, '200ml')`,
-              () => resolve()
-            );
-          });
-        }
       } catch (err) {
         console.warn("Notice during SQLite schema migration:", err.message);
       }
@@ -1552,4 +1435,3 @@ export const db = {
 };
 
 export default db;
-

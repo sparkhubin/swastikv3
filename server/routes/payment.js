@@ -1,10 +1,11 @@
 import express from "express";
 import crypto from "crypto";
 import { db } from "../../database/db.js";
+import { requirePermission, requireStaffAuth } from "../auth.js";
 
 const router = express.Router();
 
-router.get("/payment/settings", async (req, res) => {
+router.get("/payment/settings", requireStaffAuth, requirePermission("settings"), async (req, res) => {
   try {
     const rows = await db.query(
       `SELECT enabled, app_id as "appId", secret_key as "secretKey", environment,
@@ -41,7 +42,7 @@ router.get("/payment/settings", async (req, res) => {
   }
 });
 
-router.post("/payment/settings", async (req, res) => {
+router.post("/payment/settings", requireStaffAuth, requirePermission("settings"), async (req, res) => {
   const { 
     enabled, 
     appId, 
@@ -97,6 +98,11 @@ router.post("/payment/settings", async (req, res) => {
 router.post("/razorpay/create-order", async (req, res) => {
   const { orderId, amount, customerName, customerPhone, customerEmail } = req.body;
 
+  const amountInPaise = Math.round(Number(amount) * 100);
+  if (!orderId || !Number.isSafeInteger(amountInPaise) || amountInPaise <= 0) {
+    return res.status(400).json({ error: "A valid order ID and positive payment amount are required." });
+  }
+
   try {
     const rows = await db.query(
       `SELECT razorpay_enabled as "razorpayEnabled", razorpay_key_id as "razorpayKeyId", 
@@ -115,13 +121,13 @@ router.post("/razorpay/create-order", async (req, res) => {
       keySecret = (rows[0].razorpayKeySecret || "").trim();
     }
 
-    const amountInPaise = Math.round(Number(amount) * 100);
+    if (!keyId || !keySecret) {
+      return res.status(503).json({ error: "Razorpay is not configured." });
+    }
 
-    // If real credentials exist, invoke official Razorpay REST API
-    if (keyId && keySecret) {
-      try {
-        const authString = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
-        const response = await fetch("https://api.razorpay.com/v1/orders", {
+    try {
+      const authString = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
+      const response = await fetch("https://api.razorpay.com/v1/orders", {
           method: "POST",
           headers: {
             "Authorization": `Basic ${authString}`,
@@ -140,9 +146,9 @@ router.post("/razorpay/create-order", async (req, res) => {
           })
         });
 
-        const rzpData = await response.json();
-        if (response.ok) {
-          return res.json({
+      const rzpData = await response.json();
+      if (response.ok) {
+        return res.json({
             status: "success",
             razorpay_order_id: rzpData.id,
             key_id: keyId,
@@ -150,28 +156,14 @@ router.post("/razorpay/create-order", async (req, res) => {
             currency: rzpData.currency || "INR",
             receipt: rzpData.receipt,
             api_called: true
-          });
-        } else {
-          console.warn("Razorpay API order creation warning:", rzpData);
-        }
-      } catch (err) {
-        console.error("Razorpay network connection error:", err.message);
+        });
       }
+      console.warn("Razorpay API order creation failed:", rzpData?.error?.description || response.status);
+      return res.status(502).json({ error: "Razorpay rejected the order creation request." });
+    } catch (err) {
+      console.error("Razorpay network connection error:", err.message);
+      return res.status(502).json({ error: "Razorpay is currently unavailable." });
     }
-
-    // Graceful fallback simulation if API keys are empty or in testing sandbox mode
-    console.log(`[RAZORPAY SIMULATOR] Generating sandbox session for Order#${orderId} (₹${amount})`);
-    const mockRzpOrderId = `order_mock_rzp_${orderId}_${Math.floor(1000 + Math.random() * 9000)}`;
-    res.json({
-      status: "success",
-      razorpay_order_id: mockRzpOrderId,
-      key_id: keyId || "rzp_test_swastik_mock",
-      amount: amountInPaise,
-      currency: "INR",
-      receipt: String(orderId),
-      simulated: true,
-      message: "Razorpay session created in test sandbox mode"
-    });
   } catch (err) {
     console.error("Error in /razorpay/create-order:", err);
     res.status(500).json({ error: "Failed to initialize Razorpay transaction session." });
@@ -187,16 +179,18 @@ router.post("/razorpay/verify", async (req, res) => {
       `SELECT razorpay_key_secret as "razorpayKeySecret" FROM payment_settings WHERE id = 1`
     );
 
-    let isSignatureValid = true;
-    if (rows.length > 0 && rows[0].razorpayKeySecret && razorpay_signature) {
-      const secret = rows[0].razorpayKeySecret.trim();
-      const generatedSignature = crypto
-        .createHmac("sha256", secret)
-        .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-        .digest("hex");
-
-      isSignatureValid = (generatedSignature === razorpay_signature);
+    const secret = rows[0]?.razorpayKeySecret?.trim();
+    if (!orderId || !razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !secret) {
+      return res.status(400).json({ error: "Complete Razorpay verification data is required." });
     }
+
+    const generatedSignature = crypto
+      .createHmac("sha256", secret)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest("hex");
+    const providedSignature = String(razorpay_signature);
+    const isSignatureValid = generatedSignature.length === providedSignature.length &&
+      crypto.timingSafeEqual(Buffer.from(generatedSignature), Buffer.from(providedSignature));
 
     if (!isSignatureValid) {
       console.warn(`[RAZORPAY VERIFY FAILED] Invalid signature for Order ID ${orderId}`);
@@ -215,7 +209,7 @@ router.post("/razorpay/verify", async (req, res) => {
       status: "success",
       payment_status: "SUCCESS",
       order_id: orderId,
-      razorpay_payment_id: razorpay_payment_id || `pay_mock_${Date.now()}`,
+      razorpay_payment_id,
       message: "Payment successfully verified and recorded!"
     });
   } catch (err) {
@@ -226,9 +220,20 @@ router.post("/razorpay/verify", async (req, res) => {
 
 // 3. Razorpay Webhook Endpoint
 router.post("/razorpay/webhook", async (req, res) => {
-  console.log("[RAZORPAY WEBHOOK RECEIVED]", JSON.stringify(req.body));
-
   try {
+    const settings = await db.query('SELECT razorpay_key_secret as "razorpayKeySecret" FROM payment_settings WHERE id = 1');
+    const secret = settings[0]?.razorpayKeySecret?.trim();
+    const providedSignature = String(req.get("x-razorpay-signature") || "");
+    if (!secret || !providedSignature || !req.rawBody) {
+      return res.status(401).json({ error: "Webhook signature is required." });
+    }
+    const expectedSignature = crypto.createHmac("sha256", secret).update(req.rawBody).digest("hex");
+    const isValid = expectedSignature.length === providedSignature.length &&
+      crypto.timingSafeEqual(Buffer.from(expectedSignature), Buffer.from(providedSignature));
+    if (!isValid) {
+      return res.status(401).json({ error: "Invalid webhook signature." });
+    }
+
     const event = req.body.event || "";
     const payload = req.body.payload || {};
 
@@ -243,11 +248,6 @@ router.post("/razorpay/webhook", async (req, res) => {
       }
     } else if (payload.order && payload.order.entity) {
       orderId = payload.order.entity.receipt || "";
-    }
-
-    // Direct simulation or custom hook payload
-    if (!orderId) {
-      orderId = req.body.orderId || req.body.order_id || "";
     }
 
     if (orderId) {
@@ -268,6 +268,10 @@ router.post("/razorpay/webhook", async (req, res) => {
 
 router.post("/cashfree/create-order", async (req, res) => {
   const { orderId, amount, customerName, customerPhone, customerEmail } = req.body;
+
+  if (!orderId || !Number.isFinite(Number(amount)) || Number(amount) <= 0 || !customerPhone) {
+    return res.status(400).json({ error: "A valid order ID, amount, and customer phone are required." });
+  }
 
   try {
     const rows = await db.query("SELECT enabled, app_id as \"appId\", secret_key as \"secretKey\", environment FROM payment_settings WHERE id = 1");
@@ -297,10 +301,10 @@ router.post("/cashfree/create-order", async (req, res) => {
             order_amount: Number(amount),
             order_currency: "INR",
             customer_details: {
-              customer_id: customerPhone.replace(/\D/g, "") || `cust_${Date.now()}`,
+              customer_id: customerPhone.replace(/\D/g, ""),
               customer_name: customerName || "Swastik Customer",
-              customer_phone: customerPhone.replace(/\D/g, "").slice(-10) || "9999999999",
-              customer_email: customerEmail || "customer@example.com"
+              customer_phone: customerPhone.replace(/\D/g, "").slice(-10),
+              customer_email: customerEmail || undefined
             },
             order_meta: {
               return_url: `${req.headers.origin || "http://localhost:3000"}/api/cashfree/return?order_id={order_id}`,
@@ -322,57 +326,22 @@ router.post("/cashfree/create-order", async (req, res) => {
           });
         } else {
           console.warn("Cashfree API order creation failure details:", data);
+          return res.status(502).json({ error: "Cashfree rejected the order creation request." });
         }
       } catch (err) {
         console.error("Cashfree API network connection error:", err.message);
+        return res.status(502).json({ error: "Cashfree is currently unavailable." });
       }
     }
+    return res.status(503).json({ error: "Cashfree is not configured." });
   } catch (err) {
     console.error("Database query error checking payment settings:", err.message);
+    return res.status(500).json({ error: "Unable to read payment configuration." });
   }
-
-  // Graceful Sandbox Simulation Fallback Mode if no keys are found
-  console.log(`[CASHFREE SIMULATOR] Creating sandbox simulated order session for: Order#${orderId} (₹${amount})`);
-  res.json({
-    status: "success",
-    payment_session_id: `mock_session_${orderId}_${Math.floor(1000 + Math.random() * 9000)}`,
-    order_id: orderId,
-    cf_order_id: `CF_${Math.floor(100000 + Math.random() * 900000)}`,
-    payment_status: "ACTIVE",
-    api_called: false,
-    env: "SIMULATED_TEST"
-  });
 });
 
 router.post("/cashfree/webhook", async (req, res) => {
-  const { data } = req.body;
-  console.log("[CASHFREE WEBHOOK DETECTED]", JSON.stringify(req.body));
-  
-  let orderId = "";
-  let paymentStatus = "PENDING";
-
-  if (data && data.order && data.payment) {
-    orderId = data.order.order_id;
-    paymentStatus = data.payment.payment_status;
-  } else {
-    orderId = req.body.orderId || req.body.order_id;
-    paymentStatus = req.body.paymentStatus || req.body.payment_status || "SUCCESS";
-  }
-
-  if (orderId) {
-    const isSuccess = paymentStatus === "SUCCESS" || paymentStatus === "PAID" || paymentStatus === "COMPLETED";
-    try {
-      await db.execute(
-        "UPDATE \"order\" SET status_label = ?, step_level = ?, payment_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-        [isSuccess ? "Paid" : "Payment Failed", isSuccess ? 1 : 0, isSuccess ? "PAID" : "FAILED", orderId]
-      );
-      console.log(`[CASHFREE WEBHOOK] Synced Order ID ${orderId} on payment state: ${paymentStatus}`);
-    } catch (err) {
-      console.error("Failed to sync webhook payment to database:", err.message);
-    }
-  }
-
-  res.json({ status: "processed", orderId, paymentStatus });
+  res.status(501).json({ error: "Cashfree webhooks are disabled until signature verification is configured." });
 });
 
 router.post("/cashfree/verify-payment", async (req, res) => {
@@ -395,8 +364,7 @@ router.post("/cashfree/verify-payment", async (req, res) => {
           status: "success",
           payment_status: "SUCCESS",
           order_id: orderId,
-          cf_payment_id: "Simulated_Paid",
-          message: "Order already verified paid via automated webhooks"
+          message: "Order is already recorded as paid."
         });
       }
 
@@ -438,23 +406,7 @@ router.post("/cashfree/verify-payment", async (req, res) => {
     console.error("Database query error in verify payment:", err.message);
   }
 
-  // Graceful simulated payment processing if credentials aren't active yet
-  try {
-    await db.execute(
-      "UPDATE \"order\" SET status_label = ?, step_level = ?, payment_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-      ["Paid", 1, "PAID", orderId]
-    );
-  } catch (err) {
-    console.error("Database simulated verification failure:", err.message);
-  }
-
-  res.json({
-    status: "success",
-    payment_status: "SUCCESS",
-    order_id: orderId,
-    cf_payment_id: `TXN_${Math.floor(1000000 + Math.random() * 9000000)}`,
-    message: "Simulation payment successful"
-  });
+  res.status(502).json({ error: "Cashfree could not verify this payment." });
 });
 
 export default router;

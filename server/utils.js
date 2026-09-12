@@ -19,7 +19,7 @@ export const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB max limit
 });
 
-export let fallbackOtps = {};
+export const otpChallenges = new Map();
 
 // Brand mapping helper
 export function getBrand(name, category) {
@@ -57,7 +57,7 @@ try {
     const fileData = fs.readFileSync(PAYMENT_SETTINGS_FILE, "utf-8");
     const parsed = JSON.parse(fileData);
     paymentSettings = { ...paymentSettings, ...parsed };
-    console.log("✓ Dynamic payment settings loaded successfully:", paymentSettings);
+    console.log("✓ Dynamic payment settings loaded successfully.");
   }
 } catch (err) {
   console.error("Error parsing payment-settings.json:", err);
@@ -413,7 +413,7 @@ export async function mapOrder(o) {
   const computedSubtotal = subtotal > 0 ? subtotal : itemsSum;
   const computedTotal = Math.max(0, computedSubtotal + deliveryFee + gst - referralDiscount - couponDiscount - celebrationDiscount);
 
-  const finalTotal = Number(o.grand_total || 0) > 0 ? Number(o.grand_total) : (computedTotal > 0 ? computedTotal : (computedSubtotal > 0 ? computedSubtotal : 350));
+  const finalTotal = Number(o.grand_total || 0) > 0 ? Number(o.grand_total) : computedTotal;
 
   let dynamicUserId = o.customer_id ? Number(o.customer_id) : (o.user_id ? Number(o.user_id) : (o.rel_customer_id ? Number(o.rel_customer_id) : null));
   let dynamicCustName = o.rel_customer_name || o.customer_name;
@@ -460,13 +460,6 @@ export async function mapOrder(o) {
       const riderRows = await db.query('SELECT * FROM "user" WHERE LOWER(full_name) = ? OR LOWER(full_name) LIKE ? LIMIT 1', [dynamicRiderName.toLowerCase(), `%${dynamicRiderName.toLowerCase()}%`]);
       if (riderRows && riderRows.length > 0) matchedRider = riderRows[0];
     }
-    if (!matchedRider) {
-      const activeRiderRows = await db.query('SELECT * FROM "user" WHERE role_id = 4 LIMIT 1');
-      if (activeRiderRows && activeRiderRows.length > 0) {
-        matchedRider = activeRiderRows[0];
-      }
-    }
-
     if (matchedRider) {
       dynamicRiderId = Number(matchedRider.id);
       dynamicRiderName = matchedRider.full_name;
@@ -720,20 +713,7 @@ export async function sendWhatsappMessageUnified(
     }
   }
 
-  // 3. Fallback: Log to Simulated Outbox
-  console.log(`[SIMULATED WHATSAPP OUTBOX] To: ${cleanTo} | Msg: ${body}`);
-  const outboxEntry = {
-    id: `WA-SIM-${Date.now()}`,
-    to: cleanTo,
-    body,
-    provider: "simulated_outbox",
-    status: "DISPATCHED",
-    timestamp: new Date().toISOString()
-  };
-  whatsappOutbox.unshift(outboxEntry);
-  if (whatsappOutbox.length > 50) whatsappOutbox.pop();
-
-  return { success: true, provider: "simulation", id: outboxEntry.id };
+  return { success: false, error: "No configured WhatsApp provider accepted the message." };
 }
 
 export function isR2ConfiguredAndValid() {

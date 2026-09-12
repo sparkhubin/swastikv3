@@ -1,6 +1,7 @@
 import express from "express";
 import { db } from "../../database/db.js";
 import { mapProduct } from "../utils.js";
+import { requirePermission, requireStaffAuth } from "../auth.js";
 
 const router = express.Router();
 
@@ -69,9 +70,18 @@ router.get("/products", async (req, res) => {
   }
 });
 
-router.post("/products", async (req, res) => {
+router.post("/products", requireStaffAuth, requirePermission("products"), async (req, res) => {
   try {
     const p = req.body;
+    const productName = String(p.nameEn || p.name || "").trim();
+    const priceValue = Number(p.price);
+    const stockValue = p.stockCount === undefined ? 0 : Number(p.stockCount);
+    if (!productName || !Number.isFinite(priceValue) || priceValue < 0) {
+      return res.status(400).json({ error: "Product name and a non-negative price are required." });
+    }
+    if (!Number.isFinite(stockValue) || stockValue < 0) {
+      return res.status(400).json({ error: "Stock count must be a non-negative number." });
+    }
     const gstVal = p.gstPercent !== undefined ? Number(p.gstPercent) : (p.gst_percent !== undefined ? Number(p.gst_percent) : 5);
     const cleanedImg = cleanImageStorageValue(p.imageUrl || p.image || "", p.code || "");
     const isImage = cleanedImg ? 1 : 0;
@@ -82,14 +92,16 @@ router.post("/products", async (req, res) => {
         unit, unit_prices, pack_en, pack_hi, gst_percent
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        p.code || "", p.nameEn || p.name || "", p.nameHi || p.name || "", p.category || "swastik",
-        p.subEn || p.brand || "General", p.subHi || p.brand || "General", p.price || 0,
-        p.originalPrice || null, p.discountTag || "", cleanedImg,isImage, p.stockCount || 100,
+        p.code || "", productName, p.nameHi || p.name || "", p.category || "swastik",
+        p.subEn || p.brand || "General", p.subHi || p.brand || "General", priceValue,
+        p.originalPrice || null, p.discountTag || "", cleanedImg,isImage, Math.floor(stockValue),
         p.unit || "", p.unitPrices || "", p.packEn || "", p.packHi || "", gstVal
       ]
     );
-    const newId = resId.lastID || 999;
-    const rows = await db.query("SELECT * FROM product WHERE id = ?", [newId]);
+    const rows = resId.lastID
+      ? await db.query("SELECT * FROM product WHERE id = ?", [resId.lastID])
+      : await db.query("SELECT * FROM product WHERE code = ? AND name_en = ? ORDER BY id DESC LIMIT 1", [p.code || "", productName]);
+    if (!rows[0]) throw new Error("Product was inserted but could not be read back.");
     if (db.savePersistentSnapshot) {
       try { await db.savePersistentSnapshot(); } catch (e) {}
     }
@@ -101,6 +113,12 @@ router.post("/products", async (req, res) => {
         console.log("⚠️ Missing column detected in product table. Auto-triggering db.migrateSchema()...");
         await db.migrateSchema();
         const p = req.body;
+        const productName = String(p.nameEn || p.name || "").trim();
+        const priceValue = Number(p.price);
+        const stockValue = p.stockCount === undefined ? 0 : Number(p.stockCount);
+        if (!productName || !Number.isFinite(priceValue) || priceValue < 0 || !Number.isFinite(stockValue) || stockValue < 0) {
+          return res.status(400).json({ error: "Product name, price, or stock value is invalid." });
+        }
         const gstVal = p.gstPercent !== undefined ? Number(p.gstPercent) : (p.gst_percent !== undefined ? Number(p.gst_percent) : 5);
         const cleanedImg = cleanImageStorageValue(p.imageUrl || p.image || "", p.code || "");
         const isImage = cleanedImg ? 1 : 0;
@@ -109,16 +127,18 @@ router.post("/products", async (req, res) => {
             code, name_en, name_hi, category, sub_en, sub_hi, 
             price, original_price, discount_tag, image_url, is_image, stock_count,
             unit, unit_prices, pack_en, pack_hi, gst_percent
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
-            p.code || "", p.nameEn || p.name || "", p.nameHi || p.name || "", p.category || "swastik",
-            p.subEn || p.brand || "General", p.subHi || p.brand || "General", p.price || 0,
-            p.originalPrice || null, p.discountTag || "", cleanedImg,isImage, p.stockCount || 100,
+            p.code || "", productName, p.nameHi || p.name || "", p.category || "swastik",
+            p.subEn || p.brand || "General", p.subHi || p.brand || "General", priceValue,
+            p.originalPrice || null, p.discountTag || "", cleanedImg,isImage, Math.floor(stockValue),
             p.unit || "", p.unitPrices || "", p.packEn || "", p.packHi || "", gstVal
           ]
         );
-        const retryId = retryResId.lastID || 999;
-        const retryRows = await db.query("SELECT * FROM product WHERE id = ?", [retryId]);
+        const retryRows = retryResId.lastID
+          ? await db.query("SELECT * FROM product WHERE id = ?", [retryResId.lastID])
+          : await db.query("SELECT * FROM product WHERE code = ? AND name_en = ? ORDER BY id DESC LIMIT 1", [p.code || "", productName]);
+        if (!retryRows[0]) throw new Error("Product was inserted but could not be read back.");
         if (db.savePersistentSnapshot) {
           try { await db.savePersistentSnapshot(); } catch (e) {}
         }
@@ -159,7 +179,7 @@ function extractFieldValue(raw, candidateKeys) {
 }
 
 // Bulk Upload Products (Excel & JSON with validation: skip or update, preserve code, prevent duplicate names)
-router.post("/products/bulk-upload-before", async (req, res) => {
+router.post("/products/bulk-upload-before", requireStaffAuth, requirePermission("products"), async (req, res) => {
   try {
     const { items = [], mode = "update_existing", defaultCategory = "swastik" } = req.body;
     if (!Array.isArray(items) || items.length === 0) {
@@ -337,7 +357,7 @@ router.post("/products/bulk-upload-before", async (req, res) => {
         }
       }
 
-      // 8. Stock Count (Defaults to 100)
+      // 8. Stock Count (missing inventory starts unavailable)
       const stockVal = extractFieldValue(raw, [
         "Stock",
         "Physical Stock Count (Qty)",
@@ -350,8 +370,8 @@ router.post("/products/bulk-upload-before", async (req, res) => {
       ]);
       const stockNum = (stockVal !== undefined && stockVal !== null && String(stockVal).trim() !== "")
         ? Math.floor(Number(String(stockVal).replace(/[^0-9]/g, '')))
-        : 100;
-      const stockCount = (!isNaN(stockNum) && stockNum >= 0) ? stockNum : 100;
+        : 0;
+      const stockCount = (!isNaN(stockNum) && stockNum >= 0) ? stockNum : 0;
 
       // 9. Product Code (Preserved if matching existing item, auto-assigned if empty)
       const codeVal = extractFieldValue(raw, [
@@ -435,7 +455,7 @@ router.post("/products/bulk-upload-before", async (req, res) => {
           const finalDiscount = discount || existing.discount_tag || "";
           const finalCategory = (catVal ? category : existing.category) || "swastik";
           const finalBrand = (brandVal ? brandTag : existing.sub_en) || brandTag;
-          const finalStock = (stockVal !== undefined ? stockCount : existing.stock_count) || 100;
+          const finalStock = stockVal !== undefined ? stockCount : (existing.stock_count ?? 0);
           const packEn = unit ? unit.split(',')[0].trim() : (existing.pack_en || "1 Unit");
           const packHi = packEn;
           const finalUnit = unit || existing.unit || "1 Unit";
@@ -569,7 +589,7 @@ router.post("/products/bulk-upload-before", async (req, res) => {
 });
 
 
-router.post("/products/bulk-upload", async (req, res) => {
+router.post("/products/bulk-upload", requireStaffAuth, requirePermission("products"), async (req, res) => {
   try {
     const {
       items = [],
@@ -907,12 +927,12 @@ router.post("/products/bulk-upload", async (req, res) => {
         raw["StockCount"] ??
         raw["Qty"] ??
         raw.stockCount ??
-        100;
+        0;
 
       let stockCount = Number(stockRaw);
 
       if (!Number.isFinite(stockCount) || stockCount < 0) {
-        stockCount = 100;
+        stockCount = 0;
       } else {
         stockCount = Math.floor(stockCount);
       }
@@ -1139,7 +1159,7 @@ router.post("/products/bulk-upload", async (req, res) => {
 });
 
 // Bulk Stock Update Menu API (Updates stock count across multiple items in one batch)
-router.post("/products/bulk-stock", async (req, res) => {
+router.post("/products/bulk-stock", requireStaffAuth, requirePermission("products", "inventory"), async (req, res) => {
   try {
     const { updates = [], action, category, value } = req.body;
 
@@ -1222,7 +1242,7 @@ router.get("/products/:id", async (req, res) => {
   }
 });
 
-router.put("/products/:id", async (req, res) => {
+router.put("/products/:id", requireStaffAuth, requirePermission("products"), async (req, res) => {
   try {
     const id = Number(req.params.id);
     const p = req.body;
@@ -1322,7 +1342,7 @@ router.put("/products/:id", async (req, res) => {
   }
 });
 
-router.delete("/products", async (req, res) => {
+router.delete("/products", requireStaffAuth, requirePermission("products"), async (req, res) => {
   try {
     try {
       await db.execute("UPDATE order_item SET product_id = NULL");
@@ -1337,7 +1357,7 @@ router.delete("/products", async (req, res) => {
   }
 });
 
-router.delete("/products/:id", async (req, res) => {
+router.delete("/products/:id", requireStaffAuth, requirePermission("products"), async (req, res) => {
   try {
     const id = Number(req.params.id);
     try {

@@ -1,6 +1,7 @@
 import express from "express";
 import { db } from "../../database/db.js";
 import { mapOrder, sendWhatsappMessageUnified } from "../utils.js";
+import { requirePermission, requireStaffAuth } from "../auth.js";
 
 const router = express.Router();
 
@@ -423,7 +424,7 @@ router.post("/orders", async (req, res) => {
   }
 });
 
-router.put(["/orders/:id", "/orders/:id/transit"], async (req, res) => {
+router.put(["/orders/:id", "/orders/:id/transit"], requireStaffAuth, requirePermission("orders", "delivery"), async (req, res) => {
   const id = req.params.id;
   const updateData = req.body;
   try {
@@ -712,7 +713,7 @@ router.put(["/orders/:id", "/orders/:id/transit"], async (req, res) => {
   }
 });
 
-router.delete("/orders", async (req, res) => {
+router.delete("/orders", requireStaffAuth, requirePermission("orders"), async (req, res) => {
   try {
     await db.execute("DELETE FROM order_item");
     await db.execute('DELETE FROM "order"');
@@ -728,14 +729,25 @@ router.delete("/orders", async (req, res) => {
   }
 });
 
-router.delete("/orders/:id", async (req, res) => {
+router.delete("/orders/:id", requireStaffAuth, requirePermission("orders"), async (req, res) => {
   const id = req.params.id;
   try {
+    const existing = await db.query('SELECT status_label, step_level, order_date FROM "order" WHERE id = ?', [id]);
+    if (!existing.length) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+
+    const curr = existing[0];
+    const isCancelled = (curr.status_label || "").toLowerCase().includes("cancel") || Number(curr.step_level) === -1;
+    const isDelivered = (curr.status_label || "").toLowerCase().includes("deliver") || Number(curr.step_level) >= 2;
+    const orderTime = Date.parse(curr.order_date || "");
+    const isLocked = isDelivered && Number.isFinite(orderTime) && Date.now() - orderTime > 60 * 60 * 1000;
+    if (isLocked && !req.staff?.isMasterAdmin && req.staff?.role_code !== "admin") {
+      return res.status(403).json({ error: "Only a super administrator can delete a delivered order after one hour." });
+    }
+
     // If order was not cancelled, return its items back to stock
     try {
-      const existing = await db.query('SELECT status_label, step_level FROM "order" WHERE id = ?', [id]);
-      const curr = existing[0] || {};
-      const isCancelled = (curr.status_label || "").toLowerCase().includes("cancel") || curr.step_level === -1;
       if (!isCancelled) {
         const orderItems = await db.query('SELECT product_id, qty FROM order_item WHERE order_id = ?', [id]);
         for (const it of orderItems) {
@@ -750,7 +762,8 @@ router.delete("/orders/:id", async (req, res) => {
         }
       }
     } catch (stkErr) {
-      console.warn(`Could not restore stock before deleting order #${id}:`, stkErr.message);
+      console.error(`Could not restore stock before deleting order #${id}:`, stkErr.message);
+      return res.status(500).json({ error: "Order was not deleted because its inventory could not be restored." });
     }
 
     await db.execute("DELETE FROM order_item WHERE order_id = ?", [id]);

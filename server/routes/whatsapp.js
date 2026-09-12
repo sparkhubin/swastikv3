@@ -1,8 +1,10 @@
 import express from "express";
+import { requirePermission, requireStaffAuth } from "../auth.js";
 import { sendWhatsappMessageUnified, whatsappOutbox } from "../utils.js";
 import { db } from "../../database/db.js";
 
 const router = express.Router();
+router.use("/whatsapp", requireStaffAuth, requirePermission("whatsapp"));
 
 // Helper to get custom templates from app_settings
 async function getStoredCustomTemplates() {
@@ -257,7 +259,7 @@ router.get("/whatsapp/settings", async (req, res) => {
       twilioFrom: process.env.TWILIO_WHATSAPP_FROM || "+14155238886",
       activeProvider: (process.env.META_WHATSAPP_PHONE_NUMBER_ID && process.env.META_WHATSAPP_ACCESS_TOKEN) 
         ? "meta" 
-        : ((process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) ? "twilio" : "simulated_outbox")
+        : ((process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) ? "twilio" : "unconfigured")
     };
 
     // Check app_settings for custom overrides
@@ -279,7 +281,7 @@ router.get("/whatsapp/settings", async (req, res) => {
             twilioFrom: saved.twilioFrom || settings.twilioFrom,
             activeProvider: (saved.metaPhoneNumberId && saved.metaAccessToken) 
               ? "meta" 
-              : (settings.metaAccessTokenConfigured ? "meta" : (settings.twilioConfigured ? "twilio" : "simulated_outbox"))
+              : (settings.metaAccessTokenConfigured ? "meta" : (settings.twilioConfigured ? "twilio" : "unconfigured"))
           };
         }
       }
@@ -338,7 +340,7 @@ router.post("/whatsapp/settings", async (req, res) => {
     res.json({
       success: true,
       message: "WhatsApp configuration saved successfully.",
-      activeProvider: (updatedSettings.metaPhoneNumberId && updatedSettings.metaAccessToken) ? "meta" : "simulated_outbox"
+      activeProvider: (updatedSettings.metaPhoneNumberId && updatedSettings.metaAccessToken) ? "meta" : "unconfigured"
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -365,7 +367,7 @@ router.post("/whatsapp/test", async (req, res) => {
     res.json({
       success: waRes.success,
       to,
-      provider: waRes.provider || "simulated",
+      provider: waRes.provider || "unavailable",
       details: waRes
     });
   } catch (err) {

@@ -99,10 +99,11 @@ export default function AdminDashboard({ onViewChange }) {
   // Authentication State
   const [loggedInStaff, setLoggedInStaff] = useState(() => {
     try {
-      const saved = localStorage.getItem('swastik_logged_in_staff');
-      return saved ? JSON.parse(saved) : null;
+      const saved = sessionStorage.getItem('swastik_logged_in_staff');
+      const token = sessionStorage.getItem('swastik_staff_token');
+      return saved && token ? JSON.parse(saved) : null;
     } catch (e) {
-      console.warn("Failed to parse swastik_logged_in_staff from localStorage:", e);
+      console.warn("Failed to parse the active staff session:", e);
       return null;
     }
   });
@@ -111,6 +112,28 @@ export default function AdminDashboard({ onViewChange }) {
   const [loginMobile, setLoginMobile] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+
+  useEffect(() => {
+    if (!loggedInStaff) return;
+    let active = true;
+    fetch('/api/auth/staff/session')
+      .then(async response => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      })
+      .then(data => {
+        if (!active || !data.user) return;
+        setLoggedInStaff(data.user);
+        sessionStorage.setItem('swastik_logged_in_staff', JSON.stringify(data.user));
+      })
+      .catch(() => {
+        if (!active) return;
+        setLoggedInStaff(null);
+        sessionStorage.removeItem('swastik_logged_in_staff');
+        sessionStorage.removeItem('swastik_staff_token');
+      });
+    return () => { active = false; };
+  }, []);
 
   // Change Password Modal States
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
@@ -207,10 +230,10 @@ export default function AdminDashboard({ onViewChange }) {
           const currentPerms = [...(current.permissions || [])].sort().join(',');
           const loggedInPerms = [...(loggedInStaff.permissions || [])].sort().join(',');
           const permsChanged = currentPerms !== loggedInPerms;
-          const infoChanged = current.name !== loggedInStaff.name || current.password !== loggedInStaff.password || current.role !== loggedInStaff.role;
+          const infoChanged = current.name !== loggedInStaff.name || current.role !== loggedInStaff.role;
           if (permsChanged || infoChanged) {
             setLoggedInStaff(current);
-            localStorage.setItem('swastik_logged_in_staff', JSON.stringify(current));
+            sessionStorage.setItem('swastik_logged_in_staff', JSON.stringify(current));
           }
         }
       }
@@ -224,7 +247,6 @@ export default function AdminDashboard({ onViewChange }) {
   const staffLoggedInId = loggedInStaff?.id;
   useEffect(() => {
     if (!staffLoggedInId) {
-      fetchStaff();
       return;
     }
 
@@ -255,66 +277,50 @@ export default function AdminDashboard({ onViewChange }) {
   }, [activeTab, staffLoggedInId, fetchOrders, fetchProducts, fetchPartners, fetchReviews, fetchStaff]);
 
   // Login Submission
-  const handleLoginSubmit = (e) => {
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setLoginError('');
-
-    const matched = staff.find(
-      s => s.mobile.replace(/\s+/g, '') === loginMobile.replace(/\s+/g, '') && s.password === loginPassword
-    );
-
-    if (matched) {
-      if (matched.status === 'disabled') {
-        setLoginError('This staff workspace account has been disabled by Administrator nodes.');
+    try {
+      const response = await fetch('/api/auth/staff/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mobile: loginMobile, password: loginPassword })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.user || !data.token) {
+        setLoginError(data.error || 'Invalid credentials. Access denied.');
         return;
       }
+
+      const matched = data.user;
+      sessionStorage.setItem('swastik_staff_token', data.token);
+      sessionStorage.setItem('swastik_logged_in_staff', JSON.stringify(matched));
       setLoggedInStaff(matched);
-      localStorage.setItem('swastik_logged_in_staff', JSON.stringify(matched));
       const perms = matched.permissions || [];
-      const isSuper = matched.id === 1 || matched.mobile === '9999999999' || perms.includes('staff');
+      const isSuper = matched.isMasterAdmin || matched.role_code === 'admin';
       const isDeliveryOnly = perms.length === 1 && perms[0] === 'delivery';
       const roleToSet = isDeliveryOnly ? 'delivery' : (isSuper ? 'admin' : 'manager');
       setUserRole(roleToSet);
       localStorage.setItem('swastik_user_role', roleToSet);
-    } else {
-      setLoginError('Invalid credentials. Access Denied.');
+      await fetchStaff(true);
+    } catch (error) {
+      console.error('Staff authentication failed:', error);
+      setLoginError('The authentication service is unavailable.');
     }
   };
 
   // Logout handler
   const handleLogout = () => {
+    fetch('/api/auth/staff/logout', { method: 'POST' }).catch(() => {});
     setLoggedInStaff(null);
-    localStorage.removeItem('swastik_logged_in_staff');
+    sessionStorage.removeItem('swastik_logged_in_staff');
+    sessionStorage.removeItem('swastik_staff_token');
     setUserRole('customer');
   };
 
   // Request Recovery OTP on WhatsApp (Requirement 8)
   const handleRequestOTP = () => {
-    if (!recoveryPhone) {
-      setRecoveryLogs('Please fill up your registered mobile coordinate.');
-      return;
-    }
-    const matched = staff.find(s => s.mobile.replace(/\s+/g, '') === recoveryPhone.replace(/\s+/g, ''));
-    if (!matched) {
-      setRecoveryLogs('⚠️ This mobile number is not registered on the Swastik staff directory.');
-      return;
-    }
-
-    const randomOTP = Math.floor(1000 + Math.random() * 9000).toString();
-    setIncomingOTP(randomOTP);
-    setRecoveryLogs(`💬 Sending WhatsApp OTP to +91 ${recoveryPhone}...`);
-    try {
-      fetch('/api/auth/otp/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneNumber: recoveryPhone })
-      }).then(res => res.json()).then(data => {
-        setRecoveryLogs(`✓ Security verification OTP code dispatched to +91 ${recoveryPhone} via WhatsApp.`);
-      }).catch(() => {
-        setRecoveryLogs(`✓ Security verification OTP code dispatched to +91 ${recoveryPhone} via WhatsApp.`);
-      });
-    } catch (e) {}
-    setRecoveryStep(2);
+    setRecoveryLogs('Self-service staff recovery is disabled. Ask an authenticated super administrator to reset this account.');
   };
 
   const verifyOTP = async () => {
@@ -336,37 +342,18 @@ export default function AdminDashboard({ onViewChange }) {
         setRecoveryLogs(`❌ ${data.error || 'Incorrect verification code. Please check your WhatsApp.'}`);
       }
     } catch (e) {
-      if (userTypedOTP === '8765') {
-        setRecoveryLogs('✓ Master OTP verified! Enter your new password below.');
-        setRecoveryStep(3);
-      } else {
-        setRecoveryLogs('❌ Verification failed. Please enter the OTP sent to your WhatsApp.');
-      }
+      setRecoveryLogs('❌ Verification failed. Please enter the OTP sent to your WhatsApp.');
     }
   };
 
   const updateStaffForgotPass = () => {
-    if (!newPassword) {
-      setRecoveryLogs('Please select a non-empty password entry.');
-      return;
-    }
-    const matched = staff.find(s => s.mobile.replace(/\s+/g, '') === recoveryPhone.replace(/\s+/g, ''));
-    if (matched) {
-      updateStaff(matched.id, { password: newPassword });
-      setRecoveryLogs('✓ Success! Your system password has been reset. Proceed to login.');
-      setTimeout(() => {
-        setRecoveryStep(1);
-        setShowForgot(false);
-        setLoginMobile(recoveryPhone);
-        setLoginPassword(newPassword);
-      }, 2000);
-    }
+    setRecoveryLogs('❌ Self-service staff password reset is unavailable. Contact a super administrator.');
   };
 
   // Staff creation Super Admin CRUD
-  const handleCreateStaffSubmit = (e) => {
+  const handleCreateStaffSubmit = async (e) => {
     e.preventDefault();
-    if (!newStaffName || !newStaffMobile || !newStaffPassword) {
+    if (!newStaffName || !newStaffMobile || (!editingStaffId && !newStaffPassword)) {
       alert('Please fill out all staff credentials.');
       return;
     }
@@ -374,18 +361,26 @@ export default function AdminDashboard({ onViewChange }) {
     const payload = {
       name: newStaffName,
       mobile: newStaffMobile,
-      password: newStaffPassword,
+      ...(newStaffPassword ? { password: newStaffPassword } : {}),
       permissions: newStaffPerms,
       status: newStaffStatus
     };
 
     if (editingStaffId) {
-      updateStaff(editingStaffId, payload);
+      const result = await updateStaff(editingStaffId, payload);
+      if (!result?.success) {
+        alert(`Failed to update staff member: ${result?.error || 'Unknown error'}`);
+        return;
+      }
       setEditingStaffId(null);
       alert('✓ Staff Member permissions updated successfully.');
     } else {
-      addStaff(payload);
-      alert('✓ Staff Member registered on local Swastik Directory.');
+      const result = await addStaff(payload);
+      if (!result?.success) {
+        alert(`Failed to create staff member: ${result?.error || 'Unknown error'}`);
+        return;
+      }
+      alert('✓ Staff Member registered in the Swastik directory.');
     }
 
     setNewStaffName('');
@@ -399,7 +394,7 @@ export default function AdminDashboard({ onViewChange }) {
     setEditingStaffId(s.id);
     setNewStaffName(s.name);
     setNewStaffMobile(s.mobile);
-    setNewStaffPassword(s.password);
+    setNewStaffPassword('');
     setNewStaffPerms(s.permissions || []);
     setNewStaffStatus(s.status || 'enabled');
   };
@@ -2007,7 +2002,7 @@ export default function AdminDashboard({ onViewChange }) {
                                   <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1.5 py-0.5 text-[8px] font-mono uppercase rounded font-black">Active</span>
                                 )}
                               </div>
-                              <p className="font-mono text-[10px] text-slate-400">Mobile: +91 {s.mobile} • Password: <span className="text-cyan-300 font-bold bg-white/5 border border-white/5 px-1 py-0.5 rounded">{s.password}</span> • Access: <span className="text-amber-300 font-bold">{perms.length} of 17 modules</span></p>
+                              <p className="font-mono text-[10px] text-slate-400">Mobile: +91 {s.mobile} • Access: <span className="text-amber-300 font-bold">{perms.length} of 17 modules</span></p>
                               
                               <div className="flex flex-wrap gap-1 pt-1">
                                 {perms.map((pSub) => (
@@ -2130,15 +2125,13 @@ export default function AdminDashboard({ onViewChange }) {
                         }
                         const payload = await changeStaffPassword(loggedInStaff.mobile, modalOldPassword, modalNewPassword);
                         if (payload.success) {
-                          setModalStatus({ success: true, message: '✓ PIN Updated!' });
-                          const updated = { ...loggedInStaff, password: modalNewPassword };
-                          setLoggedInStaff(updated);
-                          localStorage.setItem('swastik_logged_in_staff', JSON.stringify(updated));
+                          setModalStatus({ success: true, message: '✓ Password updated. Please sign in again.' });
                           setTimeout(() => {
                             setShowChangePasswordModal(false);
                             setModalStatus({ success: null, message: '' });
                             setModalOldPassword('');
                             setModalNewPassword('');
+                            handleLogout();
                           }, 1500);
                         } else {
                           setModalStatus({ success: false, message: `❌ ${payload.error || 'Identity mismatch rejection.'}` });

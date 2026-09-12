@@ -200,8 +200,11 @@ export default function CartCheckout({ onViewChange }) {
 
   // Fetch backend gateway configurations dynamically & inject Razorpay JS SDK
   useEffect(() => {
-    fetch('/api/payment/settings')
-      .then(res => res.json())
+    fetch('/api/config')
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then(data => {
         setGatewaySettings({
           activeGateway: data.activeGateway || 'RAZORPAY',
@@ -386,19 +389,18 @@ export default function CartCheckout({ onViewChange }) {
       return;
     }
     
-    let isOtpValid = cleanAuthOtp === '8765';
-    if (!isOtpValid) {
-      try {
-        const verifyRes = await fetch('/api/auth/otp/verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phoneNumber: authMobile, code: cleanAuthOtp })
-        });
-        const verifyData = await verifyRes.json();
-        isOtpValid = verifyRes.ok && verifyData.status === 'verified';
-      } catch (err) {
-        isOtpValid = cleanAuthOtp === '8765';
-      }
+    let isOtpValid = false;
+    try {
+      const verifyRes = await fetch('/api/auth/otp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: authMobile, code: cleanAuthOtp })
+      });
+      const verifyData = await verifyRes.json();
+      isOtpValid = verifyRes.ok && verifyData.status === 'verified';
+    } catch (err) {
+      setAuthGateError(language === 'hi' ? "ओटीपी सत्यापन सेवा उपलब्ध नहीं है।" : "OTP verification service is unavailable.");
+      return;
     }
 
     if (!isOtpValid) {
@@ -449,7 +451,7 @@ export default function CartCheckout({ onViewChange }) {
     }
 
     if (existingCust.password && existingCust.password.trim().length > 0) {
-      if (existingCust.password.trim() !== authPassword.trim() && authPassword.trim() !== 'admin123') {
+      if (existingCust.password.trim() !== authPassword.trim()) {
         setAuthGateError(language === 'hi' 
           ? "गलत पासवर्ड! कृपया सही पासवर्ड दर्ज करें।" 
           : "Incorrect password! Please enter the correct password.");
@@ -464,7 +466,7 @@ export default function CartCheckout({ onViewChange }) {
 
     const loggedInProfile = {
       fullName: existingCust.name || (contactSettings?.brandName ? `${contactSettings.brandName} Shopper` : "Valued Shopper"),
-      email: existingCust.email || `${authMobile}@example.com`,
+      email: existingCust.email || "",
       phone: existingCust.phone || `+91 ${authMobile.replace(/^(\+91|91)/, '')}`,
       address: existingCust.address || "",
       points: existingCust.points || 100,
@@ -1258,53 +1260,22 @@ export default function CartCheckout({ onViewChange }) {
             });
             rzpObj.open();
           } catch (err) {
-            console.warn("Error opening Razorpay checkout window, opening simulator fallback:", err);
-            setShowRazorpaySDKSimulator(true);
+            console.error("Error opening Razorpay checkout window:", err);
+            setCheckoutError("Razorpay checkout could not be opened. Please retry or choose Cash on Delivery.");
           }
         } else {
-          // Open interactive Razorpay checkout modal simulator for sandbox / test key mode
-          setShowRazorpaySDKSimulator(true);
+          setCheckoutError("Razorpay checkout is unavailable. Please retry or choose Cash on Delivery.");
         }
       } catch (err) {
         setIsPlacing(false);
-        console.warn("Razorpay order handler error, launching simulator modal:", err);
-        setShowRazorpaySDKSimulator(true);
+        console.error("Razorpay order handler error:", err);
+        setCheckoutError("Razorpay checkout is unavailable. Please retry or choose Cash on Delivery.");
       }
     } else {
-      // 🥉 Process Cashfree Online Order Sequence
-      try {
-        setPendingOrderData(newOrder);
-
-        // Call Express payment initialization endpoints
-        const response = await fetch('/api/cashfree/create-order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            orderId: orderId,
-            amount: finalGrandTotal,
-            customerName: finalCustName || "Customer",
-            customerPhone: finalCustPhone || "+91 99999 88888",
-            customerEmail: customerEmail
-          })
-        });
-
-        const data = await response.json();
-        setIsPlacing(false);
-
-        if (response.ok && data.status === 'success') {
-          setCashfreeOrderSession(data);
-          setCashfreePaymentStage('select_method');
-          setShowCashfreeSDKSimulator(true);
-        } else {
-          setCheckoutError(language === 'hi' ? "कैशफ्री गेटवे प्रारंभ करने में विफलता।" : "Failed to initialize Cashfree Payment API Session.");
-        }
-      } catch (err) {
-        setIsPlacing(false);
-        console.warn("Cashfree order handler error, launching simulator fallback:", err);
-        setCashfreeOrderSession({ cf_order_id: `CF_${orderId}`, order_id: orderId });
-        setCashfreePaymentStage('select_method');
-        setShowCashfreeSDKSimulator(true);
-      }
+      setIsPlacing(false);
+      setCheckoutError(language === 'hi'
+        ? "सुरक्षित कैशफ्री चेकआउट अभी उपलब्ध नहीं है। कृपया कैश ऑन डिलीवरी चुनें।"
+        : "Secure Cashfree checkout is not available yet. Please choose Cash on Delivery.");
     }
   };
 
@@ -2993,4 +2964,3 @@ export default function CartCheckout({ onViewChange }) {
     </div>
   );
 }
-
