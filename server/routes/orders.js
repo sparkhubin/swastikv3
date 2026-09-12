@@ -96,6 +96,12 @@ async function appNumber(tx, key, fallback = 0) {
   return Number.isFinite(value) ? value : fallback;
 }
 
+async function appJson(tx, key, fallback) {
+  const row = await tx.get("SELECT value_text FROM app_settings WHERE key_name=?", [key]);
+  if (!row) return fallback;
+  try { return JSON.parse(row.value_text); } catch { return fallback; }
+}
+
 router.post("/orders", requireAnyIdentity, async (req, res) => {
   const requestedItems = req.body?.items;
   if (!Array.isArray(requestedItems) || !requestedItems.length || requestedItems.length > 100) return res.status(400).json({ error: "An order requires 1-100 items." });
@@ -138,12 +144,21 @@ router.post("/orders", requireAnyIdentity, async (req, res) => {
       }
       const membership = await tx.get(`SELECT mp.* FROM customer_membership cm JOIN membership_plan mp ON mp.id=cm.membership_plan_id WHERE cm.customer_id=? AND cm.status='Active' AND cm.start_date<=date('now') AND cm.end_date>=date('now') ORDER BY cm.end_date DESC LIMIT 1`, [customer.id]);
       const membershipDiscount = membership ? Math.round(subtotal*Number(membership.discount_percent)*100)/10000 : 0;
-      const deliveryFee = membership?.free_delivery ? 0 : await appNumber(tx,"delivery_fee",0);
+      const locationGroups = await appJson(tx, "swastik_location_groups", []);
+      const locationGroup = Array.isArray(locationGroups) ? locationGroups.find(group => String(group.id) === String(req.body?.locationGroupId || "")) : null;
+      if (locationGroups.length && !locationGroup) { const error=new Error("Select a configured delivery location."); error.status=400; throw error; }
+      const configuredDeliveryFee = locationGroup
+        ? Number(membership ? locationGroup.primeDelivery : locationGroup.normalDelivery)
+        : await appNumber(tx,"delivery_fee",0);
+      if (!Number.isFinite(configuredDeliveryFee) || configuredDeliveryFee < 0) { const error=new Error("Delivery pricing is not configured correctly."); error.status=503; throw error; }
+      const freeDeliveryMinimum = Number(locationGroup?.minFreeDeliveryAmount);
+      const deliveryFee = membership?.free_delivery || (Number.isFinite(freeDeliveryMinimum) && freeDeliveryMinimum > 0 && subtotal >= freeDeliveryMinimum) ? 0 : configuredDeliveryFee;
       const appliedPoints = Number(req.body?.appliedPoints || 0);
       let pointsDiscount = 0;
       if (!Number.isInteger(appliedPoints) || appliedPoints < 0) { const error=new Error("Applied points must be a non-negative integer."); error.status=400; throw error; }
       if (appliedPoints) {
-        const pointValue = await appNumber(tx,"points_redemption_value",0);
+        const referralSettings = await appJson(tx, "swastik_referral_settings", {});
+        const pointValue = Number(referralSettings.pointsValueInINR ?? await appNumber(tx,"points_redemption_value",0));
         const balance = await tx.get("SELECT COALESCE(SUM(points),0) balance FROM customer_points WHERE customer_id=?", [customer.id]);
         if (pointValue <= 0 || appliedPoints > Number(balance.balance)) { const error=new Error("Point redemption is unavailable or exceeds the balance."); error.status=409; throw error; }
         pointsDiscount = Math.min(appliedPoints*pointValue,subtotal-couponDiscount-membershipDiscount);
@@ -203,7 +218,7 @@ router.put(["/orders/:id","/orders/:id/transit"], requireStaffAuth, requirePermi
       }
       if(nextStatus==="DELIVERED" && order.status!=="DELIVERED") {
         for(const item of items){ const inv=await tx.get("SELECT * FROM inventory WHERE product_id=?",[item.product_id]); if(Number(inv.stock_qty)<Number(item.qty)||Number(inv.reserved_qty)<Number(item.qty)){const e=new Error("Insufficient reserved stock to fulfill order.");e.status=409;throw e;} const after=Number(inv.stock_qty)-Number(item.qty); await tx.execute("UPDATE inventory SET stock_qty=?,reserved_qty=reserved_qty-?,updated_at=CURRENT_TIMESTAMP WHERE product_id=?",[after,item.qty,item.product_id]); await tx.execute("INSERT INTO stock_movement (product_id,type,quantity,before_qty,after_qty,reference_type,reference_id,note,created_by_user_id) VALUES (?,'FULFILL',?,?,?,?,?,'Delivered order fulfillment',?)",[item.product_id,-Number(item.qty),inv.stock_qty,after,'ORDER',order.id,req.staff.id]); }
-        const pointsRatio=await appNumber(tx,"points_per_rupee",0); const multiplier=await tx.get(`SELECT COALESCE(mp.extra_points_multiplier,1) multiplier FROM customer_membership cm JOIN membership_plan mp ON mp.id=cm.membership_plan_id WHERE cm.customer_id=? AND cm.status='Active' AND cm.end_date>=date('now') ORDER BY cm.end_date DESC LIMIT 1`,[order.customer_id]); const earned=pointsRatio>0?Math.floor(Number(order.grand_total)*pointsRatio*Number(multiplier?.multiplier||1)):0;
+        const referralSettings=await appJson(tx,"swastik_referral_settings",{}); const pointsRatio=Number(referralSettings.pointsPerRupee ?? await appNumber(tx,"points_per_rupee",0)); const multiplier=await tx.get(`SELECT COALESCE(mp.extra_points_multiplier,1) multiplier FROM customer_membership cm JOIN membership_plan mp ON mp.id=cm.membership_plan_id WHERE cm.customer_id=? AND cm.status='Active' AND cm.end_date>=date('now') ORDER BY cm.end_date DESC LIMIT 1`,[order.customer_id]); const earned=pointsRatio>0?Math.floor(Number(order.grand_total)*pointsRatio*Number(multiplier?.multiplier||1)):0;
         if(earned>0 && !await tx.get("SELECT id FROM customer_points WHERE customer_id=? AND type='ORDER_EARN' AND reference_id=?",[order.customer_id,order.id])) await tx.execute("INSERT INTO customer_points (customer_id,points,type,reference_id,description) VALUES (?,?,'ORDER_EARN',?,'Points earned on delivered order')",[order.customer_id,earned,order.id]);
         await tx.execute("UPDATE \"order\" SET points_earned=? WHERE id=?",[earned,order.id]);
       }

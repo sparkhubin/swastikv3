@@ -1,13 +1,11 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useData } from '../context/DataContext';
 import { ShieldCheck, Info, FileText, Lock, Trash2, AlertTriangle } from 'lucide-react';
-import DataDeletionModal from '../components/account/DataDeletionModal';
 
 export default function PrivacyPolicy() {
   const { language } = useLanguage();
   const { privacySections, contactSettings } = useData();
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const isHindi = language === 'hi';
 
@@ -29,7 +27,7 @@ export default function PrivacyPolicy() {
           <p className="text-xs md:text-sm text-slate-300 mt-1 font-medium max-w-xl">
             {isHindi 
               ? "जानिए कैसे हम आपकी व्यक्तिगत जानकारी और स्थान डेटा की पूर्ण सुरक्षा करते हैं।"
-              : "Learn how Swastik Supermarket collects, encrypts, and protects your profile information."
+              : `Learn how ${contactSettings?.brandName || 'the store'} handles and protects profile information.`
             }
           </p>
         </div>
@@ -57,6 +55,11 @@ export default function PrivacyPolicy() {
             </p>
           </div>
         ))}
+        {(!privacySections || privacySections.length === 0) && (
+          <div className="p-5 bg-amber-50 border border-amber-200 rounded-2xl text-sm text-amber-900">
+            {isHindi ? 'गोपनीयता नीति अभी कॉन्फ़िगर नहीं की गई है।' : 'The privacy policy has not been configured.'}
+          </div>
+        )}
       </div>
 
       {/* Data Deletion Request Callout */}
@@ -76,31 +79,20 @@ export default function PrivacyPolicy() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setIsDeleteModalOpen(true)}
-          className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs font-extrabold uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center gap-2 shrink-0 cursor-pointer"
-        >
-          <Trash2 className="h-4 w-4" />
-          <span>{isHindi ? "डेटा हटाने का अनुरोध भेजें" : "Request Data Deletion"}</span>
-        </button>
+        <p className="px-5 py-2.5 bg-white text-rose-800 border border-rose-200 text-xs font-bold rounded-xl">
+          {isHindi ? 'साइन इन करें और Account → Privacy में अनुरोध भेजें।' : 'Sign in, then open Account → Privacy to submit a request.'}
+        </p>
       </div>
 
       <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
         <Info className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
         <p className="text-emerald-900 text-xs leading-relaxed font-medium">
-          {isHindi 
-            ? `यदि गोपनीयता नीति के बारे में आपके कोई प्रश्न हैं, तो कृपया info.swastiksupermarket@gmail.com या ${contactSettings?.phone || '094845 40001'} पर संपर्क करें।`
-            : `If you have any questions or concerns regarding these privacy practices, contact our support desk via ${contactSettings?.email || 'info.swastiksupermarket@gmail.com'} or ${contactSettings?.phone || '094845 40001'}.`
-          }
+          {contactSettings?.email || contactSettings?.phone
+            ? (isHindi ? `गोपनीयता सहायता: ${[contactSettings.email, contactSettings.phone].filter(Boolean).join(' / ')}` : `Privacy support: ${[contactSettings.email, contactSettings.phone].filter(Boolean).join(' / ')}`)
+            : (isHindi ? 'गोपनीयता सहायता संपर्क कॉन्फ़िगर नहीं है।' : 'Privacy support contact is not configured.')}
         </p>
       </div>
 
-      <DataDeletionModal
-        isOpen={isDeleteModalOpen}
-        onClose={() => setIsDeleteModalOpen(false)}
-      />
     </div>
   );
 }
-

@@ -8,6 +8,7 @@ export default function ContactUs() {
   const { t, language } = useLanguage();
   const { contactSettings, addContactMessage, reviews, addReview } = useData();
   const isHindi = language === 'hi';
+  const mapEmbedUrl = getGoogleMapsEmbedUrl(contactSettings);
 
   const [newReviewForm, setNewReviewForm] = useState({
     name: '',
@@ -87,7 +88,7 @@ export default function ContactUs() {
                 <MapPin className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
                   <p className="font-bold text-xs text-slate-800 uppercase tracking-widest">{isHindi ? "मुख्यालय" : "HQ Address"}</p>
-                  <p className="text-xs text-slate-600 mt-0.5">{contactSettings?.address || 'Survey no. 100 Sanjit road opposite of Saraswati school , Mandsaur, India, Madhya Pradesh'}</p>
+                  <p className="text-xs text-slate-600 mt-0.5">{contactSettings?.address || (isHindi ? 'कॉन्फ़िगर नहीं किया गया' : 'Not configured')}</p>
                 </div>
               </div>
 
@@ -95,7 +96,7 @@ export default function ContactUs() {
                 <Phone className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
                   <p className="font-bold text-xs text-slate-800 uppercase tracking-widest">{isHindi ? "हेल्पलाइन नंबर" : "Phone Help"}</p>
-                  <p className="text-xs text-slate-600 font-mono mt-0.5">{contactSettings?.phone || '094845 40001'}</p>
+                  <p className="text-xs text-slate-600 font-mono mt-0.5">{contactSettings?.phone || '—'}</p>
                 </div>
               </div>
 
@@ -103,7 +104,7 @@ export default function ContactUs() {
                 <Mail className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
                   <p className="font-bold text-xs text-slate-800 uppercase tracking-widest">{isHindi ? "ईमेल समर्थन" : "Email Care"}</p>
-                  <p className="text-xs text-slate-600 font-mono mt-0.5">{contactSettings?.email || 'info.swastiksupermarket@gmail.com'}</p>
+                  <p className="text-xs text-slate-600 font-mono mt-0.5">{contactSettings?.email || '—'}</p>
                 </div>
               </div>
 
@@ -111,14 +112,15 @@ export default function ContactUs() {
                 <MapPin className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5 animate-pulse" />
                 <div>
                   <p className="font-bold text-xs text-emerald-800 uppercase tracking-widest">{isHindi ? "गूगल मैप्स नक्शा" : "Google Maps HQ"}</p>
-                  <a 
-                    href={contactSettings?.googleMaps || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(contactSettings?.address || "Survey no. 100 Sanjit road opposite of Saraswati school , Mandsaur, India, Madhya Pradesh")}`} 
+                  {(contactSettings?.googleMaps || contactSettings?.address) && <a
+                    href={contactSettings?.googleMaps || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(contactSettings.address)}`}
                     target="_blank" 
                     rel="noopener noreferrer" 
                     className="text-xs text-emerald-700 hover:text-emerald-800 hover:underline font-extrabold mt-0.5 inline-flex items-center gap-1"
                   >
                     🗺️ {isHindi ? "दिशा-निर्देश खोलें" : "Open Map Directions"}
                   </a>
+                  }
                 </div>
               </div>
             </div>
@@ -237,14 +239,14 @@ export default function ContactUs() {
               {isHindi ? "लाइव सैटेलाइट और स्थान मैप" : "Interactive HQ Venue Map"}
             </h3>
             <p className="text-[10px] sm:text-xs text-slate-500">
-              {contactSettings?.address || (isHindi ? "सर्वे नंबर 100 संजीत रोड सरस्वती स्कूल के सामने, मंदसौर, मध्य प्रदेश" : "Survey no. 100 Sanjit road opposite of Saraswati school , Mandsaur, India, Madhya Pradesh")}
+              {contactSettings?.address || (isHindi ? 'कॉन्फ़िगर नहीं किया गया' : 'Not configured')}
             </p>
           </div>
         </div>
         
         <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-inner bg-slate-100">
-          <iframe 
-            src={getGoogleMapsEmbedUrl(contactSettings)}
+          {mapEmbedUrl ? <iframe
+            src={mapEmbedUrl}
             width="100%" 
             height="320" 
             style={{ border: 0 }} 
@@ -252,7 +254,7 @@ export default function ContactUs() {
             loading="lazy" 
             referrerPolicy="no-referrer-when-downgrade" 
             className="w-full transition-opacity duration-300"
-          ></iframe>
+          ></iframe> : <div className="h-80 flex items-center justify-center text-sm text-slate-500">{isHindi ? 'स्टोर का नक्शा कॉन्फ़िगर नहीं है।' : 'Store map is not configured.'}</div>}
         </div>
       </div>
 

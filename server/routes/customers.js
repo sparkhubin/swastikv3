@@ -7,6 +7,24 @@ import {
 } from "../auth.js";
 
 const router = express.Router();
+const DELETION_SELECT = `SELECT id,customer_id AS customerId,requester_name AS name,requester_phone AS phone,
+  requester_email AS email,reason,notes,status,requested_at AS requestedAt,processed_at AS processedAt,
+  processed_by_user_id AS processedBy,admin_notes AS adminNotes FROM data_deletion_request`;
+
+async function loadDeletionRequest(id, transaction = db) {
+  if (!/^[0-9a-f-]{36}$/i.test(String(id || ""))) return null;
+  return transaction.get(`${DELETION_SELECT} WHERE id=?`, [id]);
+}
+
+async function saveDeletionRequest(request, transaction = db) {
+  await transaction.execute(`INSERT INTO data_deletion_request
+    (id,customer_id,requester_name,requester_phone,requester_email,reason,notes,status,requested_at,processed_at,processed_by_user_id,admin_notes)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
+    customer_id=excluded.customer_id,requester_name=excluded.requester_name,requester_phone=excluded.requester_phone,
+    requester_email=excluded.requester_email,reason=excluded.reason,notes=excluded.notes,status=excluded.status,
+    processed_at=excluded.processed_at,processed_by_user_id=excluded.processed_by_user_id,admin_notes=excluded.admin_notes`,
+  [request.id,request.customerId,request.name,request.phone,request.email,request.reason,request.notes,request.status,request.requestedAt,request.processedAt,request.processedBy,request.adminNotes]);
+}
 
 function finiteNumber(value) {
   const number = Number(value);
@@ -61,11 +79,16 @@ router.post("/customers", optionalIdentity, async (req, res) => {
         const referrer = await tx.get("SELECT id FROM customer WHERE referral_code=? AND id<>?", [referralCode, customerId]);
         const settings = await tx.query("SELECT key_name,value_text FROM app_settings WHERE key_name IN ('referrer_points','referred_customer_points')");
         const config = Object.fromEntries(settings.map(item => [item.key_name, Number(item.value_text)]));
-        if (referrer && Number.isInteger(config.referrer_points) && config.referrer_points > 0) {
-          await tx.execute("INSERT INTO customer_points (customer_id,points,type,reference_id,description,referred_customer_id) VALUES (?,?,'REFERRAL',?,'Referral reward',?)", [referrer.id, config.referrer_points, `REFERRAL:${customerId}`, customerId]);
+        const dynamicRow = await tx.get("SELECT value_text FROM app_settings WHERE key_name='swastik_referral_settings'");
+        let dynamic = {};
+        try { dynamic = JSON.parse(dynamicRow?.value_text || "{}"); } catch { dynamic = {}; }
+        const referrerPoints = Number(dynamic.referralPointsEarned ?? config.referrer_points);
+        const referredPoints = Number(dynamic.referredCustomerPoints ?? config.referred_customer_points);
+        if (referrer && Number.isInteger(referrerPoints) && referrerPoints > 0) {
+          await tx.execute("INSERT INTO customer_points (customer_id,points,type,reference_id,description,referred_customer_id) VALUES (?,?,'REFERRAL',?,'Referral reward',?)", [referrer.id, referrerPoints, `REFERRAL:${customerId}`, customerId]);
         }
-        if (referrer && Number.isInteger(config.referred_customer_points) && config.referred_customer_points > 0) {
-          await tx.execute("INSERT INTO customer_points (customer_id,points,type,reference_id,description,referrer_customer_id) VALUES (?,?,'REFERRED',?,'Referral welcome reward',?)", [customerId, config.referred_customer_points, `REFERRED:${customerId}`, referrer.id]);
+        if (referrer && Number.isInteger(referredPoints) && referredPoints > 0) {
+          await tx.execute("INSERT INTO customer_points (customer_id,points,type,reference_id,description,referrer_customer_id) VALUES (?,?,'REFERRED',?,'Referral welcome reward',?)", [customerId, referredPoints, `REFERRED:${customerId}`, referrer.id]);
         }
       }
       const session = req.staff ? null : await issueCustomerSession(customerId, { ip: req.ip, userAgent: req.get("user-agent") }, tx);
@@ -205,6 +228,117 @@ router.post("/customers/:id/memberships/cancel-active", requireStaffAuth, requir
 router.post("/customers/me/memberships/:id/cancel",requireCustomerAuth,async(req,res)=>{const result=await db.execute("UPDATE customer_membership SET status='Cancelled',updated_at=CURRENT_TIMESTAMP WHERE id=? AND customer_id=? AND status='Active'",[req.params.id,req.customer.id]);if(!result.changes)return res.status(404).json({error:"Active membership not found."});await audit("CUSTOMER",req.customer.id,"CANCEL_MEMBERSHIP","customer_membership",req.params.id,{},req);res.json({success:true});});
 
 router.delete("/customers/:id", requireStaffAuth, requirePermission("customers"), (_req, res) => res.status(405).json({ error: "Customer deletion is disabled to preserve order, points, and membership history." }));
-router.all("/data-deletion-requests/:rest(*)?", (_req, res) => res.status(501).json({ error: "Data deletion requests require a dedicated table in the committed schema." }));
+
+router.get("/data-deletion-requests", optionalIdentity, async (req, res) => {
+  if (!req.customer && !req.staff) return res.status(401).json({ error: "Authentication is required." });
+  if (req.staff && !req.staff.isMasterAdmin && !req.staff.permissions.includes("customers")) return res.status(403).json({ error: "Insufficient permission." });
+  try {
+    const requests = req.staff
+      ? await db.query(`${DELETION_SELECT} ORDER BY requested_at DESC,id DESC`)
+      : await db.query(`${DELETION_SELECT} WHERE customer_id=? ORDER BY requested_at DESC,id DESC`, [req.customer.id]);
+    res.json(requests);
+  } catch (error) {
+    console.error("Data deletion request list failed:", error.message);
+    res.status(500).json({ error: "Unable to load data deletion requests." });
+  }
+});
+
+router.post("/data-deletion-requests", requireCustomerAuth, async (req, res) => {
+  const reason = String(req.body?.reason || "").trim().slice(0, 250);
+  const notes = String(req.body?.notes || "").trim().slice(0, 2000);
+  if (!reason) return res.status(400).json({ error: "A deletion reason is required." });
+  try {
+    const request = await db.transaction(async tx => {
+      const duplicate = await tx.get("SELECT id FROM data_deletion_request WHERE customer_id=? AND status='Pending' LIMIT 1", [req.customer.id]);
+      if (duplicate) { const error = new Error("A deletion request is already pending."); error.status = 409; throw error; }
+      const created = {
+        id: crypto.randomUUID(), customerId: Number(req.customer.id), name: req.customer.name,
+        phone: req.customer.phone, email: req.customer.email || "", reason, notes,
+        status: "Pending", requestedAt: new Date().toISOString(), processedAt: null,
+        processedBy: null, adminNotes: ""
+      };
+      await saveDeletionRequest(created, tx);
+      return created;
+    });
+    await audit("CUSTOMER", req.customer.id, "REQUEST_DATA_DELETION", "data_deletion_request", request.id, { reason }, req);
+    res.status(201).json({ request });
+  } catch (error) {
+    console.error("Data deletion request creation failed:", error.message);
+    res.status(error.status || 500).json({ error: error.status ? error.message : "Unable to submit the deletion request." });
+  }
+});
+
+router.post("/data-deletion-requests/:id/approve", requireStaffAuth, requirePermission("customers"), async (req, res) => {
+  const adminNotes = String(req.body?.adminNotes || "").trim().slice(0, 2000);
+  try {
+    const processed = await db.transaction(async tx => {
+      const request = await loadDeletionRequest(req.params.id, tx);
+      if (!request) { const error = new Error("Deletion request not found."); error.status = 404; throw error; }
+      if (request.status !== "Pending") { const error = new Error("Only pending requests can be approved."); error.status = 409; throw error; }
+      const customerId = Number(request.customerId);
+      const customer = await tx.get("SELECT id FROM customer WHERE id=?", [customerId]);
+      if (!customer) { const error = new Error("Customer account no longer exists."); error.status = 409; throw error; }
+      const activeOrders = await tx.get(`SELECT COUNT(*) AS count FROM "order" WHERE customer_id=? AND upper(status) NOT IN ('DELIVERED','CANCELLED','FAILED','REFUNDED')`, [customerId]);
+      if (Number(activeOrders.count) > 0) { const error = new Error("Resolve active orders before erasing this customer account."); error.status = 409; throw error; }
+
+      await tx.execute("UPDATE customer_session SET revoked_at=CURRENT_TIMESTAMP WHERE customer_id=? AND revoked_at IS NULL", [customerId]);
+      await tx.execute("DELETE FROM customer_otp WHERE customer_id=?", [customerId]);
+      await tx.execute("DELETE FROM notification WHERE recipient_type='CUSTOMER' AND recipient_id=?", [customerId]);
+      await tx.execute("UPDATE payment_transaction SET customer_id=NULL,raw_response='' WHERE customer_id=?", [customerId]);
+      await tx.execute("UPDATE whatsapp_log SET customer_id=NULL,recipient_phone='',request_payload='',response_payload='',error_message='' WHERE customer_id=?", [customerId]);
+      await tx.execute("UPDATE \"order\" SET customer_name='',customer_phone='',customer_email='',shipping_address='',updated_at=CURRENT_TIMESTAMP WHERE customer_id=?", [customerId]);
+
+      const anonymousPhone = `deleted:${request.id.slice(0, 32)}`;
+      await tx.execute(`UPDATE customer SET name='',phone=?,email='',password_hash='',address='',status='Deleted',dob='',anniversary='',referral_code=NULL,last_login_at=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=?`, [anonymousPhone, customerId]);
+
+      const updated = {
+        ...request, customerId: null, name: "", phone: "", email: "", notes: "",
+        status: "Approved & Deleted", processedAt: new Date().toISOString(),
+        processedBy: Number(req.staff.id), adminNotes
+      };
+      await saveDeletionRequest(updated, tx);
+      return updated;
+    });
+    await audit("USER", req.staff.id, "APPROVE_DATA_DELETION", "data_deletion_request", processed.id, { status: processed.status }, req);
+    res.json({ request: processed });
+  } catch (error) {
+    console.error("Data deletion approval failed:", error.message);
+    res.status(error.status || 500).json({ error: error.status ? error.message : "Unable to process the deletion request." });
+  }
+});
+
+router.post("/data-deletion-requests/:id/reject", requireStaffAuth, requirePermission("customers"), async (req, res) => {
+  const adminNotes = String(req.body?.adminNotes || "").trim().slice(0, 2000);
+  if (!adminNotes) return res.status(400).json({ error: "A rejection reason is required." });
+  try {
+    const processed = await db.transaction(async tx => {
+      const request = await loadDeletionRequest(req.params.id, tx);
+      if (!request) { const error = new Error("Deletion request not found."); error.status = 404; throw error; }
+      if (request.status !== "Pending") { const error = new Error("Only pending requests can be rejected."); error.status = 409; throw error; }
+      const updated = { ...request, status: "Rejected", processedAt: new Date().toISOString(), processedBy: Number(req.staff.id), adminNotes };
+      await saveDeletionRequest(updated, tx);
+      return updated;
+    });
+    await audit("USER", req.staff.id, "REJECT_DATA_DELETION", "data_deletion_request", processed.id, { status: processed.status }, req);
+    res.json({ request: processed });
+  } catch (error) {
+    console.error("Data deletion rejection failed:", error.message);
+    res.status(error.status || 500).json({ error: error.status ? error.message : "Unable to reject the deletion request." });
+  }
+});
+
+router.delete("/data-deletion-requests/:id", requireStaffAuth, requirePermission("customers"), async (req, res) => {
+  try {
+    const request = await loadDeletionRequest(req.params.id);
+    if (!request) return res.status(404).json({ error: "Deletion request not found." });
+    if (request.status === "Pending") return res.status(409).json({ error: "Resolve the request before removing it from the operational queue." });
+    await db.execute("DELETE FROM data_deletion_request WHERE id=?", [req.params.id]);
+    await audit("USER", req.staff.id, "ARCHIVE_DATA_DELETION_REQUEST", "data_deletion_request", request.id, { status: request.status }, req);
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Data deletion request removal failed:", error.message);
+    res.status(500).json({ error: "Unable to archive the deletion request." });
+  }
+});
 
 export default router;

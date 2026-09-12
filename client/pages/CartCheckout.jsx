@@ -127,13 +127,12 @@ const CartItemImage = ({ product, r2PublicUrl, className }) => {
 
 export default function CartCheckout({ onViewChange }) {
   const { t, language, isHindi } = useLanguage();
-  const { orders, addOrder, offers, contactSettings, products, setProducts, referralSettings, locationGroups, celebrationSettings, customers, addCustomer, upsertCustomer, updateCustomer, r2PublicUrl, paymentEnabled, paymentEnvironment, fetchProducts, fetchOrders, fetchCustomers, staff, fetchStaff } = useData();
+  const { orders, addOrder, offers, contactSettings, products, setProducts, referralSettings, locationGroups, celebrationSettings, customers, addCustomer, upsertCustomer, updateCustomer, r2PublicUrl, paymentEnabled, paymentEnvironment, fetchProducts, fetchOrders, fetchCustomers } = useData();
 
   useEffect(() => {
     fetchProducts();
     if (fetchCustomers) fetchCustomers();
-    if (fetchStaff) fetchStaff();
-  }, [fetchProducts, fetchCustomers, fetchStaff]);
+  }, [fetchProducts, fetchCustomers]);
 
   const {
     cartItems,
@@ -504,10 +503,10 @@ export default function CartCheckout({ onViewChange }) {
   const [redeemPointsChecked, setRedeemPointsChecked] = useState(false);
   const [appliedPoints, setAppliedPoints] = useState(0);
 
-  const pointsRateInINR = referralSettings?.pointsValueInINR ?? 1;
+  const pointsRateInINR = Number(referralSettings?.pointsValueInINR || 0);
   const userPointsAvailable = isLoggedIn && profile ? (profile.points || 0) : 0;
-  const minPointsRedeem = referralSettings?.minPointsRedeem ?? 10;
-  const maxPointsRedeem = referralSettings?.maxPointsRedeem ?? 500;
+  const minPointsRedeem = Number(referralSettings?.minPointsRedeem || 0);
+  const maxPointsRedeem = Number(referralSettings?.maxPointsRedeem || 0);
 
   // Custom Location Groups Overrides
   const [selectedLocationGroupId, setSelectedLocationGroupId] = useState("");
@@ -936,8 +935,6 @@ export default function CartCheckout({ onViewChange }) {
     const effectiveUserId = (databaseCust && databaseCust.id) || (profile && profile.id) || null;
     const finalCustName = shippingInfo.fullName || (databaseCust && databaseCust.name) || profile?.fullName || profile?.name || "Customer";
     const finalCustPhone = shippingInfo.phoneNumber || (databaseCust && databaseCust.phone) || profile?.phone || profile?.mobile || "";
-    const activeRider = staff?.find(s => s.role_id === 4 || s.role?.toLowerCase().includes('delivery') || s.role?.toLowerCase().includes('rider')) || null;
-
     const newOrder = {
       id: orderId,
       userId: effectiveUserId,
@@ -959,12 +956,8 @@ export default function CartCheckout({ onViewChange }) {
       celebrationDiscount: Number(celebrationDiscountValue),
       celebrationOfferName: appliedCelebrationOfferName,
       total: Number(finalGrandTotal),
-      deliveryStaffId: activeRider ? activeRider.id : null,
-      deliveryPartnerName: activeRider ? activeRider.name : "",
-      deliveryPartnerPhone: activeRider ? (activeRider.mobile || activeRider.phone || "") : "",
-      hubName: selectedLocationGroup ? `${selectedLocationGroup.name} Hub` : "Alpha Hub, Sector 12",
-      eta: "15 Mins",
-      shippingAddress: `[${selectedLocationGroup ? selectedLocationGroup.name : 'General Location'}${selectedSubLocation ? ` - ${selectedSubLocation}` : ''}] ${shippingInfo.address || "Sector 15, Noida, UP"}`,
+      locationGroupId: selectedLocationGroup?.id || null,
+      shippingAddress: `[${selectedLocationGroup?.name || ''}${selectedSubLocation ? ` - ${selectedSubLocation}` : ''}] ${shippingInfo.address}`.trim(),
       customerName: finalCustName,
       customerPhone: finalCustPhone,
       customerEmail: customerEmail || profile?.email || "",
@@ -975,7 +968,7 @@ export default function CartCheckout({ onViewChange }) {
         price: Number(getUnitPrice(item.product, item.selectedUnit)),
         qty: Number(item.quantity),
         weight: item.selectedUnit || (language === 'hi' ? (item.product.packHi || "100gm") : (item.product.packEn || "100gm")),
-        gstPercent: item.product?.gstPercent !== undefined ? Number(item.product.gstPercent) : (item.product?.gst_percent !== undefined ? Number(item.product.gst_percent) : 5)
+        gstPercent: item.product?.gstPercent !== undefined ? Number(item.product.gstPercent) : (item.product?.gst_percent !== undefined ? Number(item.product.gst_percent) : 0)
       }))
     };
 
@@ -1036,7 +1029,7 @@ export default function CartCheckout({ onViewChange }) {
             key: data.key_id,
             amount: data.amount,
             currency: data.currency || "INR",
-            name: "Swastik Supermarket",
+            name: contactSettings?.brandName || undefined,
             description: `Grocery Order #${pending.order.id}`,
             image: "/pwa-192x192.png",
             ...(data.razorpay_order_id ? { order_id: data.razorpay_order_id } : {}),
@@ -1719,7 +1712,7 @@ export default function CartCheckout({ onViewChange }) {
                   <p className="text-[10px] text-slate-700 font-semibold leading-relaxed mt-1">
                     {language === 'hi' 
                       ? "स्वास्तिक सुपरमार्केट की ओर से ढेर सारी शुभकामनाएं! आपके लिए विशेष रूप से निम्नलिखित लाभ सक्रिय कर दिया गया है:" 
-                      : "Swastik Supermarket sends warm greetings on your celebration! The following automatic benefit has been enabled for you:"}
+                      : `${contactSettings?.brandName || 'The store'} sends warm greetings on your celebration. The configured benefit is shown below:`}
                   </p>
                 </div>
 
@@ -2203,8 +2196,8 @@ export default function CartCheckout({ onViewChange }) {
                   </p>
                   <p>
                     {language === 'hi' 
-                      ? "किराने और खराब होने वाले जैविक उपज की स्वच्छता बनाए रखने के लिए, हम प्रसव के समय नुकसान होने पर 24 घंटे की त्वरित वापसी प्रदान करते हैं। रिफंड सीधे आपके कैशफ्री वॉलेट/मूल स्रोत खाते में 3-5 दिनों में वापस जमा कर दिया जाएगा।"
-                      : "To uphold optimal hygiene controls on edible items and organic harvests, Swastik Supermarket supports zero-friction return within 24 hours of dispatch if items represent quality variance. Approved refunds credit directly through Cashfree gateway within 3 days."}
+                      ? "लागू समयसीमा और पात्रता के लिए डेटाबेस में कॉन्फ़िगर की गई रिफंड एवं रद्दीकरण नीति देखें।"
+                      : "Review the configured Refund & Cancellation Policy for applicable eligibility and settlement timelines."}
                   </p>
                 </div>
               </div>

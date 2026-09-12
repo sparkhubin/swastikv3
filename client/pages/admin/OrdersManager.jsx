@@ -35,7 +35,7 @@ import R2ImageUploader from './R2ImageUploader';
 import NotificationCenter from '../../components/NotificationCenter';
 import { isOrder1HourLocked, isOrderCancelled, getLockTimeRemainingFormatted } from '../../utils/orderLock';
 
-export default function OrdersManager({ userRole }) {
+export default function OrdersManager({ userRole, loggedInStaff }) {
   const { isHindi } = useLanguage();
   const { orders, updateOrder, deleteOrder, addOrder, products, offers, staff, contactSettings, customers, fetchOrders, fetchCustomers, fetchStaff } = useData();
 
@@ -107,24 +107,17 @@ export default function OrdersManager({ userRole }) {
     });
   }, [staff]);
 
-  const activeStaff = React.useMemo(() => {
-    try {
-      const saved = localStorage.getItem('swastik_logged_in_staff');
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      return null;
-    }
-  }, []);
+  const activeStaff = loggedInStaff;
 
   // Print Official Tax Invoice PDF
   const handlePrintInvoice = (order) => {
     if (!order) return;
-    const storeName = contactSettings?.brandName || "Swastik Supermarket";
-    const storeAddress = contactSettings?.address || "Survey no. 100 Sanjit road opposite of Saraswati school , Mandsaur, India, Madhya Pradesh";
-    const storePhone = contactSettings?.phone || "094845 40001";
-    const storeEmail = contactSettings?.email || "info.swastiksupermarket@gmail.com";
-    const storeGst = contactSettings?.gst || contactSettings?.gstin || "23AAAAA0000A1Z5";
-    const storeFssai = contactSettings?.fssai || "12721001000123";
+    const storeName = contactSettings?.brandName || "";
+    const storeAddress = contactSettings?.address || "";
+    const storePhone = contactSettings?.phone || "";
+    const storeEmail = contactSettings?.email || "";
+    const storeGst = contactSettings?.gst || contactSettings?.gstin || "";
+    const storeFssai = contactSettings?.fssai || contactSettings?.license || "";
     const storeLogo = contactSettings?.logo || "";
 
     const custName = getCustName(order);
@@ -468,10 +461,10 @@ export default function OrdersManager({ userRole }) {
   const [newOrderPaymentStatus, setNewOrderPaymentStatus] = useState('PENDING');
   const [newOrderItems, setNewOrderItems] = useState([]);
   const [newOrderSearchQuery, setNewOrderSearchQuery] = useState('');
-  const [newOrderDeliveryFee, setNewOrderDeliveryFee] = useState(30);
-  const [newOrderPilotName, setNewOrderPilotName] = useState('Rakesh Pilot');
-  const [newOrderPilotPhone, setNewOrderPilotPhone] = useState('+91 99999-88888');
-  const [newOrderETA, setNewOrderETA] = useState('15 Mins');
+  const [newOrderDeliveryFee, setNewOrderDeliveryFee] = useState(0);
+  const [newOrderPilotName, setNewOrderPilotName] = useState('');
+  const [newOrderPilotPhone, setNewOrderPilotPhone] = useState('');
+  const [newOrderETA, setNewOrderETA] = useState('');
   const [newOrderCouponCode, setNewOrderCouponCode] = useState('');
   const [newOrderAppliedCoupon, setNewOrderAppliedCoupon] = useState(null);
 
@@ -839,15 +832,13 @@ export default function OrdersManager({ userRole }) {
     // Generate unique order ID
     const randomSuffix = Math.floor(10000 + Math.random() * 90000);
     const newId = `SW-${randomSuffix}`;
-    const defaultRider = staff?.find(s => s.role_id === 4 || s.role?.toLowerCase().includes('delivery') || s.role?.toLowerCase().includes('rider')) || null;
-
     const orderPayload = {
       id: newId,
       customerName: newOrderName,
       customerPhone: newOrderPhone,
-      deliveryStaffId: defaultRider ? defaultRider.id : null,
-      deliveryPartnerName: newOrderPilotName || (defaultRider ? defaultRider.name : ""),
-      deliveryPartnerPhone: newOrderPilotPhone || (defaultRider ? defaultRider.mobile : ""),
+      deliveryStaffId: null,
+      deliveryPartnerName: newOrderPilotName,
+      deliveryPartnerPhone: newOrderPilotPhone,
       shippingAddress: newOrderAddress,
       orderDate: new Date().toISOString().split('T')[0],
       items: newOrderItems,
@@ -858,9 +849,9 @@ export default function OrdersManager({ userRole }) {
       total,
       paymentMethod: newOrderPaymentMethod,
       paymentStatus: newOrderPaymentStatus,
-      deliveryPartnerNamePilot: newOrderPilotName || "Rakesh Pilot",
-      deliveryPartnerPhonePilot: newOrderPilotPhone || "+91 99999-88888",
-      eta: newOrderETA || "15 Mins",
+      deliveryPartnerNamePilot: newOrderPilotName,
+      deliveryPartnerPhonePilot: newOrderPilotPhone,
+      eta: newOrderETA,
       status: "Confirmed",
       step: 0,
       isActive: true
@@ -1841,14 +1832,14 @@ export default function OrdersManager({ userRole }) {
                     {contactSettings?.brandName || "SWASTIK SUPERMARKET"}
                   </h3>
                   <p className="text-[10px] text-slate-600 font-bold">
-                    {contactSettings?.address || "Survey no. 100 Sanjit road opposite of Saraswati school , Mandsaur, India, Madhya Pradesh"}
+                    {contactSettings?.address || (isHindi ? 'कॉन्फ़िगर नहीं किया गया' : 'Not configured')}
                   </p>
                   <p className="text-[9px] text-slate-600 font-semibold">
-                    TEL: {contactSettings?.phone || "094845 40001"} | EMAIL: {contactSettings?.email || "info.swastiksupermarket@gmail.com"}
+                    TEL: {contactSettings?.phone || '—'} | EMAIL: {contactSettings?.email || '—'}
                   </p>
                   {(contactSettings?.gst || contactSettings?.gstin) && (
                     <p className="text-[8.5px] text-slate-500 font-mono font-bold">
-                      GSTIN: {contactSettings.gst || contactSettings.gstin} | FSSAI: {contactSettings?.fssai || '12721001000123'}
+                      GSTIN: {contactSettings.gst || contactSettings.gstin} {contactSettings?.fssai || contactSettings?.license ? `| FSSAI: ${contactSettings.fssai || contactSettings.license}` : ''}
                     </p>
                   )}
                 </div>

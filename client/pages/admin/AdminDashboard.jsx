@@ -55,7 +55,6 @@ import CustomersManager from './CustomersManager';
 import PartnersManager from './PartnersManager';
 import ReviewsManager from './ReviewsManager';
 import PagesManager from './PagesManager';
-import SecurityManager from './SecurityManager';
 import SliderManager from './SliderManager';
 import PaymentReports from './PaymentReports';
 import GstReportsManager from './GstReportsManager';
@@ -97,16 +96,7 @@ export default function AdminDashboard({ onViewChange }) {
   } = useData();
 
   // Authentication State
-  const [loggedInStaff, setLoggedInStaff] = useState(() => {
-    try {
-      const saved = sessionStorage.getItem('swastik_logged_in_staff');
-      const token = sessionStorage.getItem('swastik_staff_token');
-      return saved && token ? JSON.parse(saved) : null;
-    } catch (e) {
-      console.warn("Failed to parse the active staff session:", e);
-      return null;
-    }
-  });
+  const [loggedInStaff, setLoggedInStaff] = useState(null);
 
   // Login Form States
   const [loginMobile, setLoginMobile] = useState('');
@@ -114,7 +104,6 @@ export default function AdminDashboard({ onViewChange }) {
   const [loginError, setLoginError] = useState('');
 
   useEffect(() => {
-    if (!loggedInStaff) return;
     let active = true;
     fetch('/api/auth/staff/session')
       .then(async response => {
@@ -124,13 +113,10 @@ export default function AdminDashboard({ onViewChange }) {
       .then(data => {
         if (!active || !data.user) return;
         setLoggedInStaff(data.user);
-        sessionStorage.setItem('swastik_logged_in_staff', JSON.stringify(data.user));
       })
       .catch(() => {
         if (!active) return;
         setLoggedInStaff(null);
-        sessionStorage.removeItem('swastik_logged_in_staff');
-        sessionStorage.removeItem('swastik_staff_token');
       });
     return () => { active = false; };
   }, []);
@@ -224,7 +210,6 @@ export default function AdminDashboard({ onViewChange }) {
           const infoChanged = current.name !== loggedInStaff.name || current.role !== loggedInStaff.role;
           if (permsChanged || infoChanged) {
             setLoggedInStaff(current);
-            sessionStorage.setItem('swastik_logged_in_staff', JSON.stringify(current));
           }
         }
       }
@@ -284,15 +269,13 @@ export default function AdminDashboard({ onViewChange }) {
       }
 
       const matched = data.user;
-      sessionStorage.setItem('swastik_staff_token', data.token);
-      sessionStorage.setItem('swastik_logged_in_staff', JSON.stringify(matched));
       setLoggedInStaff(matched);
+      window.dispatchEvent(new Event('staff_session_change'));
       const perms = matched.permissions || [];
       const isSuper = matched.isMasterAdmin || matched.role_code === 'admin';
       const isDeliveryOnly = perms.length === 1 && perms[0] === 'delivery';
       const roleToSet = isDeliveryOnly ? 'delivery' : (isSuper ? 'admin' : 'manager');
       setUserRole(roleToSet);
-      localStorage.setItem('swastik_user_role', roleToSet);
       await fetchStaff(true);
     } catch (error) {
       console.error('Staff authentication failed:', error);
@@ -304,8 +287,7 @@ export default function AdminDashboard({ onViewChange }) {
   const handleLogout = () => {
     fetch('/api/auth/staff/logout', { method: 'POST' }).catch(() => {});
     setLoggedInStaff(null);
-    sessionStorage.removeItem('swastik_logged_in_staff');
-    sessionStorage.removeItem('swastik_staff_token');
+    window.dispatchEvent(new Event('staff_session_change'));
     setUserRole('customer');
   };
 
@@ -385,24 +367,13 @@ export default function AdminDashboard({ onViewChange }) {
 
   // Determine if active user has Super Admin clearance (Root Admin)
   // Strict Staff Role & Permission Mapping
-  const isRootAdmin = Boolean(
-    loggedInStaff && (
-      loggedInStaff.id === 1 ||
-      loggedInStaff.mobile === '9999999999' ||
-      loggedInStaff.isMasterAdmin ||
-      loggedInStaff.role === 'Store Super Admin' ||
-      loggedInStaff.role === 'admin'
-    )
-  );
+  const isRootAdmin = Boolean(loggedInStaff?.isMasterAdmin || ['MASTER_ADMIN', 'ADMIN'].includes(String(loggedInStaff?.role_code || '').toUpperCase()));
 
   // Delivery Rider identification: strictly delivery operations only
   const isRiderRole = Boolean(
     loggedInStaff && (
-      loggedInStaff.role_id === 4 ||
-      loggedInStaff.role_code === 'rider' ||
-      (loggedInStaff.role && String(loggedInStaff.role).toLowerCase().includes('rider')) ||
-      (loggedInStaff.role && String(loggedInStaff.role).toLowerCase().includes('delivery')) ||
-      userRole === 'delivery'
+      String(loggedInStaff.role_code || '').toUpperCase() === 'DELIVERY' ||
+      (Array.isArray(loggedInStaff.permissions) && loggedInStaff.permissions.length === 1 && loggedInStaff.permissions[0] === 'delivery')
     ) && !isRootAdmin
   );
 
@@ -1534,6 +1505,7 @@ export default function AdminDashboard({ onViewChange }) {
             {activeTab === 'orders' && (
               <OrdersManager 
                 userRole={userRole}
+                loggedInStaff={loggedInStaff}
               />
             )}
 
@@ -1605,6 +1577,7 @@ export default function AdminDashboard({ onViewChange }) {
             {activeTab === 'delivery' && (
               <DeliveryDashboard 
                 userRole={userRole} 
+                loggedInStaff={loggedInStaff}
                 onNavigateToReports={() => setActiveTab('payment-reports')}
               />
             )}

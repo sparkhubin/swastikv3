@@ -40,6 +40,7 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
     fetchReviews,
     fetchSettings
   } = useData();
+  const mapEmbedUrl = getGoogleMapsEmbedUrl(contactSettings);
   useEffect(() => {
     fetchReviews();
     fetchSettings();
@@ -170,14 +171,16 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
 
 
 
-  const storeLat = contactSettings?.latitude !== undefined ? Number(contactSettings.latitude) : 28.5708;
-  const storeLng = contactSettings?.longitude !== undefined ? Number(contactSettings.longitude) : 77.3259;
-
   const handleDirections = () => {
+    if (!contactSettings?.address && !contactSettings?.googleMaps) {
+      setDirectionsStatus(language === 'hi' ? 'स्टोर का स्थान कॉन्फ़िगर नहीं है।' : 'Store location is not configured.');
+      setShowDirections(true);
+      return;
+    }
     setShowDirections(true);
     setDirectionsStatus(language === 'hi' ? 'आपकी वर्तमान स्थिति से मार्ग की गणना की जा रही है...' : 'Calculating shortest route from current location...');
     setTimeout(() => {
-      const addressName = contactSettings?.address || (language === 'hi' ? "सर्वे नंबर 100 संजीत रोड सरस्वती स्कूल के सामने, मंदसौर, मध्य प्रदेश" : "Survey no. 100 Sanjit road opposite of Saraswati school , Mandsaur, India, Madhya Pradesh");
+      const addressName = contactSettings?.address || contactSettings?.googleMaps;
       setDirectionsStatus(
         language === 'hi' 
           ? `मार्ग तैयार है! स्वास्तिक स्टोर का स्थान: ${addressName} है।`
@@ -541,8 +544,8 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
               <div className="flex items-start gap-3">
                 <Phone className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-extrabold text-sm text-slate-900">{contactSettings?.phone || "094845 40001"}</p>
-                  <p className="text-xs text-slate-500 font-medium">{contactSettings?.email || "info.swastiksupermarket@gmail.com"}</p>
+                  <p className="font-extrabold text-sm text-slate-900">{contactSettings?.phone || '—'}</p>
+                  <p className="text-xs text-slate-500 font-medium">{contactSettings?.email || '—'}</p>
                 </div>
               </div>
             </div>
@@ -559,14 +562,14 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
 
           <div className="space-y-3">
             <div className="rounded-xl overflow-hidden border border-slate-200 relative h-[300px] md:h-[380px] shadow-sm">
-              <iframe 
-                src={getGoogleMapsEmbedUrl(contactSettings)}
+              {mapEmbedUrl ? <iframe
+                src={mapEmbedUrl}
                 className="w-full h-full border-0"
                 allowFullScreen="" 
                 loading="lazy" 
                 referrerPolicy="no-referrer-when-downgrade"
                 title="Store Map Location"
-              ></iframe>
+              ></iframe> : <div className="h-full flex items-center justify-center text-sm text-slate-500">{language === 'hi' ? 'स्टोर का नक्शा कॉन्फ़िगर नहीं है।' : 'Store map is not configured.'}</div>}
             </div>
           </div>
         </div>
@@ -596,14 +599,15 @@ export default function Home({ onViewChange, onCategorySelect, onSlideClick }) {
               >
                 Close
               </button>
-              <a 
-                href={contactSettings?.googleMaps || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(contactSettings?.address || "Survey no. 100 Sanjit road opposite of Saraswati school , Mandsaur, India, Madhya Pradesh")}`} 
+              {(contactSettings?.googleMaps || contactSettings?.address) && <a
+                href={contactSettings?.googleMaps || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(contactSettings.address)}`}
                 target="_blank" 
                 rel="noreferrer"
                 className="px-5 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all text-center shadow-sm"
               >
                 Open Google Maps
               </a>
+              }
             </div>
           </div>
         </div>

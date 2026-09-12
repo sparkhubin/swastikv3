@@ -9,7 +9,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import R2ImageUploader from './R2ImageUploader';
 import { isOrder1HourLocked } from '../../utils/orderLock';
 
-export default function DeliveryDashboard({ userRole, onNavigateToReports }) {
+export default function DeliveryDashboard({ userRole, loggedInStaff, onNavigateToReports }) {
   const { isHindi } = useLanguage();
   const { orders = [], updateOrder, staff = [], contactSettings, fetchOrders, fetchStaff } = useData();
 
@@ -17,16 +17,6 @@ export default function DeliveryDashboard({ userRole, onNavigateToReports }) {
     fetchOrders();
     fetchStaff();
   }, [fetchOrders, fetchStaff]);
-
-  // Retrieve logged-in staff from storage or fallback
-  const loggedInStaff = useMemo(() => {
-    try {
-      const saved = localStorage.getItem('swastik_logged_in_staff');
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      return null;
-    }
-  }, []);
 
   // Rider duty availability toggle
   const [isOnDuty, setIsOnDuty] = useState(true);
@@ -48,9 +38,8 @@ export default function DeliveryDashboard({ userRole, onNavigateToReports }) {
   const [copyFeedback, setCopyFeedback] = useState(null);
 
   // Active rider identity details
-  const defaultRider = staff?.find(s => s.role_id === 4 || s.role?.toLowerCase().includes('delivery') || s.role?.toLowerCase().includes('rider')) || null;
-  const currentRiderName = loggedInStaff?.name || (userRole === 'delivery' ? '' : (defaultRider?.name || ''));
-  const currentRiderPhone = loggedInStaff?.mobile || (userRole === 'delivery' ? '' : (defaultRider?.mobile || ''));
+  const currentRiderName = loggedInStaff?.name || '';
+  const currentRiderPhone = loggedInStaff?.mobile || '';
 
   // Filter orders based on assigned rider and view scope
   const riderOrders = useMemo(() => {
@@ -308,7 +297,7 @@ export default function DeliveryDashboard({ userRole, onNavigateToReports }) {
               <p className="text-xs text-slate-400 font-mono font-medium flex items-center gap-2 mt-0.5">
                 <span>📞 {currentRiderPhone}</span>
                 <span>•</span>
-                <span>ID: #{loggedInStaff?.id ? `RIDER-${loggedInStaff.id}` : 'RIDER-01'}</span>
+                <span>ID: #{loggedInStaff?.id || ''}</span>
               </p>
             </div>
           </div>
@@ -666,7 +655,7 @@ export default function DeliveryDashboard({ userRole, onNavigateToReports }) {
                           <span>{isHindi ? 'डिलीवरी पता और जीपीएस लोकेशन' : 'Delivery Address & GPS Pin'}</span>
                         </span>
                         <p className="text-xs text-slate-200 font-medium leading-relaxed">
-                          {order.shippingAddress || order.address || "Sector 15, Noida, Uttar Pradesh"}
+                          {order.shippingAddress || order.address || (isHindi ? 'पता उपलब्ध नहीं है' : 'Address unavailable')}
                         </p>
                       </div>
 

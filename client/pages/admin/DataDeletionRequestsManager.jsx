@@ -120,11 +120,7 @@ export default function DataDeletionRequestsManager() {
   const openActionModal = (req, type) => {
     setSelectedRequest(req);
     setActionType(type);
-    if (type === 'approve') {
-      setAdminNoteInput(isHindi ? 'अनुरोध स्वीकृत। ग्राहक का व्यक्तिगत डेटा स्थायी रूप से हटाया गया।' : 'Approved: Customer profile and personal records permanently deleted as requested.');
-    } else {
-      setAdminNoteInput(isHindi ? 'सक्रिय ऑर्डर या बकाया भुगतान के कारण अनुरोध वर्तमान में अस्वीकृत है।' : 'Request declined due to active pending order or account verification requirement.');
-    }
+    setAdminNoteInput('');
   };
 
   const handleConfirmAction = async () => {

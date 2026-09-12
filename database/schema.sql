@@ -443,6 +443,22 @@ CREATE TABLE whatsapp_log (
  FOREIGN KEY (customer_id) REFERENCES customer(id) ON DELETE SET NULL,
  FOREIGN KEY (template_id) REFERENCES whatsapp_template(id) ON DELETE SET NULL
 );
+CREATE TABLE data_deletion_request (
+ id VARCHAR(36) PRIMARY KEY,
+ customer_id INTEGER,
+ requester_name VARCHAR(255) DEFAULT '',
+ requester_phone VARCHAR(50) DEFAULT '',
+ requester_email VARCHAR(255) DEFAULT '',
+ reason VARCHAR(250) NOT NULL,
+ notes TEXT DEFAULT '',
+ status VARCHAR(30) NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending','Approved & Deleted','Rejected')),
+ requested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ processed_at TIMESTAMP,
+ processed_by_user_id INTEGER,
+ admin_notes TEXT DEFAULT '',
+ FOREIGN KEY (customer_id) REFERENCES customer(id) ON DELETE SET NULL,
+ FOREIGN KEY (processed_by_user_id) REFERENCES user(id) ON DELETE SET NULL
+);
 CREATE TABLE partner (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  name VARCHAR(255) NOT NULL,
@@ -521,5 +537,7 @@ CREATE INDEX idx_points_customer ON customer_points(customer_id, created_at);
 CREATE INDEX idx_notification_recipient ON notification(recipient_type, recipient_id, is_read);
 CREATE INDEX idx_whatsapp_log_customer ON whatsapp_log(customer_id);
 CREATE INDEX idx_whatsapp_log_reference ON whatsapp_log(reference_type, reference_id);
+CREATE INDEX idx_data_deletion_customer ON data_deletion_request(customer_id, requested_at);
+CREATE INDEX idx_data_deletion_status ON data_deletion_request(status, requested_at);
 CREATE INDEX idx_audit_entity ON audit_log(entity_type, entity_id);
 CREATE INDEX idx_audit_actor ON audit_log(actor_type, actor_id);

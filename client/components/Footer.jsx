@@ -44,15 +44,16 @@ export default function Footer({ onViewChange }) {
           >
             <Instagram className="h-4 w-4" />
           </a>
-          <a
-            href={`tel:${(contactSettings?.phone || "+91 94845 40001").replace(/[^0-9]/g, "")}`}
+          {contactSettings?.phone && <a
+            href={`tel:${contactSettings.phone.replace(/[^0-9]/g, "")}`}
             className="p-2 rounded-full bg-slate-100 border border-slate-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 text-slate-700 transition-all cursor-pointer flex items-center gap-1.5 px-3 py-1.5"
             title="Helpline Support"
             id="footer-phone-link"
           >
             <Phone className="h-4 w-4 text-emerald-600" />
-            <span className="text-[10px] font-mono font-extrabold tracking-tight text-slate-800">{contactSettings?.phone || "094845 40001"}</span>
+            <span className="text-[10px] font-mono font-extrabold tracking-tight text-slate-800">{contactSettings.phone}</span>
           </a>
+          }
         </div>
 
         {/* Navigation & Back to Top */}

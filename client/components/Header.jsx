@@ -12,29 +12,24 @@ export default function Header({ onMenuClick, onSearchClick, currentView, onView
 
   const totalItems = cartItems.reduce((acc, item) => acc + item.quantity, 0);
 
-  const [staffSession, setStaffSession] = React.useState(() => {
-    try {
-      const saved = localStorage.getItem('swastik_logged_in_staff');
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      return null;
-    }
-  });
+  const [staffSession, setStaffSession] = React.useState(null);
 
   React.useEffect(() => {
-    const handleSync = () => {
+    let active = true;
+    const refreshSession = async () => {
       try {
-        const saved = localStorage.getItem('swastik_logged_in_staff');
-        setStaffSession(saved ? JSON.parse(saved) : null);
-      } catch (e) {
-        setStaffSession(null);
+        const response = await fetch('/api/auth/staff/session');
+        const data = await response.json().catch(() => ({}));
+        if (active) setStaffSession(response.ok ? data.user || null : null);
+      } catch {
+        if (active) setStaffSession(null);
       }
     };
-    window.addEventListener('storage', handleSync);
-    window.addEventListener('staff_session_change', handleSync);
+    refreshSession();
+    window.addEventListener('staff_session_change', refreshSession);
     return () => {
-      window.removeEventListener('storage', handleSync);
-      window.removeEventListener('staff_session_change', handleSync);
+      active = false;
+      window.removeEventListener('staff_session_change', refreshSession);
     };
   }, []);
 
@@ -154,7 +149,7 @@ export default function Header({ onMenuClick, onSearchClick, currentView, onView
             role={(() => {
               if (staffSession) {
                 const s = staffSession;
-                const isRider = s.role_id === 4 || s.role_code === 'rider' || (s.role && String(s.role).toLowerCase().includes('rider')) || (s.permissions?.includes('delivery') && !s.isMasterAdmin && s.id !== 1);
+                const isRider = String(s.role_code || '').toUpperCase() === 'DELIVERY' || (s.permissions?.length === 1 && s.permissions[0] === 'delivery');
                 if (isRider) return 'delivery';
                 return 'admin';
               }

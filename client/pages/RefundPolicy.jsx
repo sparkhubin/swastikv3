@@ -27,57 +27,12 @@ export default function RefundPolicy() {
           <p className="text-xs md:text-sm text-emerald-100 mt-1 font-medium max-w-xl">
             {isHindi 
               ? "स्वास्तिक सुपरमार्केट में आपकी संतुष्टि हमारी सर्वोच्च प्राथमिकता है। हमारी पारदर्शी रिफंड प्रक्रिया और आसान वापसी की शर्तें नीचे देखें।"
-              : "Your satisfaction is our highest priority at Swastik Supermarket. Review our transparent refund timeline and hassle-free doorstep guarantee."
+              : `Review the refund and cancellation policy configured by ${contactSettings?.brandName || 'the store'}.`
             }
           </p>
         </div>
         {/* Decorative circle */}
         <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white/10 rounded-full blur-2xl pointer-events-none" />
-      </div>
-
-      {/* Highlights Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
-        <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm flex items-center gap-3">
-          <div className="p-2.5 bg-emerald-50 text-emerald-700 rounded-xl">
-            <Clock className="h-5 w-5" />
-          </div>
-          <div>
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
-              {isHindi ? "रद्दीकरण समय" : "Cancellation Window"}
-            </span>
-            <span className="text-xs font-bold text-slate-900">
-              {isHindi ? "10 मिनट के भीतर मुफ्त" : "Free within 10 Mins"}
-            </span>
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm flex items-center gap-3">
-          <div className="p-2.5 bg-cyan-50 text-cyan-700 rounded-xl">
-            <CheckCircle className="h-5 w-5" />
-          </div>
-          <div>
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
-              {isHindi ? "डोरस्टेप निरीक्षण" : "Doorstep Inspection"}
-            </span>
-            <span className="text-xs font-bold text-slate-900">
-              {isHindi ? "त्वरित वापसी / प्रतिस्थापन" : "Instant Return / Swap"}
-            </span>
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm flex items-center gap-3">
-          <div className="p-2.5 bg-teal-50 text-teal-700 rounded-xl">
-            <RotateCcw className="h-5 w-5" />
-          </div>
-          <div>
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
-              {isHindi ? "ऑनलाइन रिफंड समय" : "Online Settlement"}
-            </span>
-            <span className="text-xs font-bold text-slate-900">
-              {isHindi ? "24–48 कार्य घंटे" : "24–48 Working Hours"}
-            </span>
-          </div>
-        </div>
       </div>
 
       {/* Dynamic Refund Policy Sections */}
@@ -102,6 +57,11 @@ export default function RefundPolicy() {
             </p>
           </div>
         ))}
+        {(!refundSections || refundSections.length === 0) && (
+          <div className="p-5 bg-amber-50 border border-amber-200 rounded-2xl text-sm text-amber-900">
+            {isHindi ? 'रिफंड नीति अभी कॉन्फ़िगर नहीं की गई है।' : 'The refund policy has not been configured.'}
+          </div>
+        )}
       </div>
 
       {/* Support Helpline Box */}
@@ -123,13 +83,7 @@ export default function RefundPolicy() {
           </div>
         </div>
 
-        <a
-          href={`tel:${(contactSettings?.phone || "+91 94845 40001").replace(/[^0-9]/g, "")}`}
-          className="px-5 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2 shrink-0 active:scale-95"
-        >
-          <Phone className="h-4 w-4" />
-          <span>{contactSettings?.phone || "094845 40001"}</span>
-        </a>
+        {contactSettings?.phone ? <a href={`tel:${contactSettings.phone.replace(/[^0-9]/g, "")}`} className="px-5 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2 shrink-0 active:scale-95"><Phone className="h-4 w-4" /><span>{contactSettings.phone}</span></a> : <span className="text-xs text-slate-300">{isHindi ? 'सहायता नंबर कॉन्फ़िगर नहीं है।' : 'Support phone is not configured.'}</span>}
       </div>
     </div>
   );

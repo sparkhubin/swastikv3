@@ -423,19 +423,11 @@ export default function CustomersManager() {
     XLSX.writeFile(wb, "swastik_contacts_sample.xlsx");
   };
 
-  // Groups stored locally in localStorage
-  const [groups, setGroups] = useState(() => {
-    const saved = localStorage.getItem('swastik_wa_groups');
-    return saved ? JSON.parse(saved) : [
-      { id: 1, name: 'Premium Frequent Shoppers', desc: 'Loyal customers ordering twice weekly.', memberIds: [101, 102] },
-      { id: 2, name: 'Daily Milk & Dairy Buyers', desc: 'Customers subscribed or ordering milk daily.', memberIds: [103] },
-      { id: 3, name: 'Organic Fruits Enthusiasts', desc: 'Sellers of organic and health fruits.', memberIds: [102, 103] }
-    ];
-  });
+  // The committed schema has no broadcast-group table, so no groups are fabricated or persisted client-side.
+  const [groups, setGroups] = useState([]);
 
   const saveGroups = (nextGroups) => {
     setGroups(nextGroups);
-    localStorage.setItem('swastik_wa_groups', JSON.stringify(nextGroups));
   };
 
   // Group Builder Form State
@@ -454,7 +446,23 @@ export default function CustomersManager() {
   const [selectedTargetCustId, setSelectedTargetCustId] = useState(customers[0]?.id || '');
 
   // Campaign template var states
-  const [activeTemplateId, setActiveTemplateId] = useState('welcome_onboard');
+  const [activeTemplateId, setActiveTemplateId] = useState('');
+  const [templates, setTemplates] = useState([]);
+
+  useEffect(() => {
+    fetch('/api/whatsapp/custom-templates')
+      .then(async response => response.ok ? response.json() : [])
+      .then(rows => {
+        const normalized = (Array.isArray(rows) ? rows : []).filter(row => row.isActive).map(row => {
+          let inputs = [];
+          try { inputs = JSON.parse(row.variablesJson || '[]'); } catch { inputs = []; }
+          return { ...row, text: row.bodyPreview || '', inputs: Array.isArray(inputs) ? inputs : [] };
+        });
+        setTemplates(normalized);
+        setActiveTemplateId(current => current || String(normalized[0]?.id || ''));
+      })
+      .catch(() => setTemplates([]));
+  }, []);
   const [var1, setVar1] = useState('');
   const [var2, setVar2] = useState('');
   const [var3, setVar3] = useState('');
@@ -599,46 +607,18 @@ export default function CustomersManager() {
     reader.readAsBinaryString(file);
   };
 
-  // Meta business template specs
-  const templates = {
-    reference_no: {
-      name: 'reference_no (OTP Login Reference)',
-      text: 'Hello\nNote {{1}} is Your Reference',
-      inputs: ['OTP Code (e.g. 1234)']
-    },
-    order_dispatch_alert: {
-      name: 'order_dispatch_alert (Order Dispatched Handover)',
-      text: 'Hello {{1}}, your Swastik order {{2}} has been handed over to our delivery partner! Total bill amount is {{3}}. You can track or contact your rider directly from the Swastik app.',
-      inputs: ['Customer Name (e.g. Balram)', 'Order ID (e.g. 1234)', 'Total Bill Amount (e.g. 1200)']
-    },
-    thank_you_template: {
-      name: 'thank_you_template (Order Placed Appreciation)',
-      text: 'Thank you for shopping at Swastik Supermarket 😊\n\nWe appreciate your visit.',
-      inputs: []
-    },
-    welcome_onboard: {
-      name: 'Welcome Onboard Greetings',
-      text: 'Namaste {{1}}, welcome to Swastik Supermarket! Your flat ₹{{2}} promo points are active. Valid for {{3}}.',
-      inputs: ['Customer Name', 'Reward Points Amount', 'Validity (e.g. 30 days)']
-    },
-    promotional_offer: {
-      name: 'Flash Sale & Campaigns',
-      text: 'Hurrah {{1}}! Dynamic discount of flat {{2}}% is running on all kirana essentials today only using coupon code {{3}}!',
-      inputs: ['Customer Name', 'Discount Percentage', 'Promo Coupon Code']
-    },
-    inactive_nudge: {
-      name: 'Inactive We Miss You Nudge',
-      text: 'Dear {{1}}, we missed your smile in our aisle! Get flat ₹{{2}} discount on purchases. Validity: {{3}}.',
-      inputs: ['Customer Name', 'Discount Voucher', 'Valid Till Date']
-    }
-  };
-
-  const currentTemplate = templates[activeTemplateId];
+  const currentTemplate = templates.find(template => String(template.id) === String(activeTemplateId)) || { text: '', inputs: [] };
 
   // Dispatch a campaign through the authenticated server/provider integration.
   const handleLaunchCampaign = async () => {
     setIsBroadcasting(true);
     setPayloadLogs([]);
+
+    if (!activeTemplateId) {
+      triggerToast('Configure and activate a WhatsApp template before broadcasting.');
+      setIsBroadcasting(false);
+      return;
+    }
 
     let recipients = [];
     if (targetType === 'individual') {
@@ -669,8 +649,8 @@ export default function CustomersManager() {
             phone: rcp.phone,
             params: [var1 || rcp.name, var2, var3]
           })),
-          templateName: activeTemplateId,
-          languageCode: 'en_US',
+          templateName: currentTemplate.metaTemplateName || currentTemplate.name,
+          languageCode: currentTemplate.languageCode,
           fallbackMessage: currentTemplate.text
         })
       });
@@ -1439,8 +1419,9 @@ export default function CustomersManager() {
                 }}
                 className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none cursor-pointer font-bold text-cyan-300"
               >
-                {Object.keys(templates).map(id => (
-                  <option key={id} value={id}>📲 {templates[id].name}</option>
+                <option value="">Select a configured template</option>
+                {templates.map(template => (
+                  <option key={template.id} value={template.id}>📲 {template.name}</option>
                 ))}
               </select>
             </div>
@@ -1503,7 +1484,7 @@ export default function CustomersManager() {
 
             <button 
               onClick={handleLaunchCampaign}
-              disabled={isBroadcasting}
+              disabled={isBroadcasting || !activeTemplateId}
               className={`w-full py-2.5 rounded-xl font-black text-xs uppercase tracking-wider border transition-all cursor-pointer ${
                 isBroadcasting 
                   ? 'bg-slate-800 text-slate-500 border-white/10 cursor-not-allowed' 

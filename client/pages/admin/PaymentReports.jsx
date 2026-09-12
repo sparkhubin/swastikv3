@@ -34,16 +34,7 @@ export default function PaymentReports({ userRole, loggedInStaff }) {
     fetchStaff();
   }, [fetchOrders, fetchStaff]);
 
-  // Retrieve logged-in staff from storage if not passed directly
-  const activeStaff = useMemo(() => {
-    if (loggedInStaff) return loggedInStaff;
-    try {
-      const saved = localStorage.getItem('swastik_logged_in_staff');
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      return null;
-    }
-  }, [loggedInStaff]);
+  const activeStaff = loggedInStaff;
 
   const isOnlyDeliveryRider = userRole === 'delivery' || (activeStaff && activeStaff.permissions?.length === 1 && activeStaff.permissions[0] === 'delivery');
   const isDeliveryRider = isOnlyDeliveryRider;

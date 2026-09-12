@@ -18,7 +18,7 @@ import {
 export default function DataDeletionModal({ isOpen, onClose, userProfile = null, onSuccess }) {
   const { language } = useLanguage();
   const isHindi = language === 'hi';
-  const { addDataDeletionRequest, dataDeletionRequests, customers } = useData();
+  const { addDataDeletionRequest } = useData();
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -34,16 +34,7 @@ export default function DataDeletionModal({ isOpen, onClose, userProfile = null,
     if (isOpen) {
       const pPhone = userProfile?.phone || userProfile?.mobile || '';
       const pEmail = userProfile?.email || '';
-      let pName = userProfile?.fullName || userProfile?.name || '';
-
-      if (!pName && (pPhone || pEmail)) {
-        const cleanP = pPhone ? String(pPhone).replace(/\D/g, '').slice(-10) : '';
-        const match = customers?.find(c => 
-          (cleanP && (c.phone || '').replace(/\D/g, '').endsWith(cleanP)) ||
-          (pEmail && c.email && c.email.toLowerCase().trim() === pEmail.toLowerCase().trim())
-        );
-        if (match?.name) pName = match.name;
-      }
+      const pName = userProfile?.fullName || userProfile?.name || '';
 
       setName(pName);
       setPhone(pPhone);
@@ -52,7 +43,7 @@ export default function DataDeletionModal({ isOpen, onClose, userProfile = null,
       setError('');
       setSubmittedRequest(null);
     }
-  }, [isOpen, userProfile, customers]);
+  }, [isOpen, userProfile]);
 
   if (!isOpen) return null;
 
@@ -60,8 +51,8 @@ export default function DataDeletionModal({ isOpen, onClose, userProfile = null,
     e.preventDefault();
     setError('');
 
-    if (!phone && !email) {
-      setError(isHindi ? 'कृपया मोबाइल नंबर या ईमेल दर्ज करें।' : 'Please provide either a phone number or email.');
+    if (!userProfile?.id) {
+      setError(isHindi ? 'पहले अपने ग्राहक खाते में साइन इन करें।' : 'Sign in to your customer account first.');
       return;
     }
 
@@ -72,23 +63,7 @@ export default function DataDeletionModal({ isOpen, onClose, userProfile = null,
 
     setSubmitting(true);
     try {
-      const cleanP = phone ? String(phone).replace(/\D/g, '').slice(-10) : '';
-      const matchedCust = customers?.find(c => 
-        (cleanP && (c.phone || '').replace(/\D/g, '').endsWith(cleanP)) ||
-        (email && c.email && c.email.toLowerCase().trim() === email.toLowerCase().trim()) ||
-        (userProfile?.id && Number(c.id) === Number(userProfile.id))
-      );
-
-      const finalName = (name || '').trim() || userProfile?.fullName || userProfile?.name || matchedCust?.name || '';
-
-      const created = await addDataDeletionRequest({
-        customerId: userProfile?.id || matchedCust?.id || null,
-        name: finalName,
-        phone: phone || matchedCust?.phone || userProfile?.phone || '',
-        email: email || matchedCust?.email || userProfile?.email || '',
-        reason,
-        notes
-      });
+      const created = await addDataDeletionRequest({ reason, notes });
 
       setSubmittedRequest(created);
       if (onSuccess) onSuccess(created);
@@ -147,7 +122,7 @@ export default function DataDeletionModal({ isOpen, onClose, userProfile = null,
               <p className="text-xs text-slate-600 mt-1 max-w-sm mx-auto">
                 {isHindi 
                   ? 'आपका डेटा डिलीट करने का अनुरोध सुरक्षित रूप से दर्ज कर लिया गया है। व्यवस्थापक द्वारा सत्यापन के बाद आपका डेटा स्थायी रूप से हटा दिया जाएगा।'
-                  : 'Your request for account and data deletion has been received. Our admin team will process and permanently remove your data within 24-48 hours.'}
+                  : 'Your request for account and data deletion has been received. Its status will be available in your privacy center after review.'}
               </p>
             </div>
 
@@ -214,8 +189,7 @@ export default function DataDeletionModal({ isOpen, onClose, userProfile = null,
                     type="text"
                     required
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. Rahul Sharma"
+                    readOnly
                     className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:border-rose-500 focus:outline-hidden transition-colors"
                   />
                 </div>
@@ -232,8 +206,7 @@ export default function DataDeletionModal({ isOpen, onClose, userProfile = null,
                       type="tel"
                       required
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="+91 98765 43210"
+                      readOnly
                       className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:border-rose-500 focus:outline-hidden transition-colors"
                     />
                   </div>
@@ -248,8 +221,7 @@ export default function DataDeletionModal({ isOpen, onClose, userProfile = null,
                     <input
                       type="email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="rahul@example.com"
+                      readOnly
                       className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:border-rose-500 focus:outline-hidden transition-colors"
                     />
                   </div>

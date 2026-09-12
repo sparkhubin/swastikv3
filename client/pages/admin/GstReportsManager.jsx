@@ -31,11 +31,11 @@ export default function GstReportsManager({ userRole }) {
   }, [fetchOrders]);
 
   // Store information
-  const storeName = contactSettings?.brandName || "Swastik Supermarket";
-  const storeGstin = contactSettings?.gst || contactSettings?.gstin || "23AAAAA0000A1Z5";
-  const storeAddress = contactSettings?.address || "Survey no. 100 Sanjit road opposite of Saraswati school, Mandsaur, MP";
-  const storePhone = contactSettings?.phone || "094845 40001";
-  const storeFssai = contactSettings?.fssai || "12721001000123";
+  const storeName = contactSettings?.brandName || "";
+  const storeGstin = contactSettings?.gst || contactSettings?.gstin || "";
+  const storeAddress = contactSettings?.address || "";
+  const storePhone = contactSettings?.phone || "";
+  const storeFssai = contactSettings?.fssai || contactSettings?.license || "";
 
   // Filter States
   const [datePreset, setDatePreset] = useState('this-month');
@@ -124,7 +124,7 @@ export default function GstReportsManager({ userRole }) {
       const orderSlabs = {};
 
       const processedItems = items.map(item => {
-        const rate = item.gstPercent !== undefined ? Number(item.gstPercent) : 5;
+        const rate = item.gstPercent !== undefined ? Number(item.gstPercent) : 0;
         const qty = Number(item.qty || item.quantity || 1);
         const unitPrice = Number(item.price || 0);
         const itemTaxable = Math.round(unitPrice * qty * 100) / 100;
@@ -443,7 +443,7 @@ export default function GstReportsManager({ userRole }) {
 📋 *RATE-WISE GST SLAB BREAKDOWN:*
 ${metrics.slabAggregates.map(s => `• *${s.slab}% Slab:* Taxable ₹${s.taxable.toFixed(2)} | CGST ₹${s.cgst.toFixed(2)} | SGST ₹${s.sgst.toFixed(2)} | Total ₹${s.totalTax.toFixed(2)}`).join('\n')}
 
-_Generated via Swastik Supermarket Billing Management System_`;
+_Generated via ${storeName || 'configured billing system'}_`;
 
     navigator.clipboard.writeText(summaryText).then(() => {
       setCopiedNotification(true);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useData } from '../context/DataContext';
 import { useCart } from '../context/CartContext';
@@ -60,15 +60,33 @@ export default function Account({ onViewChange }) {
   const isHindi = language === 'hi';
   const { products = [], orders, referralSettings, customers, primeSettings, updateCustomer, addCustomer, upsertCustomer, addOrder, deleteOrder, paymentEnabled, paymentEnvironment, contactSettings, staff, setUserRole, fetchOrders, fetchCustomers, fetchProducts, fetchDataDeletionRequests } = useData();
   const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [activeMembershipPlan, setActiveMembershipPlan] = useState(null);
+  const activeMembershipBenefits = useMemo(() => {
+    try {
+      const benefits = JSON.parse(activeMembershipPlan?.benefitsJson || '[]');
+      return Array.isArray(benefits) ? benefits : [];
+    } catch {
+      return [];
+    }
+  }, [activeMembershipPlan]);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/membership/plans')
+      .then(async response => response.ok ? response.json() : [])
+      .then(plans => { if (active) setActiveMembershipPlan(Array.isArray(plans) ? plans[0] || null : null); })
+      .catch(() => { if (active) setActiveMembershipPlan(null); });
+    return () => { active = false; };
+  }, []);
   // Print Official Tax Invoice PDF
   const handlePrintInvoice = (order) => {
     if (!order) return;
-    const storeName = contactSettings?.brandName || "Swastik Supermarket";
-    const storeAddress = contactSettings?.address || "Survey no. 100 Sanjit road opposite of Saraswati school , Mandsaur, India, Madhya Pradesh";
-    const storePhone = contactSettings?.phone || "094845 40001";
-    const storeEmail = contactSettings?.email || "info.swastiksupermarket@gmail.com";
-    const storeGst = contactSettings?.gst || contactSettings?.gstin || "23AAAAA0000A1Z5";
-    const storeFssai = contactSettings?.fssai || "12721001000123";
+    const storeName = contactSettings?.brandName || "";
+    const storeAddress = contactSettings?.address || "";
+    const storePhone = contactSettings?.phone || "";
+    const storeEmail = contactSettings?.email || "";
+    const storeGst = contactSettings?.gst || contactSettings?.gstin || "";
+    const storeFssai = contactSettings?.fssai || contactSettings?.license || "";
     const storeLogo = contactSettings?.logo || "";
 
     const custName = order.customerName || order.name || profile?.fullName || "Valued Customer";
@@ -424,7 +442,7 @@ export default function Account({ onViewChange }) {
         return;
       }
       if (!await ensureRazorpayLoaded() || !window.Razorpay) throw new Error('Razorpay checkout SDK is unavailable.');
-      new window.Razorpay({ key: intent.key_id, amount: intent.amount, currency: intent.currency, order_id: intent.razorpay_order_id, name: 'Swastik Supermarket', description: plans[0].name,
+      new window.Razorpay({ key: intent.key_id, amount: intent.amount, currency: intent.currency, order_id: intent.razorpay_order_id, name: contactSettings?.brandName || undefined, description: plans[0].name,
         handler: async response => {
           const verification = await fetch('/api/razorpay/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(response) });
           const result = await verification.json().catch(() => ({}));
@@ -438,45 +456,37 @@ export default function Account({ onViewChange }) {
       setPaymentErrorMessage(error.message);
     }
   };
-  // --- 1. USER SESSION CONTROLS WITH LOCALSTORAGE SYNC ---
+  // Customer and staff identity are resolved from server-side sessions.
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [authMode, setAuthMode] = useState('login'); // login | signup | forgot_password
   const [authType, setAuthType] = useState('password'); // password | otp
 
   // Staff Session State & Sync Listener
-  const [activeStaffSession, setActiveStaffSession] = useState(() => {
-    try {
-      const saved = sessionStorage.getItem('swastik_logged_in_staff');
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      return null;
-    }
-  });
+  const [activeStaffSession, setActiveStaffSession] = useState(null);
 
   useEffect(() => {
-    const handleSync = () => {
+    let active = true;
+    const handleSync = async () => {
       try {
-        const saved = sessionStorage.getItem('swastik_logged_in_staff');
-        setActiveStaffSession(saved ? JSON.parse(saved) : null);
-      } catch (e) {
-        setActiveStaffSession(null);
+        const response = await fetch('/api/auth/staff/session');
+        const data = await response.json().catch(() => ({}));
+        if (active) setActiveStaffSession(response.ok ? data.user || null : null);
+      } catch {
+        if (active) setActiveStaffSession(null);
       }
     };
-    window.addEventListener('storage', handleSync);
+    handleSync();
     window.addEventListener('staff_session_change', handleSync);
     return () => {
-      window.removeEventListener('storage', handleSync);
+      active = false;
       window.removeEventListener('staff_session_change', handleSync);
     };
   }, []);
 
   const handleExitStaffSession = () => {
     fetch('/api/auth/staff/logout', { method: 'POST' }).catch(() => {});
-    sessionStorage.removeItem('swastik_logged_in_staff');
-    sessionStorage.removeItem('swastik_staff_token');
     setActiveStaffSession(null);
     window.dispatchEvent(new Event('staff_session_change'));
-    window.dispatchEvent(new Event('storage'));
   };
 
   // --- AUTH FORM STATES ---
@@ -629,9 +639,12 @@ export default function Account({ onViewChange }) {
   };
 
   const handleWhatsAppShare = () => {
+    const brandName = contactSettings?.brandName || (isHindi ? 'हमारे स्टोर' : 'our store');
+    const configuredReward = Number(referralSettings?.referralPointsEarned || 0);
+    const rewardText = configuredReward > 0 ? (isHindi ? ` और ${configuredReward} पॉइंट पाएं` : ` and receive ${configuredReward} points`) : '';
     const text = isHindi
-      ? `नमस्ते! स्वस्तिक सुपरमार्केट ऐप पर साइन अप करें और मेरे रेफ़रल कोड *${userReferralCode}* का उपयोग कर ₹${referralSettings?.referralPointsEarned ?? 50} मूल्य के फ़्री शॉपिंग पॉइंट्स पाएं! यहाँ खरीदें: ${window.location.origin}`
-      : `Hey! Shop fresh groceries at Swastik Supermarket. Sign up using my referral code *${userReferralCode}* and get ${referralSettings?.referralPointsEarned ?? 50} free shopping points immediately! Order now: ${window.location.origin}`;
+      ? `${brandName} पर मेरे रेफ़रल कोड *${userReferralCode}* से साइन अप करें${rewardText}: ${window.location.origin}`
+      : `Sign up at ${brandName} with my referral code *${userReferralCode}*${rewardText}: ${window.location.origin}`;
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -825,13 +838,12 @@ export default function Account({ onViewChange }) {
       });
       if (staffResponse.ok) {
         const session = await staffResponse.json();
-        sessionStorage.setItem('swastik_staff_token', session.token);
-        sessionStorage.setItem('swastik_logged_in_staff', JSON.stringify(session.user));
         const perms = session.user.permissions || [];
         const isSuper = session.user.isMasterAdmin || session.user.role_code === 'admin';
         const isDeliveryOnly = perms.length === 1 && perms[0] === 'delivery';
         if (setUserRole) setUserRole(isDeliveryOnly ? 'delivery' : (isSuper ? 'admin' : 'manager'));
         setActiveStaffSession(session.user);
+        window.dispatchEvent(new Event('staff_session_change'));
         setAuthSuccess(isHindi ? `लॉगिन सफल (${session.user.name})!` : `Staff login successful (${session.user.name}).`);
         setTimeout(() => onViewChange?.('admin'), 500);
         return;
@@ -1329,11 +1341,6 @@ export default function Account({ onViewChange }) {
                 fetch('/api/auth/customer/logout', { method: 'POST' }).catch(() => {});
                 setIsLoggedIn(false);
                 setProfile({ fullName: "", email: "", phone: "", address: "", points: 0, dob: "", anniversary: "", membershipStatus: null, membershipNumber: null });
-                sessionStorage.removeItem('swastik_logged_in_staff');
-                sessionStorage.removeItem('swastik_staff_token');
-                setActiveStaffSession(null);
-                window.dispatchEvent(new Event('staff_session_change'));
-                window.dispatchEvent(new Event('storage'));
                 setAuthError('');
                 setMobileNumber('');
                 setPassword('');
@@ -1484,6 +1491,7 @@ export default function Account({ onViewChange }) {
                 setProfile={setProfile}
                 setShowPrimePayment={setShowPrimePayment}
                 primeSettings={primeSettings}
+                membershipPlan={activeMembershipPlan}
                 isHindi={isHindi}
               />
             )}
@@ -2014,7 +2022,7 @@ export default function Account({ onViewChange }) {
                     <div className="text-sm font-black text-white font-mono flex items-baseline gap-1.5">
                       <span>{profile.points || 0} PTS</span>
                       <span className="text-[10px] text-zinc-400 font-medium font-sans">
-                        (≈ ₹{((profile.points || 0) * (referralSettings?.pointsValueInINR ?? 1)).toFixed(1)} INR)
+                        (≈ ₹{((profile.points || 0) * Number(referralSettings?.pointsValueInINR || 0)).toFixed(1)} INR)
                       </span>
                     </div>
                   </div>
@@ -2135,33 +2143,28 @@ export default function Account({ onViewChange }) {
                   <div className="space-y-4 flex-1 flex flex-col justify-between">
                     <div className="space-y-2.5">
                       <p className="text-xs text-slate-300 font-medium leading-relaxed">
-                        {isHindi 
-                          ? "स्वास्तिक प्राइम के साथ विशेष सुविधाओं का आनंद लें और हर ऑर्डर पर डिलीवरी चार्ज बचाएं!" 
-                          : "Unlock elite membership privileges, free delivery options, and ultra priority dispatches!"}
+                        {activeMembershipPlan?.description || (isHindi ? 'सदस्यता योजना का विवरण कॉन्फ़िगर नहीं है।' : 'Membership plan description is not configured.')}
                       </p>
                       
                       <div className="space-y-2">
                         <div className="flex items-start gap-2 text-xs">
                           <span className="text-indigo-400">⚡</span>
                           <div>
-                            <p className="font-bold text-slate-200">{isHindi ? (primeSettings?.primeBenefit1Hi || "जीरो डिलीवरी शुल्क") : (primeSettings?.primeBenefit1En || "Free / Reduced Delivery")}</p>
-                            <p className="text-[10px] text-slate-400">{isHindi ? (primeSettings?.primeBenefitDesc1Hi || "सभी चुनिंदा क्षेत्रों पर भारी बचत") : (primeSettings?.primeBenefitDesc1En || "Maximum relief on all location groups")}</p>
+                            <p className="font-bold text-slate-200">{activeMembershipBenefits[0] || '—'}</p>
                           </div>
                         </div>
 
                         <div className="flex items-start gap-2 text-xs">
                           <span className="text-indigo-400">📦</span>
                           <div>
-                            <p className="font-bold text-slate-200">{isHindi ? (primeSettings?.primeBenefit2Hi || "अल्ट्रा-फास्ट स्लॉट") : (primeSettings?.primeBenefit2En || "VIP Priority Dispatch")}</p>
-                            <p className="text-[10px] text-slate-400">{isHindi ? (primeSettings?.primeBenefitDesc2Hi || "आपका आर्डर सबसे पहले पैक और डिलीवर होगा") : (primeSettings?.primeBenefitDesc2En || "Express processing by our direct team")}</p>
+                            <p className="font-bold text-slate-200">{activeMembershipBenefits[1] || '—'}</p>
                           </div>
                         </div>
 
                         <div className="flex items-start gap-2 text-xs">
                           <span className="text-indigo-400">🪙</span>
                           <div>
-                            <p className="font-bold text-slate-200">{isHindi ? (primeSettings?.primeBenefit3Hi || "दोगुना रिवॉर्ड") : (primeSettings?.primeBenefit3En || "2x Loyalty Points")}</p>
-                            <p className="text-[10px] text-slate-400">{isHindi ? (primeSettings?.primeBenefitDesc3Hi || "हर खरीद पर डबल अंक कमाएं") : (primeSettings?.primeBenefitDesc3En || "Earn bonus cashbacks on every single cart")}</p>
+                            <p className="font-bold text-slate-200">{activeMembershipBenefits[2] || '—'}</p>
                           </div>
                         </div>
                       </div>
@@ -2170,7 +2173,7 @@ export default function Account({ onViewChange }) {
                     <div className="pt-2">
                       <p className="text-center text-xs text-slate-400 mb-2">
                         {isHindi ? "एक वर्ष के लिए केवल" : "Predefined Annual Privilege Amount"}{" "}
-                        <span className="text-yellow-400 font-extrabold text-sm font-mono">₹{primeSettings?.primePlanFee ?? 299}</span>
+                        <span className="text-yellow-400 font-extrabold text-sm font-mono">{activeMembershipPlan ? `₹${Number(activeMembershipPlan.price).toFixed(2)}` : (isHindi ? 'कॉन्फ़िगर नहीं' : 'Not configured')}</span>
                       </p>
 
                       {primeSettings?.isMembershipEnabled === false ? (
@@ -2194,7 +2197,7 @@ export default function Account({ onViewChange }) {
                           }}
                           className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-98 border border-indigo-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg text-center cursor-pointer flex items-center justify-center gap-1.5"
                         >
-                          🚀 {isHindi ? `प्राइम सक्रिय करें @ ₹${primeSettings?.primePlanFee ?? 299}` : `Activate Prime Plan @ ₹${primeSettings?.primePlanFee ?? 299}`}
+                          🚀 {activeMembershipPlan ? (isHindi ? `सदस्यता सक्रिय करें @ ₹${Number(activeMembershipPlan.price).toFixed(2)}` : `Activate membership @ ₹${Number(activeMembershipPlan.price).toFixed(2)}`) : (isHindi ? 'योजना कॉन्फ़िगर नहीं है' : 'Plan not configured')}
                         </button>
                       )}
                     </div>
@@ -2240,13 +2243,7 @@ export default function Account({ onViewChange }) {
                         </div>
 
                         <div className="col-span-4 flex flex-col items-center justify-center bg-white p-1 rounded-lg shadow-lg border border-indigo-400/20">
-                          {/* QR Code dynamically loaded to redirect to swastiksupermarket.com */}
-                          {profile.membershipNumber && <img
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(profile.membershipNumber)}`}
-                            alt="Membership number QR"
-                            className="w-14 h-14 object-contain"
-                            referrerPolicy="no-referrer"
-                          />}
+                          <span className="text-[9px] font-mono text-slate-800 break-all text-center">{profile.membershipNumber || '—'}</span>
                         </div>
                       </div>
 
@@ -2258,15 +2255,15 @@ export default function Account({ onViewChange }) {
                             <span className="text-green-400">{isHindi ? "सक्रिय" : "Active"}</span>
                           </div>
                         </div>
-                        <span className="text-[7.5px] font-mono text-zinc-400 tracking-tight">swastiksupermarket.com</span>
+                        <span className="text-[7.5px] font-mono text-zinc-400 tracking-tight">{contactSettings?.brandName || ''}</span>
                       </div>
                     </div>
 
                     <div className="space-y-2">
                       <p className="text-[9px] text-center text-slate-400 leading-normal font-medium">
                         {isHindi 
-                          ? "💡 भौतिक सत्यापन हेतु इस कार्ड को प्रिंट करें अथवा क्यूआर कोड को स्कैन करें जो स्वास्तिक सुपरमार्केट वेबसाइट पर निर्देशित करेगा।" 
-                          : "💡 QR Code points directly to swastiksupermarket.com for live verification."}
+                          ? "सदस्यता पहचान संख्या सर्वर द्वारा जारी रिकॉर्ड से आती है।"
+                          : "The membership identifier comes from the server-issued membership record."}
                       </p>
 
                       <div className="flex gap-2">
@@ -2384,16 +2381,16 @@ export default function Account({ onViewChange }) {
                                         <div class="info-label">${isHindi ? "सदस्यता नाम" : "VIP Member"}</div>
                                         <div class="info-val">${profile.fullName}</div>
                                         <div class="info-label">${isHindi ? "पहचान पत्र संख्या" : "Membership Identifier"}</div>
-                                        <div class="info-val" style="font-family: monospace; color: rgb(129, 140, 248);">SWS-PRM-${(profile.phone || "8888").replace(/\s/g, '').slice(-6)}</div>
+                                        <div class="info-val" style="font-family: monospace; color: rgb(129, 140, 248);">${profile.membershipNumber || ''}</div>
                                       </div>
                                       <div class="qr-box">
-                                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://swastiksupermarket.com" />
+                                        <span>${profile.membershipNumber || ''}</span>
                                       </div>
                                     </div>
 
                                     <div class="footer">
-                                      <div>${isHindi ? "योजना" : "Plan"}: <span>{LIFETIME PRIVILEGE}</span></div>
-                                      <div>swastiksupermarket.com</div>
+                                      <div>${isHindi ? "योजना" : "Plan"}: <span>${activeMembershipPlan?.name || ''}</span></div>
+                                      <div>${contactSettings?.brandName || ''}</div>
                                     </div>
                                   </div>
                                   <script>
@@ -2520,9 +2517,9 @@ export default function Account({ onViewChange }) {
                 <span className="text-[9px] font-extrabold uppercase tracking-widest text-emerald-700 block mb-1">
                   {isHindi ? "दुकान/कार्यालय विवरण" : "Store/Office Details"}
                 </span>
-                <p className="text-slate-900 font-extrabold">{contactSettings?.brandName || "Swastik Supermarket"}</p>
-                <p className="text-slate-600 text-[11px] font-mono">☎️ {contactSettings?.phone || "094845 40001"}</p>
-                <p className="text-slate-500 text-[10px] line-clamp-2">🏢 {contactSettings?.address || "Survey no. 100 Sanjit road opposite of Saraswati school , Mandsaur, India, Madhya Pradesh"}</p>
+                <p className="text-slate-900 font-extrabold">{contactSettings?.brandName || (isHindi ? 'कॉन्फ़िगर नहीं किया गया' : 'Not configured')}</p>
+                <p className="text-slate-600 text-[11px] font-mono">☎️ {contactSettings?.phone || '—'}</p>
+                <p className="text-slate-500 text-[10px] line-clamp-2">🏢 {contactSettings?.address || '—'}</p>
                 {contactSettings?.gst && (
                   <p className="text-slate-500 text-[9px] font-mono">GSTIN: {contactSettings.gst}</p>
                 )}
@@ -2700,7 +2697,7 @@ export default function Account({ onViewChange }) {
             {/* Price tag */}
             <div className="bg-amber-50 p-4 border-b border-amber-200 flex justify-between items-center px-5">
               <span className="text-[10px] uppercase font-black tracking-widest text-slate-600">{isHindi ? "प्राइम एनुअल पास शुल्क" : "Annual Prime Gold Fee"}</span>
-              <span className="font-mono text-lg font-black text-amber-800">₹{primeSettings?.primePlanFee ?? 299}.00</span>
+              <span className="font-mono text-lg font-black text-amber-800">{activeMembershipPlan ? `₹${Number(activeMembershipPlan.price).toFixed(2)}` : '—'}</span>
             </div>
 
             {/* Gateway states */}
@@ -2986,9 +2983,9 @@ export default function Account({ onViewChange }) {
                       <span>{selectedGateway === 'OFFLINE' ? '💵' : '🔒'}</span>
                       <span>
                         {selectedGateway === 'RAZORPAY'
-                          ? (isHindi ? `रेज़रपे गेटवे से ₹${primeSettings?.primePlanFee ?? 299} भुगतान करें` : `Pay ₹${primeSettings?.primePlanFee ?? 299} via Razorpay Gateway`)
+                          ? (isHindi ? `रेज़रपे से ${activeMembershipPlan ? `₹${Number(activeMembershipPlan.price).toFixed(2)}` : ''} भुगतान करें` : `Pay ${activeMembershipPlan ? `₹${Number(activeMembershipPlan.price).toFixed(2)}` : ''} via Razorpay`)
                           : selectedGateway === 'CASHFREE'
-                          ? (isHindi ? `कैशफ्री गेटवे से ₹${primeSettings?.primePlanFee ?? 299} भुगतान करें` : `Pay ₹${primeSettings?.primePlanFee ?? 299} via Cashfree Gateway`)
+                          ? (isHindi ? `कैशफ्री से ${activeMembershipPlan ? `₹${Number(activeMembershipPlan.price).toFixed(2)}` : ''} भुगतान करें` : `Pay ${activeMembershipPlan ? `₹${Number(activeMembershipPlan.price).toFixed(2)}` : ''} via Cashfree`)
                           : (isHindi ? "ऑफलाइन नकद भुगतान द्वारा मेंबरशिप एक्टिव करें" : "Activate Membership via Offline Store Cash")}
                       </span>
                     </button>

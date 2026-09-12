@@ -125,10 +125,6 @@ const customFetch = function (input, init = {}) {
   }
 
   const headers = new Headers(init.headers || (url instanceof Request ? url.headers : undefined));
-  const token = sessionStorage.getItem('swastik_staff_token');
-  if (isApiRequest && token && !headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
   return originalFetch(url, { ...init, headers, credentials: isApiRequest ? 'include' : init.credentials });
 };
 

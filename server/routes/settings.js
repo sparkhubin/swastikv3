@@ -3,11 +3,18 @@ import { db } from "../../database/db.js";
 import { requirePermission, requireStaffAuth } from "../auth.js";
 
 const router = express.Router();
+const PUBLIC_SETTING_KEYS = [
+  "swastik_location_groups", "swastik_referral_settings", "swastik_celebration_settings",
+  "swastik_prime_settings", "swastik_slides", "swastik_categories", "swastik_offers",
+  "swastik_about_settings", "swastik_contact_settings", "swastik_refund_sections",
+  "swastik_privacy_sections", "swastik_terms_sections"
+];
 
 // Fetch all saved dynamic settings from the database
 router.get("/settings", async (req, res) => {
   try {
-    const rows = await db.query("SELECT key_name, value_text FROM app_settings WHERE key_name LIKE 'public_%' OR key_name LIKE 'swastik_%'");
+    const placeholders = PUBLIC_SETTING_KEYS.map(() => "?").join(",");
+    const rows = await db.query(`SELECT key_name, value_text FROM app_settings WHERE key_name LIKE 'public_%' OR key_name IN (${placeholders})`, PUBLIC_SETTING_KEYS);
     const settings = {};
     for (const row of rows) {
       try {

@@ -8,11 +8,11 @@
  * 3. Standard coordinates query URL.
  * 4. Places search URL (extracts place name and formats as safe query).
  * 5. Latitude and Longitude values directly from contactSettings.
- * 6. Fallback to full physical address or default coordinates.
+ * 6. Use the configured physical address.
  */
 export function getGoogleMapsEmbedUrl(contactSettings) {
   if (!contactSettings) {
-    return "https://maps.google.com/maps?q=Survey%20no.%20100%20Sanjit%20road%20opposite%20of%20Saraswati%20school%20%2C%20Mandsaur%2C%20India%2C%20Madhya%20Pradesh&z=15&output=embed";
+    return "";
   }
 
   const { googleMaps, address, latitude, longitude } = contactSettings;
@@ -74,7 +74,6 @@ export function getGoogleMapsEmbedUrl(contactSettings) {
     return `https://maps.google.com/maps?q=${encodeURIComponent(googleMaps.trim())}&z=15&output=embed`;
   }
 
-  // 6. Last fallback to physical address
-  const queryAddress = address || "Survey no. 100 Sanjit road opposite of Saraswati school , Mandsaur, India, Madhya Pradesh";
-  return `https://maps.google.com/maps?q=${encodeURIComponent(queryAddress)}&z=15&output=embed`;
+  // 6. Use the database-configured physical address only.
+  return address ? `https://maps.google.com/maps?q=${encodeURIComponent(address)}&z=15&output=embed` : "";
 }

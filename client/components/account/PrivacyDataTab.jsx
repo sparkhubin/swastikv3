@@ -23,28 +23,12 @@ import {
 import DataDeletionModal from './DataDeletionModal';
 
 export default function PrivacyDataTab({ profile, myOrders = [], isHindi }) {
-  const { dataDeletionRequests, contactSettings, customers } = useData();
+  const { dataDeletionRequests, contactSettings } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Check if current user has any active/past deletion request
-  const userPhoneDigits = (profile?.phone || '').replace(/\D/g, '').slice(-10);
-  const userEmail = (profile?.email || '').toLowerCase().trim();
-
-  const matchedCustomer = (customers || []).find(c => {
-    if (userPhoneDigits && (c.phone || '').replace(/\D/g, '').endsWith(userPhoneDigits)) return true;
-    if (userEmail && c.email && c.email.toLowerCase().trim() === userEmail) return true;
-    if (profile?.id && Number(c.id) === Number(profile.id)) return true;
-    return false;
-  });
-
-  const resolvedName = profile?.fullName || profile?.name || matchedCustomer?.name || '';
-
-  const userRequest = (dataDeletionRequests || []).find(r => {
-    if (userPhoneDigits && (r.phone || '').replace(/\D/g, '').endsWith(userPhoneDigits)) return true;
-    if (userEmail && r.email && r.email.toLowerCase().trim() === userEmail) return true;
-    if (profile?.id && r.customerId && Number(r.customerId) === Number(profile.id)) return true;
-    return false;
-  });
+  const resolvedName = profile?.fullName || profile?.name || '';
+  // The API already returns only records owned by the authenticated customer.
+  const userRequest = (dataDeletionRequests || [])[0] || null;
 
   return (
     <div className="space-y-6" id="privacy-data-tab">
@@ -115,8 +99,8 @@ export default function PrivacyDataTab({ profile, myOrders = [], isHindi }) {
                         : 'The administrator has approved your request. Your profile details, points, and saved addresses have been permanently removed.')
                     : userRequest.status === 'Rejected'
                     ? (isHindi
-                        ? `व्यवस्थापक द्वारा कारण: "${userRequest.adminNotes || 'सक्रिय ऑर्डर या नीतिगत कारण'}"`
-                        : `Admin Reason: "${userRequest.adminNotes || 'Active orders or policy requirements'}"`)
+                        ? `व्यवस्थापक द्वारा कारण: "${userRequest.adminNotes}"`
+                        : `Admin Reason: "${userRequest.adminNotes}"`)
                     : (isHindi 
                         ? 'आपका डेटा डिलीट करने का अनुरोध सफलतापूर्वक सबमिट किया जा चुका है। व्यवस्थापक इसकी समीक्षा कर रहे हैं और जल्द ही आपका डेटा स्थायी रूप से मिटा दिया जाएगा।'
                         : 'Your data deletion request has been safely registered. Our admin team will review and permanently delete your records shortly.')}
@@ -246,8 +230,8 @@ export default function PrivacyDataTab({ profile, myOrders = [], isHindi }) {
         <div className="leading-relaxed">
           <p>
             {isHindi 
-              ? `डेटा गोपनीयता के संबंध में सहायता के लिए हमारे सपोर्ट डेस्क ${contactSettings?.phone || '094845 40001'} या ${contactSettings?.email || 'info.swastiksupermarket@gmail.com'} पर संपर्क कर सकते हैं।`
-              : `For any queries regarding your data rights or GDPR compliance, contact our privacy desk at ${contactSettings?.email || 'info.swastiksupermarket@gmail.com'} or ${contactSettings?.phone || '094845 40001'}.`}
+              ? (contactSettings?.phone || contactSettings?.email ? `डेटा गोपनीयता सहायता: ${[contactSettings?.email, contactSettings?.phone].filter(Boolean).join(' / ')}` : 'डेटा गोपनीयता सहायता संपर्क कॉन्फ़िगर नहीं है।')
+              : (contactSettings?.phone || contactSettings?.email ? `Privacy support: ${[contactSettings?.email, contactSettings?.phone].filter(Boolean).join(' / ')}` : 'Privacy support contact is not configured.')}
           </p>
         </div>
       </div>

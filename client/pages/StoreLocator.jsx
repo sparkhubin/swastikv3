@@ -12,47 +12,19 @@ export default function StoreLocator() {
   const [selectedBranch, setSelectedBranch] = useState(null);
   const [routeText, setRouteText] = useState('');
 
-  const branches = [
-    {
+  const branches = contactSettings?.address ? [{
       id: 1,
-      nameEn: contactSettings?.brandName || "Main Market Branch (Mandsaur)",
-      nameHi: contactSettings?.brandName || "मुख्य बाजार शाखा (मंदसौर)",
-      addressEn: contactSettings?.address || "Survey no. 100 Sanjit road opposite of Saraswati school , Mandsaur, India, Madhya Pradesh",
-      addressHi: contactSettings?.address || "सर्वे नंबर 100 संजीत रोड सरस्वती स्कूल के सामने, मंदसौर, मध्य प्रदेश",
-      phone: contactSettings?.phone || "094845 40001",
-      hoursEn: "08:00 AM - 10:00 PM (Daily)",
-      hoursHi: "सुबह 08:00 - रात 10:00 (दैनिक)",
-      metroEn: "Near Sanjit Road Saraswati School",
-      metroHi: "संजीत रोड सरस्वती स्कूल के सामने",
-      googleMaps: contactSettings?.googleMaps || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(contactSettings?.address || "Survey no. 100 Sanjit road opposite of Saraswati school , Mandsaur, India, Madhya Pradesh")}`
-    },
-    {
-      id: 2,
-      nameEn: "Preet Vihar Hub (East Delhi)",
-      nameHi: "प्रीत विहार हब (पूर्वी दिल्ली)",
-      addressEn: "D-11, Main Vikas Marg, Preet Vihar, Delhi 110092",
-      addressHi: "डी-11, मुख्य विकास मार्ग, प्रीत विहार, दिल्ली 110092",
-      phone: "+91 11 4356 7812",
-      hoursEn: "07:30 AM - 09:30 PM (Daily)",
-      hoursHi: "सुबह 07:30 - रात 09:30 (दैनिक)",
-      metroEn: "Opposite Pillar No. 102",
-      metroHi: "पिलर नंबर 102 के सामने",
-      googleMaps: "https://www.google.com/maps/search/?api=1&query=D-11,+Main+Vikas+Marg,+Preet+Vihar,+Delhi+110092"
-    },
-    {
-      id: 3,
-      nameEn: "Connaught Place Outlet (Central Delhi)",
-      nameHi: "कनॉट प्लेस आउटलेट (केंद्रीय दिल्ली)",
-      addressEn: "G-42, Outer Circle, Connaught Place, New Delhi 110001",
-      addressHi: "जी-42, आउटर सर्कल, कनॉट प्लेस, नई दिल्ली 110001",
-      phone: "+91 11 2942 3951",
-      hoursEn: "09:00 AM - 11:00 PM (Daily)",
-      hoursHi: "सुबह 09:00 - रात 11:00 (दैनिक)",
-      metroEn: "Near Rajiv Chowk Metro Gate 3",
-      metroHi: "राजीव चौक मेट्रो गेट 3 के पास",
-      googleMaps: "https://www.google.com/maps/search/?api=1&query=G-42,+Outer+Circle,+Connaught+Place,+New+Delhi+110001"
-    }
-  ];
+      nameEn: contactSettings.brandName || '',
+      nameHi: contactSettings.brandName || '',
+      addressEn: contactSettings.address,
+      addressHi: contactSettings.address,
+      phone: contactSettings.phone || '',
+      hoursEn: contactSettings.storeHours || '',
+      hoursHi: contactSettings.storeHours || '',
+      metroEn: contactSettings.landmark || '',
+      metroHi: contactSettings.landmark || '',
+      googleMaps: contactSettings.googleMaps || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(contactSettings.address)}`
+    }] : [];
 
   const filteredBranches = branches.filter(val => {
     const term = searchCity.toLowerCase();
@@ -66,9 +38,7 @@ export default function StoreLocator() {
 
   const triggerRoute = (branch) => {
     setSelectedBranch(branch);
-    const text = isHindi
-      ? `जीपीएस शुरू हो गया है। आपकी वर्तमान स्थिति से ${isHindi ? branch.nameHi : branch.nameEn} के लिए सबसे तेज मार्ग 15 मिनट (4.2 किमी) दूर है। सेक्टर 18 रिंग रोड का उपयोग करें।`
-      : `GPS initialisation complete. The fastest trajectory to ${branch.nameEn} is 15 mins (4.2 KM) using Noida-Greater Noida expressway.`;
+    const text = isHindi ? `${branch.nameHi}: ${branch.addressHi}` : `${branch.nameEn}: ${branch.addressEn}`;
     setRouteText(text);
   };
 

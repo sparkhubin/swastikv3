@@ -27,7 +27,7 @@ export default function TermsOfService() {
           <p className="text-xs md:text-sm text-slate-300 mt-1 font-medium max-w-xl">
             {isHindi 
               ? "स्वास्तिक सुपरमार्केट प्लेटफॉर्म का उपयोग करने के लिए कानूनी शर्तें और उपयोगकर्ता नियम।"
-              : "Legal policies, order terms, and user guidelines governing Swastik Supermarket operations."
+              : `Legal policies, order terms, and user guidelines for ${contactSettings?.brandName || 'the store'}.`
             }
           </p>
         </div>
@@ -55,6 +55,11 @@ export default function TermsOfService() {
             </p>
           </div>
         ))}
+        {(!termsSections || termsSections.length === 0) && (
+          <div className="p-5 bg-amber-50 border border-amber-200 rounded-2xl text-sm text-amber-900">
+            {isHindi ? 'सेवा की शर्तें अभी कॉन्फ़िगर नहीं की गई हैं।' : 'The terms of service have not been configured.'}
+          </div>
+        )}
       </div>
 
       <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
