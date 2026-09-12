@@ -1,387 +1,56 @@
 import express from "express";
-import { requirePermission, requireStaffAuth } from "../auth.js";
-import { sendWhatsappMessageUnified, whatsappOutbox } from "../utils.js";
 import { db } from "../../database/db.js";
+import { audit, requirePermission, requireStaffAuth } from "../auth.js";
+import { sendWhatsApp } from "../services/whatsapp.js";
 
-const router = express.Router();
-router.use("/whatsapp", requireStaffAuth, requirePermission("whatsapp"));
+const router=express.Router();
+router.use("/whatsapp",requireStaffAuth,requirePermission("whatsapp"));
 
-// Helper to get custom templates from app_settings
-async function getStoredCustomTemplates() {
-  try {
-    const rows = await db.query("SELECT value_text FROM app_settings WHERE key_name = 'swastik_custom_templates'");
-    if (rows.length > 0 && rows[0].value_text) {
-      const parsed = JSON.parse(rows[0].value_text);
-      if (Array.isArray(parsed)) return parsed;
-    }
-  } catch (e) {
-    console.error("Error reading custom templates:", e);
-  }
-  return [];
-}
-
-// Helper to save custom templates to app_settings
-async function saveStoredCustomTemplates(templates) {
-  try {
-    const valueString = JSON.stringify(templates);
-    const existing = await db.query("SELECT key_name FROM app_settings WHERE key_name = 'swastik_custom_templates'");
-    if (existing.length > 0) {
-      await db.execute(
-        "UPDATE app_settings SET value_text = ?, updated_at = CURRENT_TIMESTAMP WHERE key_name = 'swastik_custom_templates'",
-        [valueString]
-      );
-    } else {
-      await db.execute(
-        "INSERT INTO app_settings (key_name, value_text) VALUES ('swastik_custom_templates', ?)",
-        [valueString]
-      );
-    }
-    return true;
-  } catch (e) {
-    console.error("Error saving custom templates:", e);
-    return false;
-  }
-}
-
-// GET /api/whatsapp/custom-templates - Retrieve saved custom Meta templates
-router.get("/whatsapp/custom-templates", async (req, res) => {
-  try {
-    const templates = await getStoredCustomTemplates();
-    res.json({ success: true, templates });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+router.get("/whatsapp/custom-templates",async(_req,res)=>{
+  try{res.json(await db.query("SELECT id,name,meta_template_name AS metaTemplateName,language_code AS languageCode,category,purpose,body_preview AS bodyPreview,variables_json AS variablesJson,is_active AS isActive,created_at AS createdAt,updated_at AS updatedAt FROM whatsapp_template ORDER BY name"));}
+  catch(error){console.error("WhatsApp template read failed:",error.message);res.status(500).json({error:"Unable to load templates."});}
 });
 
-// POST /api/whatsapp/custom-templates - Save or add new custom Meta template
-router.post("/whatsapp/custom-templates", async (req, res) => {
-  try {
-    const tpl = req.body;
-    if (!tpl.name && !tpl.id) {
-      return res.status(400).json({ error: "Template name / ID is required." });
-    }
-
-    const templateId = String(tpl.id || tpl.name).trim().toLowerCase().replace(/\s+/g, '_');
-    const newTemplate = {
-      id: templateId,
-      name: tpl.displayName || tpl.name || templateId,
-      templateName: templateId,
-      category: tpl.category || 'MARKETING',
-      categoryColor: tpl.categoryColor || 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-      description: tpl.description || `Custom Meta Developer Template: ${templateId}`,
-      languageCode: tpl.languageCode || 'en_US',
-      paramsCount: Number(tpl.paramsCount || 0),
-      paramLabels: Array.isArray(tpl.paramLabels) ? tpl.paramLabels : [],
-      bodyPreview: tpl.bodyPreview || '',
-      createdAt: new Date().toISOString()
-    };
-
-    let templates = await getStoredCustomTemplates();
-    const existingIndex = templates.findIndex(t => t.id === templateId);
-    if (existingIndex >= 0) {
-      templates[existingIndex] = { ...templates[existingIndex], ...newTemplate, updatedAt: new Date().toISOString() };
-    } else {
-      templates.unshift(newTemplate);
-    }
-
-    await saveStoredCustomTemplates(templates);
-    res.json({ success: true, template: newTemplate, templates });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+router.post("/whatsapp/custom-templates",async(req,res)=>{
+  const name=String(req.body?.name||"").trim(),meta=String(req.body?.metaTemplateName||req.body?.meta_template_name||"").trim(),purpose=String(req.body?.purpose||"").trim().toUpperCase();
+  if(!name||!meta||!purpose)return res.status(400).json({error:"Name, provider template name, and purpose are required."});
+  try{const variables=Array.isArray(req.body.variables)?req.body.variables:[];const result=await db.execute(`INSERT INTO whatsapp_template (name,meta_template_name,language_code,category,purpose,body_preview,variables_json,is_active) VALUES (?,?,?,?,?,?,?,?)
+    ON CONFLICT(name) DO UPDATE SET meta_template_name=excluded.meta_template_name,language_code=excluded.language_code,category=excluded.category,purpose=excluded.purpose,body_preview=excluded.body_preview,variables_json=excluded.variables_json,is_active=excluded.is_active,updated_at=CURRENT_TIMESTAMP`,[name,meta,String(req.body.languageCode||"en"),String(req.body.category||""),purpose,String(req.body.bodyPreview||req.body.content||""),JSON.stringify(variables),req.body.isActive===false?0:1]);await audit("USER",req.staff.id,"UPSERT_WHATSAPP_TEMPLATE","whatsapp_template",result.lastID||name,{purpose},req);res.status(201).json({success:true});}
+  catch(error){console.error("WhatsApp template save failed:",error.message);res.status(500).json({error:"Unable to save template."});}
 });
 
-// DELETE /api/whatsapp/custom-templates/:id - Delete custom template
-router.delete("/whatsapp/custom-templates/:id", async (req, res) => {
-  try {
-    const id = req.params.id;
-    let templates = await getStoredCustomTemplates();
-    templates = templates.filter(t => t.id !== id && t.templateName !== id);
-    await saveStoredCustomTemplates(templates);
-    res.json({ success: true, message: `Template ${id} removed.`, templates });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+router.delete("/whatsapp/custom-templates/:id",async(req,res)=>{try{await db.execute("UPDATE whatsapp_template SET is_active=0,updated_at=CURRENT_TIMESTAMP WHERE id=?",[req.params.id]);await audit("USER",req.staff.id,"DEACTIVATE_WHATSAPP_TEMPLATE","whatsapp_template",req.params.id,{},req);res.json({success:true});}catch(error){res.status(500).json({error:"Unable to deactivate template."});}});
+
+router.post("/whatsapp/send",async(req,res)=>{
+  const to=req.body?.to||req.body?.phone;const text=String(req.body?.message||"").trim();let template=null;
+  if(req.body?.templateId)template=await db.get("SELECT * FROM whatsapp_template WHERE id=? AND is_active=1",[req.body.templateId]);
+  else if(req.body?.templateName)template=await db.get("SELECT * FROM whatsapp_template WHERE (name=? OR meta_template_name=?) AND is_active=1",[req.body.templateName,req.body.templateName]);
+  if(!to||(!text&&!template))return res.status(400).json({error:"Recipient and message or active template are required."});
+  const result=await sendWhatsApp({to,text,template,variables:Array.isArray(req.body?.variables)?req.body.variables:[],customerId:req.body?.customerId,eventType:"MANUAL",referenceType:req.body?.referenceType||"",referenceId:req.body?.referenceId||""});
+  await audit("USER",req.staff.id,"SEND_WHATSAPP","whatsapp_log",result.logId,{success:result.success},req);
+  res.status(result.success?200:502).json(result);
 });
 
-// POST /api/whatsapp/send - Single WhatsApp message dispatch
-router.post("/whatsapp/send", async (req, res) => {
-  const { to, message, templateName, templateParams, isOtp, otpCode, languageCode, mediaUrl } = req.body;
-  if (!to || (!message && !templateName)) {
-    return res.status(400).json({ error: "Parameters 'to' and 'message' or 'templateName' are required." });
-  }
-
-  const fallbackBody = message || `Swastik Notification: ${templateName || "Alert"}`;
-  const waRes = await sendWhatsappMessageUnified(
-    to, 
-    fallbackBody, 
-    isOtp || false, 
-    otpCode, 
-    templateName, 
-    templateParams,
-    mediaUrl,
-    languageCode || "en_US"
-  );
-
-  const maskedTo = isOtp && String(to).replace(/\D/g, '').length >= 10
-    ? `${String(to).replace(/\D/g, '').slice(-10, -8)}******${String(to).replace(/\D/g, '').slice(-2)}`
-    : to;
-
-  res.json({
-    status: waRes.success ? "dispatched" : "failed",
-    to: maskedTo,
-    message: isOtp ? "Security OTP dispatched successfully via WhatsApp." : fallbackBody,
-    template_name: templateName || (isOtp ? "reference_no" : null),
-    language_code: languageCode || "en_US",
-    whatsapp_response: {
-      success: waRes.success,
-      status: waRes.status || (waRes.success ? "delivered" : "failed")
-    }
-  });
+router.post("/whatsapp/bulk-send",async(req,res)=>{
+  const recipients=req.body?.recipients||req.body?.customers;
+  if(!Array.isArray(recipients)||!recipients.length||recipients.length>100)return res.status(400).json({error:"Provide 1-100 recipients."});
+  let template=null;
+  if(req.body?.templateName)template=await db.get("SELECT * FROM whatsapp_template WHERE (name=? OR meta_template_name=?) AND is_active=1",[req.body.templateName,req.body.templateName]);
+  const text=String(req.body?.message||req.body?.fallbackMessage||"").trim();
+  if(!template&&!text)return res.status(400).json({error:"An active database template or message is required."});
+  const results=[];
+  for(const recipient of recipients){const to=typeof recipient==="string"?recipient:recipient.phone;results.push(await sendWhatsApp({to,text,template,variables:Array.isArray(recipient.params)?recipient.params:[],eventType:"MANUAL_BULK",customerId:recipient.id}));}
+  await audit("USER",req.staff.id,"BULK_SEND_WHATSAPP","whatsapp_log","",{count:results.length,success:results.filter(item=>item.success).length},req);
+  res.status(results.every(item=>item.success)?200:207).json({success:results.every(item=>item.success),results});
 });
 
-// POST /api/whatsapp/bulk-send - Bulk campaign broadcast to uploaded / selected customer numbers
-router.post("/whatsapp/bulk-send", async (req, res) => {
-  try {
-    const { 
-      recipients, 
-      templateName, 
-      templateParams = [], 
-      languageCode = "en_US", 
-      fallbackMessage = "",
-      mediaUrl = undefined 
-    } = req.body;
+router.get("/whatsapp/settings",requirePermission("settings"),async(_req,res)=>{const row=await db.get("SELECT * FROM whatsapp_settings WHERE id=1");res.json(row?{provider:row.provider,enabled:Boolean(row.enabled),apiVersion:row.api_version,metaPhoneNumberId:row.meta_phone_number_id,metaBusinessAccountId:row.meta_business_account_id,twilioWhatsAppFrom:row.twilio_whatsapp_from,metaConfigured:Boolean(row.meta_phone_number_id&&row.meta_access_token),twilioConfigured:Boolean(row.twilio_account_sid&&row.twilio_auth_token)}:{provider:"META",enabled:false,configured:false});});
 
-    if (!Array.isArray(recipients) || recipients.length === 0) {
-      return res.status(400).json({ error: "No recipient numbers provided for bulk broadcast." });
-    }
-
-    const results = [];
-    let successCount = 0;
-    let failCount = 0;
-
-    for (let i = 0; i < recipients.length; i++) {
-      const recipient = recipients[i];
-      const targetPhone = typeof recipient === 'string' ? recipient : (recipient.phone || recipient.mobile || recipient.number);
-      const recipientName = typeof recipient === 'object' ? (recipient.name || recipient.customerName || "Valued Customer") : "Valued Customer";
-      
-      // Calculate dynamic parameters for this recipient
-      let itemParams = [];
-      if (Array.isArray(recipient.params) && recipient.params.length > 0) {
-        itemParams = recipient.params;
-      } else if (Array.isArray(templateParams) && templateParams.length > 0) {
-        itemParams = templateParams.map(p => {
-          let str = String(p);
-          str = str.replace(/\{\{name\}\}/gi, recipientName);
-          str = str.replace(/\{\{phone\}\}/gi, targetPhone);
-          return str;
-        });
-      }
-
-      // Format custom fallback message
-      let msgBody = fallbackMessage || `Namaste ${recipientName}, Swastik Supermarket special update for you.`;
-      msgBody = msgBody.replace(/\{\{name\}\}/gi, recipientName);
-      if (itemParams.length > 0) {
-        itemParams.forEach((val, idx) => {
-          msgBody = msgBody.replace(new RegExp(`\\{\\{${idx + 1}\\}\\}`, 'g'), val);
-        });
-      }
-
-      try {
-        const waRes = await sendWhatsappMessageUnified(
-          targetPhone,
-          msgBody,
-          false,
-          undefined,
-          templateName,
-          itemParams,
-          mediaUrl,
-          languageCode
-        );
-
-        if (waRes.success) {
-          successCount++;
-          results.push({
-            phone: targetPhone,
-            name: recipientName,
-            status: "SUCCESS",
-            provider: waRes.provider || "meta",
-            id: waRes.id || `msg_${Date.now()}_${i}`
-          });
-        } else {
-          failCount++;
-          results.push({
-            phone: targetPhone,
-            name: recipientName,
-            status: "FAILED",
-            error: waRes.error || "Delivery failed"
-          });
-        }
-      } catch (sendErr) {
-        failCount++;
-        results.push({
-          phone: targetPhone,
-          name: recipientName,
-          status: "FAILED",
-          error: sendErr.message
-        });
-      }
-    }
-
-    res.json({
-      success: true,
-      total: recipients.length,
-      successCount,
-      failCount,
-      templateName,
-      languageCode,
-      results
-    });
-  } catch (err) {
-    console.error("Error in /api/whatsapp/bulk-send:", err);
-    res.status(500).json({ error: err.message });
-  }
+router.post("/whatsapp/settings",requirePermission("settings"),async(req,res)=>{
+  try{const current=await db.get("SELECT * FROM whatsapp_settings WHERE id=1");const provider=String(req.body?.provider||current?.provider||"META").toUpperCase();if(!["META","TWILIO"].includes(provider))return res.status(400).json({error:"Unsupported provider."});const values={enabled:Number(Boolean(req.body?.enabled)),metaPhone:String(req.body?.metaPhoneNumberId??current?.meta_phone_number_id??""),metaToken:String(req.body?.metaAccessToken||current?.meta_access_token||""),metaBusiness:String(req.body?.metaBusinessAccountId??current?.meta_business_account_id??""),apiVersion:String(req.body?.apiVersion??current?.api_version??""),twilioSid:String(req.body?.twilioAccountSid??current?.twilio_account_sid??""),twilioToken:String(req.body?.twilioAuthToken||current?.twilio_auth_token||""),twilioFrom:String(req.body?.twilioWhatsAppFrom??current?.twilio_whatsapp_from??"")};if(values.enabled&&provider==="META"&&(!values.metaPhone||!values.metaToken||!values.apiVersion))return res.status(400).json({error:"Meta phone ID, access token, and API version are required."});if(values.enabled&&provider==="TWILIO"&&(!values.twilioSid||!values.twilioToken||!values.twilioFrom))return res.status(400).json({error:"Twilio account SID, token, and sender are required."});await db.execute(`INSERT INTO whatsapp_settings (id,provider,enabled,meta_phone_number_id,meta_access_token,meta_business_account_id,api_version,twilio_account_sid,twilio_auth_token,twilio_whatsapp_from) VALUES (1,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET provider=excluded.provider,enabled=excluded.enabled,meta_phone_number_id=excluded.meta_phone_number_id,meta_access_token=excluded.meta_access_token,meta_business_account_id=excluded.meta_business_account_id,api_version=excluded.api_version,twilio_account_sid=excluded.twilio_account_sid,twilio_auth_token=excluded.twilio_auth_token,twilio_whatsapp_from=excluded.twilio_whatsapp_from,updated_at=CURRENT_TIMESTAMP`,[provider,values.enabled,values.metaPhone,values.metaToken,values.metaBusiness,values.apiVersion,values.twilioSid,values.twilioToken,values.twilioFrom]);await audit("USER",req.staff.id,"UPDATE_WHATSAPP_SETTINGS","whatsapp_settings",1,{provider,enabled:Boolean(values.enabled)},req);res.json({success:true,provider,enabled:Boolean(values.enabled)});}catch(error){console.error("WhatsApp settings update failed:",error.message);res.status(500).json({error:"Unable to update WhatsApp settings."});}
 });
 
-// GET /api/whatsapp/settings - Retrieve configured WhatsApp Meta credentials & provider status
-router.get("/whatsapp/settings", async (req, res) => {
-  try {
-    let settings = {
-      metaPhoneNumberId: process.env.META_WHATSAPP_PHONE_NUMBER_ID || "",
-      metaAccessTokenConfigured: Boolean(process.env.META_WHATSAPP_ACCESS_TOKEN),
-      metaTokenPreview: process.env.META_WHATSAPP_ACCESS_TOKEN 
-        ? `${process.env.META_WHATSAPP_ACCESS_TOKEN.slice(0, 8)}...${process.env.META_WHATSAPP_ACCESS_TOKEN.slice(-6)}` 
-        : "",
-      metaTemplateName: process.env.META_WHATSAPP_TEMPLATE_NAME || "reference_no",
-      metaBusinessAccountId: process.env.META_WHATSAPP_BUSINESS_ACCOUNT_ID || "",
-      twilioConfigured: Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
-      twilioAccountSid: process.env.TWILIO_ACCOUNT_SID ? `${process.env.TWILIO_ACCOUNT_SID.slice(0, 6)}...` : "",
-      twilioFrom: process.env.TWILIO_WHATSAPP_FROM || "+14155238886",
-      activeProvider: (process.env.META_WHATSAPP_PHONE_NUMBER_ID && process.env.META_WHATSAPP_ACCESS_TOKEN) 
-        ? "meta" 
-        : ((process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) ? "twilio" : "unconfigured")
-    };
-
-    // Check app_settings for custom overrides
-    try {
-      const rows = await db.query("SELECT value_text FROM app_settings WHERE key_name = 'swastik_whatsapp_settings'");
-      if (rows.length > 0 && rows[0].value_text) {
-        const saved = JSON.parse(rows[0].value_text);
-        if (saved) {
-          settings = {
-            ...settings,
-            metaPhoneNumberId: saved.metaPhoneNumberId || settings.metaPhoneNumberId,
-            metaAccessTokenConfigured: Boolean(saved.metaAccessToken || settings.metaAccessTokenConfigured),
-            metaTokenPreview: saved.metaAccessToken 
-              ? `${saved.metaAccessToken.slice(0, 8)}...${saved.metaAccessToken.slice(-6)}` 
-              : settings.metaTokenPreview,
-            metaTemplateName: saved.metaTemplateName || settings.metaTemplateName,
-            metaBusinessAccountId: saved.metaBusinessAccountId || settings.metaBusinessAccountId,
-            twilioConfigured: Boolean((saved.twilioAccountSid && saved.twilioAuthToken) || settings.twilioConfigured),
-            twilioFrom: saved.twilioFrom || settings.twilioFrom,
-            activeProvider: (saved.metaPhoneNumberId && saved.metaAccessToken) 
-              ? "meta" 
-              : (settings.metaAccessTokenConfigured ? "meta" : (settings.twilioConfigured ? "twilio" : "unconfigured"))
-          };
-        }
-      }
-    } catch (dbErr) {}
-
-    res.json({ success: true, settings });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/whatsapp/settings - Save live WhatsApp API settings
-router.post("/whatsapp/settings", async (req, res) => {
-  try {
-    const { metaPhoneNumberId, metaAccessToken, metaTemplateName, metaBusinessAccountId, twilioAccountSid, twilioAuthToken, twilioFrom } = req.body;
-    
-    // Read existing saved settings first
-    let currentSaved = {};
-    try {
-      const rows = await db.query("SELECT value_text FROM app_settings WHERE key_name = 'swastik_whatsapp_settings'");
-      if (rows.length > 0 && rows[0].value_text) {
-        currentSaved = JSON.parse(rows[0].value_text);
-      }
-    } catch (e) {}
-
-    const updatedSettings = {
-      ...currentSaved,
-      metaPhoneNumberId: metaPhoneNumberId !== undefined ? metaPhoneNumberId.trim() : (currentSaved.metaPhoneNumberId || ""),
-      metaAccessToken: metaAccessToken !== undefined && metaAccessToken.trim() ? metaAccessToken.trim() : (currentSaved.metaAccessToken || ""),
-      metaTemplateName: metaTemplateName !== undefined ? metaTemplateName.trim() : (currentSaved.metaTemplateName || "reference_no"),
-      metaBusinessAccountId: metaBusinessAccountId !== undefined ? metaBusinessAccountId.trim() : (currentSaved.metaBusinessAccountId || ""),
-      twilioAccountSid: twilioAccountSid !== undefined ? twilioAccountSid.trim() : (currentSaved.twilioAccountSid || ""),
-      twilioAuthToken: twilioAuthToken !== undefined && twilioAuthToken.trim() ? twilioAuthToken.trim() : (currentSaved.twilioAuthToken || ""),
-      twilioFrom: twilioFrom !== undefined ? twilioFrom.trim() : (currentSaved.twilioFrom || "+14155238886"),
-      updatedAt: new Date().toISOString()
-    };
-
-    const valueString = JSON.stringify(updatedSettings);
-    const existing = await db.query("SELECT key_name FROM app_settings WHERE key_name = 'swastik_whatsapp_settings'");
-    if (existing.length > 0) {
-      await db.execute(
-        "UPDATE app_settings SET value_text = ?, updated_at = CURRENT_TIMESTAMP WHERE key_name = 'swastik_whatsapp_settings'",
-        [valueString]
-      );
-    } else {
-      await db.execute(
-        "INSERT INTO app_settings (key_name, value_text) VALUES ('swastik_whatsapp_settings', ?)",
-        [valueString]
-      );
-    }
-
-    if (db.savePersistentSnapshot) {
-      await db.savePersistentSnapshot();
-    }
-
-    res.json({
-      success: true,
-      message: "WhatsApp configuration saved successfully.",
-      activeProvider: (updatedSettings.metaPhoneNumberId && updatedSettings.metaAccessToken) ? "meta" : "unconfigured"
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/whatsapp/test - Dispatch test message to verify WhatsApp connectivity
-router.post("/whatsapp/test", async (req, res) => {
-  try {
-    const { to, message, templateName } = req.body;
-    if (!to) {
-      return res.status(400).json({ error: "Recipient mobile number 'to' is required." });
-    }
-
-    const testMsg = message || `Namaste! This is a test WhatsApp message from Swastik Supermarket. Verified on ${new Date().toLocaleTimeString()}.`;
-    const waRes = await sendWhatsappMessageUnified(
-      to,
-      testMsg,
-      false,
-      undefined,
-      templateName || undefined
-    );
-
-    res.json({
-      success: waRes.success,
-      to,
-      provider: waRes.provider || "unavailable",
-      details: waRes
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// GET /api/whatsapp/outbox - Retrieve recent WhatsApp messages sent
-router.get("/whatsapp/outbox", async (req, res) => {
-  try {
-    res.json({ success: true, count: whatsappOutbox.length, outbox: whatsappOutbox });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+router.post("/whatsapp/test",requirePermission("settings"),async(req,res)=>{const result=await sendWhatsApp({to:req.body?.to,text:String(req.body?.message||"WhatsApp configuration test"),eventType:"CONFIG_TEST"});res.status(result.success?200:502).json(result);});
+router.get("/whatsapp/outbox",async(req,res)=>{const limit=Math.min(200,Math.max(1,Number(req.query.limit)||50));const rows=await db.query("SELECT id,recipient_phone AS recipientPhone,customer_id AS customerId,template_id AS templateId,event_type AS eventType,reference_type AS referenceType,reference_id AS referenceId,provider,provider_message_id AS providerMessageId,status,error_message AS errorMessage,sent_at AS sentAt,delivered_at AS deliveredAt,read_at AS readAt,created_at AS createdAt FROM whatsapp_log ORDER BY id DESC LIMIT ?",[limit]);res.json({success:true,count:rows.length,outbox:rows});});
 
 export default router;

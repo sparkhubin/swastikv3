@@ -237,23 +237,7 @@ export function DataProvider({ children }) {
   });
 
   // Dynamic state blocks for extensive admin dashboard settings
-  const [categories, setCategories] = useState(() => {
-    try {
-      const saved = localStorage.getItem('swastik_categories');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.some(c => c.id === 'vegetables' || c.id === 'dairy' || c.id === 'staples' || c.id === 'snacks')) {
-          localStorage.removeItem('swastik_categories');
-          return initialCategories;
-        }
-        return parsed;
-      }
-    } catch (e) {
-      console.warn("Error parsing swastik_categories:", e);
-      try { localStorage.removeItem('swastik_categories'); } catch (_) {}
-    }
-    return initialCategories;
-  });
+  const [categories, setCategories] = useState([]);
 
   const [offers, setOffers] = useState(() => {
     return safeJsonParse('swastik_offers', []);
@@ -267,109 +251,21 @@ export function DataProvider({ children }) {
   const [staff, setStaff] = useState([]);
 
   // Data Deletion Requests State (User Requests for Account / Data Erasure)
-  const [dataDeletionRequests, setDataDeletionRequests] = useState(() => {
-    return safeJsonParse('swastik_data_deletion_requests', []);
-  });
+  const [dataDeletionRequests, setDataDeletionRequests] = useState([]);
 
-  const [aboutSettings, setAboutSettings] = useState(() => {
-    return safeJsonParse('swastik_about_settings', initialAboutSettings);
-  });
+  const [aboutSettings, setAboutSettings] = useState({});
 
-  const [contactSettings, setContactSettings] = useState(() => {
-    try {
-      const saved = localStorage.getItem('swastik_contact_settings');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (!parsed.address || parsed.address.includes('Noida') || parsed.email?.includes('support@swastik.com') || parsed.logo?.includes('lh3.googleusercontent')) {
-          localStorage.removeItem('swastik_contact_settings');
-          return initialContactSettings;
-        }
-        return { ...initialContactSettings, ...parsed };
-      }
-    } catch (e) {
-      console.warn("Error parsing swastik_contact_settings:", e);
-      try { localStorage.removeItem('swastik_contact_settings'); } catch (_) {}
-    }
-    return initialContactSettings;
-  });
+  const [contactSettings, setContactSettings] = useState({});
 
-  const [referralSettings, setReferralSettings] = useState(() => {
-    const defaultVal = {
-      referralPointsEarned: 50,
-      pointsValueInINR: 1,
-      minPointsRedeem: 10,
-      maxPointsRedeem: 100,
-      firstLoginPoints: 100
-    };
-    try {
-      const saved = localStorage.getItem('swastik_referral_settings');
-      if (saved) {
-        return { ...defaultVal, ...JSON.parse(saved) };
-      }
-    } catch (e) {
-      console.warn("Error parsing swastik_referral_settings:", e);
-      try { localStorage.removeItem('swastik_referral_settings'); } catch (_) {}
-    }
-    return defaultVal;
-  });
+  const [referralSettings, setReferralSettings] = useState({});
 
-  const [celebrationSettings, setCelebrationSettings] = useState(() => {
-    const defaultVal = {
-      birthdayDiscountPercent: 15,
-      birthdayMinAmount: 300,
-      birthdayOfferDetails: "Birthday special! Enjoy flat 15% discount on your special day.",
-      birthdayOfferDetailsHi: "जन्मदिन विशेष! अपने खास दिन पर फ्लैट 15% की छूट का आनंद लें।",
-      anniversaryDiscountPercent: 20,
-      anniversaryMinAmount: 500,
-      anniversaryOfferDetails: "Anniversary Celebration! Get a flat 20% discount on your special day.",
-      anniversaryOfferDetailsHi: "सालगिरह मुबारक! अपने खास दिन पर फ्लैट 20% की छूट पाएं।"
-    };
-    return safeJsonParse('swastik_celebration_settings', defaultVal);
-  });
+  const [celebrationSettings, setCelebrationSettings] = useState({});
 
-  const [primeSettings, setPrimeSettings] = useState(() => {
-    const defaultVal = {
-      isMembershipEnabled: true,
-      primePlanFee: 299,
-      primeBenefit1En: "Free / Reduced Delivery",
-      primeBenefitDesc1En: "Maximum relief on all location groups",
-      primeBenefit1Hi: "जीरो डिलीवरी शुल्क",
-      primeBenefitDesc1Hi: "सभी चुनिंदा क्षेत्रों पर भारी बचत",
-      primeBenefit2En: "VIP Priority Dispatch",
-      primeBenefitDesc2En: "Express processing by our direct team",
-      primeBenefit2Hi: "अल्ट्रा-फास्ट स्लॉट",
-      primeBenefitDesc2Hi: "आपका आर्डर सबसे पहले पैक और डिलीवर होगा",
-      primeBenefit3En: "2x Loyalty Points",
-      primeBenefitDesc3En: "Earn bonus cashbacks on every single cart",
-      primeBenefit3Hi: "दोगुना रिवॉर्ड",
-      primeBenefitDesc3Hi: "हर खरीद पर डबल अंक कमाएं"
-    };
-    return safeJsonParse('swastik_prime_settings', defaultVal);
-  });
+  const [primeSettings, setPrimeSettings] = useState({});
 
-  const [slides, setSlides] = useState(() => {
-    return safeJsonParse('swastik_slides', initialSlides);
-  });
+  const [slides, setSlides] = useState([]);
 
-  const [locationGroups, setLocationGroups] = useState(() => {
-    const saved = localStorage.getItem('swastik_location_groups');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed.map(g => ({
-            ...g,
-            deliveryStartTime: g.deliveryStartTime || "09:00",
-            deliveryEndTime: g.deliveryEndTime || "21:00",
-            minFreeDeliveryAmount: g.minFreeDeliveryAmount !== undefined ? Number(g.minFreeDeliveryAmount) : 499
-          }));
-        }
-      } catch (e) {
-        console.error("Error restoring location groups", e);
-      }
-    }
-    return initialLocationGroups;
-  });
+  const [locationGroups, setLocationGroups] = useState([]);
 
   // Synchronizers to localStorage and SQL Database
   useEffect(() => {
@@ -416,11 +312,6 @@ export function DataProvider({ children }) {
     saveSettingToDb('swastik_contact_messages', contactMessages);
   }, [contactMessages]);
 
-
-  useEffect(() => {
-    localStorage.setItem('swastik_data_deletion_requests', JSON.stringify(dataDeletionRequests));
-    saveSettingToDb('swastik_data_deletion_requests', dataDeletionRequests);
-  }, [dataDeletionRequests]);
 
   useEffect(() => {
     localStorage.setItem('swastik_about_settings', JSON.stringify(aboutSettings));
@@ -722,7 +613,6 @@ export function DataProvider({ children }) {
           if (Array.isArray(delReqData)) {
             setDataDeletionRequests(delReqData);
             loadedMap.current.deletionRequests = true;
-            try { localStorage.setItem('swastik_data_deletion_requests', JSON.stringify(delReqData)); } catch (_) {}
             return delReqData;
           }
         }
@@ -770,13 +660,12 @@ export function DataProvider({ children }) {
         const created = await res.json();
         setProducts(prev => [...prev, created]);
       } else {
-        const newId = products.length > 0 ? Math.max(...products.map(x => x.id)) + 1 : 1;
-        setProducts(prev => [...prev, { ...p, id: newId }]);
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || 'Product creation failed.');
       }
     } catch (e) {
       console.error(e);
-      const newId = products.length > 0 ? Math.max(...products.map(x => x.id)) + 1 : 1;
-      setProducts(prev => [...prev, { ...p, id: newId }]);
+      throw e;
     }
   };
 
@@ -791,11 +680,12 @@ export function DataProvider({ children }) {
         const saved = await res.json();
         setProducts(prev => prev.map(p => p.id === Number(id) ? { ...p, ...saved } : p));
       } else {
-        setProducts(prev => prev.map(p => p.id === Number(id) ? { ...p, ...updated } : p));
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || 'Product update failed.');
       }
     } catch (e) {
       console.error(e);
-      setProducts(prev => prev.map(p => p.id === Number(id) ? { ...p, ...updated } : p));
+      throw e;
     }
   };
 
@@ -805,11 +695,12 @@ export function DataProvider({ children }) {
       if (res.ok) {
         setProducts(prev => prev.filter(p => p.id !== Number(id)));
       } else {
-        setProducts(prev => prev.filter(p => p.id !== Number(id)));
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || 'Product deactivation failed.');
       }
     } catch (e) {
       console.error(e);
-      setProducts(prev => prev.filter(p => p.id !== Number(id)));
+      throw e;
     }
   };
 
@@ -823,8 +714,7 @@ export function DataProvider({ children }) {
     } catch (e) {
       console.error("Failed to clear products:", e);
     }
-    setProducts([]);
-    return true;
+    return false;
   };
 
   const bulkUploadProducts = async (items, options = {}) => {
@@ -1002,18 +892,7 @@ export function DataProvider({ children }) {
         createdOrder = { ...order, ...serverData };
         setOrders(prev => [createdOrder, ...prev]);
 
-        // After successful order, also refresh the local product stock in the frontend view
-        if (order.items) {
-          setProducts(prevProducts => {
-            return prevProducts.map(p => {
-              const orderedItem = order.items.find(item => item.productId === p.id);
-              if (orderedItem) {
-                return { ...p, stockCount: Math.max(0, (p.stockCount || 100) - orderedItem.qty) };
-              }
-              return p;
-            });
-          });
-        }
+        await fetchProducts(true);
 
    
 
@@ -1028,19 +907,7 @@ export function DataProvider({ children }) {
       }
     } catch (e) {
       console.error(e);
-      setOrders(prev => [order, ...prev]);
-      if (order.items) {
-        setProducts(prevProducts => {
-          return prevProducts.map(p => {
-            const orderedItem = order.items.find(item => item.productId === p.id);
-            if (orderedItem) {
-              return { ...p, stockCount: Math.max(0, (p.stockCount || 100) - orderedItem.qty) };
-            }
-            return p;
-          });
-        });
-      }
-      return { success: true, order };
+      return { success: false, error: e.message || 'Order creation failed.' };
     }
   };
 
@@ -1081,8 +948,8 @@ export function DataProvider({ children }) {
               const matchedItem = existingOrder.items.find(it => Number(it.productId || it.id) === Number(p.id));
               if (matchedItem) {
                 const qtyToAdd = Number(matchedItem.quantity || matchedItem.qty || 1);
-                const currentStock = Number(p.stockCount !== undefined ? p.stockCount : (p.stock_count || 0));
-                return { ...p, stockCount: currentStock + qtyToAdd, stock_count: currentStock + qtyToAdd };
+                const currentStock = Number(p.stockCount || 0);
+                return { ...p, stockCount: currentStock + qtyToAdd };
               }
               return p;
             });
@@ -1094,9 +961,9 @@ export function DataProvider({ children }) {
               const matchedItem = existingOrder.items.find(it => Number(it.productId || it.id) === Number(p.id));
               if (matchedItem) {
                 const qtyToSub = Number(matchedItem.quantity || matchedItem.qty || 1);
-                const currentStock = Number(p.stockCount !== undefined ? p.stockCount : (p.stock_count || 0));
+                const currentStock = Number(p.stockCount || 0);
                 const newStock = Math.max(0, currentStock - qtyToSub);
-                return { ...p, stockCount: newStock, stock_count: newStock };
+                return { ...p, stockCount: newStock };
               }
               return p;
             });
@@ -1109,13 +976,17 @@ export function DataProvider({ children }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
       });
-      setOrders(prev => prev.map(o => String(o.id) === String(id) ? { ...o, ...updated } : o));
+      const saved = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(saved.error || 'Order update failed.');
+      setOrders(prev => prev.map(o => String(o.id) === String(id) ? saved : o));
+      await fetchProducts(true);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('swastik:refresh-notifications'));
       }
     } catch (e) {
       console.error(e);
-      setOrders(prev => prev.map(o => String(o.id) === String(id) ? { ...o, ...updated } : o));
+      await Promise.all([fetchOrders(true), fetchProducts(true)]);
+      throw e;
     }
   };
 
@@ -1189,76 +1060,11 @@ export function DataProvider({ children }) {
   // Dynamic customers register & synchronization with backend
   const upsertCustomer = async (custData) => {
     if (!custData) return null;
-    const cleanDigits = (ph) => ph ? String(ph).replace(/[^0-9]/g, "") : "";
-    const rawPhone = custData.phone || custData.phoneNumber || custData.mobile || "";
-    const phoneDigits = cleanDigits(rawPhone);
-    const formattedPhone = rawPhone.startsWith('+') ? rawPhone : (phoneDigits.length === 10 ? `+91 ${phoneDigits}` : rawPhone);
-    const rawName = (custData.name || custData.fullName || `Customer ${phoneDigits.slice(-4)}`).trim();
-
-    let targetCust = null;
-    setCustomers(prev => {
-      const existingIdx = prev.findIndex(c => cleanDigits(c.phone).endsWith(phoneDigits.slice(-10)));
-      if (existingIdx >= 0) {
-        const current = prev[existingIdx];
-        targetCust = {
-          ...current,
-          ...custData,
-          id: current.id,
-          name: rawName || current.name,
-          phone: formattedPhone || current.phone,
-          email: custData.email !== undefined ? custData.email : current.email,
-          address: custData.address !== undefined ? custData.address : (current.address || ""),
-          points: custData.points !== undefined ? custData.points : (current.points || 0),
-          isPrimeActive: custData.isPrimeActive !== undefined ? Boolean(custData.isPrimeActive) : Boolean(current.isPrimeActive),
-          primeMembershipNo: custData.primeMembershipNo !== undefined ? custData.primeMembershipNo : (current.primeMembershipNo || ""),
-          dob: custData.dob !== undefined ? custData.dob : (current.dob || ""),
-          anniversary: custData.anniversary !== undefined ? custData.anniversary : (current.anniversary || ""),
-          password: custData.password !== undefined ? custData.password : (current.password || ""),
-          image: custData.image !== undefined ? custData.image : (current.image || "")        };
-        const updatedList = [...prev];
-        updatedList[existingIdx] = targetCust;
-        return updatedList;
-      } else {
-        const newId = prev.length > 0 ? Math.max(...prev.map(c => Number(c.id) || 0)) + 1 : 101;
-        targetCust = {
-          id: newId,
-          name: rawName,
-          phone: formattedPhone,
-          email: custData.email || `${rawName.toLowerCase().replace(/\s+/g, '')}@example.com`,
-          address: custData.address || "",
-          status: custData.status || 'Active',
-          points: custData.points !== undefined ? custData.points : 100,
-          firstLoginPointsAwarded: custData.firstLoginPointsAwarded !== undefined ? custData.firstLoginPointsAwarded : 100,
-          referralPointsAwarded: custData.referralPointsAwarded || 0,
-          referredBy: custData.referredBy || "",
-          isPrimeActive: Boolean(custData.isPrimeActive),
-          primeMembershipNo: custData.primeMembershipNo || "",
-          dob: custData.dob || "",
-          anniversary: custData.anniversary || "",
-          password: custData.password || "",
-          image: custData.image || "",
-          registeredAt: custData.registeredAt || new Date().toISOString().split('T')[0]
-        };
-        const updatedList = [targetCust, ...prev];
-        return updatedList;
-      }
-    });
-
-    // Notify listeners
-    window.dispatchEvent(new Event('storage'));
-
-    // Send to backend REST API
-    try {
-      await fetch('/api/customers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(custData)
-      });
-    } catch (e) {
-      console.warn("Could not push customer to /api/customers:", e);
-    }
-
-    return targetCust;
+    const response = await fetch('/api/customers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(custData) });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.customer) throw new Error(result.error || 'Customer creation failed.');
+    await fetchCustomers(true);
+    return result.customer;
   };
 
   const addCustomer = (cust) => {
@@ -1267,173 +1073,38 @@ export function DataProvider({ children }) {
 
   const updateCustomer = async (id, updated) => {
     const custId = Number(id);
-    const cleanP = updated.phone ? String(updated.phone).replace(/\D/g, "").slice(-10) : "";
-
-    setCustomers(prev => {
-      const updatedList = prev.map(c => c.id === custId ? { ...c, ...updated } : c);
-      return updatedList;
-    });
-
-    // Relational synchronization: immediately propagate updated customer info to all matching orders in state
-    setOrders(prevOrders => {
-      const updatedOrders = prevOrders.map(o => {
-        const ordCustId = Number(o.customerId || o.userId);
-        const ordPhone = String(o.customerPhone || o.phone || "").replace(/\D/g, "").slice(-10);
-        const isMatch = (ordCustId && ordCustId === custId) || (cleanP && ordPhone === cleanP);
-        if (isMatch) {
-          return {
-            ...o,
-            customerId: custId,
-            userId: custId,
-            ...(updated.name ? { customerName: updated.name } : {}),
-            ...(updated.phone ? { customerPhone: updated.phone } : {}),
-            ...(updated.email ? { customerEmail: updated.email } : {})
-          };
-        }
-        return o;
-      });
-      localStorage.setItem('swastik_orders', JSON.stringify(updatedOrders));
-      return updatedOrders;
-    });
-
-    window.dispatchEvent(new Event('storage'));
-
-    try {
-      await fetch(`/api/customers/${custId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updated)
-      });
-      // Refresh orders from server to ensure complete relational data sync
-      const orderRes = await fetch('/api/orders');
-      if (orderRes.ok) {
-        const freshOrders = await orderRes.json();
-        if (Array.isArray(freshOrders)) setOrders(freshOrders);
-      }
-    } catch (e) {
-      console.warn(`Could not update customer ${custId} on backend:`, e);
-    }
+    const response = await fetch(`/api/customers/${custId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.customer) throw new Error(result.error || 'Customer update failed.');
+    setCustomers(prev => prev.map(customer => customer.id === custId ? result.customer : customer));
+    await fetchOrders(true);
+    return result.customer;
   };
 
   const deleteCustomer = async (id) => {
     const custId = Number(id);
-    setCustomers(prev => {
-      const updatedList = prev.filter(c => c.id !== custId && String(c.id) !== String(id));
-      return updatedList;
-    });
-
-    window.dispatchEvent(new Event('storage'));
-
-    try {
-      await fetch(`/api/customers/${id}`, { method: 'DELETE' });
-    } catch (e) {
-      console.warn(`Could not delete customer ${id} on backend:`, e);
-    }
-  };
-
-  // ------------------------------------
-  // DATA DELETION REQUESTS METHODS
-  // ------------------------------------
-  const addDataDeletionRequest = async (reqData) => {
-    const newId = reqData.id || `DEL-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
-    const newReq = {
-      id: newId,
-      customerId: reqData.customerId ? Number(reqData.customerId) : null,
-      name: (reqData.name || 'Customer').trim(),
-      phone: reqData.phone || '',
-      email: (reqData.email || '').trim(),
-      reason: reqData.reason || 'Account & Personal Data Erasure',
-      notes: reqData.notes || '',
-      status: 'Pending',
-      requestedAt: new Date().toISOString(),
-      processedAt: null,
-      adminNotes: ''
-    };
-
-    setDataDeletionRequests(prev => [newReq, ...prev.filter(r => r.id !== newId)]);
-
-    try {
-      const res = await fetch('/api/data-deletion-requests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newReq)
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.request) {
-          setDataDeletionRequests(prev => [data.request, ...prev.filter(r => r.id !== newId && r.id !== data.request.id)]);
-          return data.request;
-        }
-      }
-    } catch (e) {
-      console.warn("Could not post deletion request to backend:", e);
-    }
-    return newReq;
-  };
-
-  const approveDataDeletionRequest = async (requestId, adminNotes = '') => {
-    const reqObj = dataDeletionRequests.find(r => String(r.id) === String(requestId));
-    const processedAt = new Date().toISOString();
-
-    setDataDeletionRequests(prev => prev.map(r => 
-      String(r.id) === String(requestId)
-        ? { ...r, status: 'Approved & Deleted', processedAt, adminNotes: adminNotes || 'Approved by Admin: Data deleted.' }
-        : r
-    ));
-
-    // Delete customer if exists
-    if (reqObj) {
-      if (reqObj.customerId) {
-        deleteCustomer(reqObj.customerId);
-      } else if (reqObj.phone) {
-        const phoneDigits = reqObj.phone.replace(/\D/g, '').slice(-10);
-        const matchedCust = customers.find(c => (c.phone || '').replace(/\D/g, '').endsWith(phoneDigits));
-        if (matchedCust) {
-          deleteCustomer(matchedCust.id);
-        }
-      }
-    }
-
-    try {
-      await fetch(`/api/data-deletion-requests/${requestId}/approve`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ adminNotes })
-      });
-    } catch (e) {
-      console.warn("Could not approve deletion request on backend:", e);
-    }
+    const response = await fetch(`/api/customers/${custId}`, { method: 'DELETE' });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Customer deletion failed.');
+    await fetchCustomers(true);
     return true;
   };
 
-  const rejectDataDeletionRequest = async (requestId, adminNotes = '') => {
-    const processedAt = new Date().toISOString();
-    setDataDeletionRequests(prev => prev.map(r => 
-      String(r.id) === String(requestId)
-        ? { ...r, status: 'Rejected', processedAt, adminNotes: adminNotes || 'Rejected by Admin.' }
-        : r
-    ));
-
-    try {
-      await fetch(`/api/data-deletion-requests/${requestId}/reject`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ adminNotes })
-      });
-    } catch (e) {
-      console.warn("Could not reject deletion request on backend:", e);
-    }
-    return true;
+  const dataDeletionRequest = async (url, options = {}) => {
+    const response = await fetch(url, options);
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Data deletion requests are unavailable.');
+    return result;
   };
 
-  const deleteDataDeletionRequest = async (requestId) => {
-    setDataDeletionRequests(prev => prev.filter(r => String(r.id) !== String(requestId)));
-    try {
-      await fetch(`/api/data-deletion-requests/${requestId}`, { method: 'DELETE' });
-    } catch (e) {
-      console.warn("Could not delete request record on backend:", e);
-    }
+  const addDataDeletionRequest = async reqData => {
+    const result = await dataDeletionRequest('/api/data-deletion-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(reqData) });
+    await fetchDataDeletionRequests(true);
+    return result.request;
   };
+  const approveDataDeletionRequest = async (requestId, adminNotes = '') => dataDeletionRequest(`/api/data-deletion-requests/${requestId}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminNotes }) });
+  const rejectDataDeletionRequest = async (requestId, adminNotes = '') => dataDeletionRequest(`/api/data-deletion-requests/${requestId}/reject`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminNotes }) });
+  const deleteDataDeletionRequest = async requestId => dataDeletionRequest(`/api/data-deletion-requests/${requestId}`, { method: 'DELETE' });
 
   // ------------------------------------
   // STAFF & PERMISSIONS SYSTEM
@@ -1512,17 +1183,11 @@ export function DataProvider({ children }) {
   };
 
   // Dynamic Privacy, Terms and Refund state
-  const [privacySections, setPrivacySections] = useState(() => {
-    return safeJsonParse('swastik_privacy_sections', initialPrivacySections);
-  });
+  const [privacySections, setPrivacySections] = useState([]);
 
-  const [termsSections, setTermsSections] = useState(() => {
-    return safeJsonParse('swastik_terms_sections', initialTermsSections);
-  });
+  const [termsSections, setTermsSections] = useState([]);
 
-  const [refundSections, setRefundSections] = useState(() => {
-    return safeJsonParse('swastik_refund_sections', initialRefundSections);
-  });
+  const [refundSections, setRefundSections] = useState([]);
 
   useEffect(() => {
     localStorage.setItem('swastik_privacy_sections', JSON.stringify(privacySections));

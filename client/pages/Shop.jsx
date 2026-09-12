@@ -1028,7 +1028,7 @@ function ListAddToCartButton({ product }) {
   const { cartItems, addToCart, updateQuantity, removeFromCart } = useCart();
   const { t, language } = useLanguage();
 
-  const stockCount = product.stockCount !== undefined ? Number(product.stockCount) : (product.stock !== undefined ? Number(product.stock) : 100);
+  const stockCount = product.stockCount !== undefined ? Number(product.stockCount) : (product.stock !== undefined ? Number(product.stock) : 0);
   const isOutOfStock = stockCount <= 0;
 
   const cartItem = cartItems?.find(item => item.product.id === product.id);

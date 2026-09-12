@@ -301,7 +301,7 @@ export default function SecurityManager({ userRole, setUserRole }) {
                   <input 
                     type="text" 
                     id="entered-otp"
-                    placeholder="Enter 4-digit code..."
+                    placeholder="Enter 6-digit code..."
                     className="bg-slate-950 border border-pink-400/25 px-3 py-2 rounded-xl text-xs font-semibold uppercase tracking-wider outline-none text-white w-full"
                   />
                   <button 
@@ -473,7 +473,7 @@ export default function SecurityManager({ userRole, setUserRole }) {
           </div>
           <div className="bg-slate-950/80 border border-white/10 rounded-2xl p-3.5 space-y-1 text-center">
             <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Database Path</span>
-            <span className="text-[10px] font-bold font-mono text-slate-300 truncate block" title="/app/applet/swastik_local.db">swastik_local.db</span>
+            <span className="text-[10px] font-bold font-mono text-slate-300 truncate block" title="swastik_local_final.db">swastik_local_final.db</span>
           </div>
         </div>
 

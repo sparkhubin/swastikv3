@@ -129,7 +129,7 @@ const customFetch = function (input, init = {}) {
   if (isApiRequest && token && !headers.has('Authorization')) {
     headers.set('Authorization', `Bearer ${token}`);
   }
-  return originalFetch(url, { ...init, headers });
+  return originalFetch(url, { ...init, headers, credentials: isApiRequest ? 'include' : init.credentials });
 };
 
 try {

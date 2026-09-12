@@ -54,10 +54,9 @@ export default function BulkStockManager() {
   const getProductStock = (p) => {
     if (!p) return 0;
     if (p.stockCount !== undefined && p.stockCount !== null && p.stockCount !== '') return Number(p.stockCount);
-    if (p.stock_count !== undefined && p.stock_count !== null && p.stock_count !== '') return Number(p.stock_count);
     if (p.stock !== undefined && p.stock !== null && p.stock !== '') return Number(p.stock);
     if (p.quantity !== undefined && p.quantity !== null && p.quantity !== '') return Number(p.quantity);
-    return 100;
+    return 0;
   };
 
   // Stock statistics

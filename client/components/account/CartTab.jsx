@@ -76,7 +76,7 @@ export default function CartTab({ isHindi, onViewChange }) {
               const p = item.product || {};
               const unit = item.selectedUnit || p.unit || '1 Unit';
               const dbProduct = products?.find(prod => prod.id === p.id) || p;
-              const maxStock = dbProduct.stockCount !== undefined ? Number(dbProduct.stockCount) : (dbProduct.stock !== undefined ? Number(dbProduct.stock) : 100);
+              const maxStock = dbProduct.stockCount !== undefined ? Number(dbProduct.stockCount) : (dbProduct.stock !== undefined ? Number(dbProduct.stock) : 0);
               const isOutOfStock = maxStock <= 0;
               const isOverStock = item.quantity > maxStock;
 

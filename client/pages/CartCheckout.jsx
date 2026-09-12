@@ -127,7 +127,7 @@ const CartItemImage = ({ product, r2PublicUrl, className }) => {
 
 export default function CartCheckout({ onViewChange }) {
   const { t, language, isHindi } = useLanguage();
-  const { orders, addOrder, offers, contactSettings, products, setProducts, referralSettings, locationGroups, celebrationSettings, customers, addCustomer, upsertCustomer, updateCustomer, r2PublicUrl, paymentEnabled, paymentEnvironment, fetchProducts, fetchCustomers, staff, fetchStaff } = useData();
+  const { orders, addOrder, offers, contactSettings, products, setProducts, referralSettings, locationGroups, celebrationSettings, customers, addCustomer, upsertCustomer, updateCustomer, r2PublicUrl, paymentEnabled, paymentEnvironment, fetchProducts, fetchOrders, fetchCustomers, staff, fetchStaff } = useData();
 
   useEffect(() => {
     fetchProducts();
@@ -140,8 +140,6 @@ export default function CartCheckout({ onViewChange }) {
     removeFromCart,
     updateQuantity,
     clearCart,
-    couponApplied,
-    setCouponApplied,
     appliedCoupon,
     setAppliedCoupon,
     shippingInfo,
@@ -167,10 +165,6 @@ export default function CartCheckout({ onViewChange }) {
     cashfreeEnabled: true,
     environment: 'TEST'
   });
-  const [showRazorpaySDKSimulator, setShowRazorpaySDKSimulator] = useState(false);
-  const [razorpayOrderSession, setRazorpayOrderSession] = useState(null);
-  const [rzpSimulating, setRzpSimulating] = useState(false);
-  const [pendingOrderData, setPendingOrderData] = useState(null);
 
   const ensureRazorpayLoaded = () => {
     return new Promise((resolve) => {
@@ -195,6 +189,33 @@ export default function CartCheckout({ onViewChange }) {
       } else {
         resolve(false);
       }
+    });
+  };
+
+  const ensureCashfreeLoaded = () => {
+    return new Promise((resolve) => {
+      if (typeof window !== 'undefined' && window.Cashfree) {
+        resolve(true);
+        return;
+      }
+      if (typeof window === 'undefined') {
+        resolve(false);
+        return;
+      }
+      const source = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+      const existingScript = document.querySelector(`script[src="${source}"]`);
+      if (existingScript) {
+        existingScript.addEventListener('load', () => resolve(true), { once: true });
+        existingScript.addEventListener('error', () => resolve(false), { once: true });
+        setTimeout(() => resolve(Boolean(window.Cashfree)), 1500);
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = source;
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
     });
   };
 
@@ -230,29 +251,22 @@ export default function CartCheckout({ onViewChange }) {
   }, []);
 
   // --- LOYALTY SAVINGS HOOKS & CALCULATIONS ---
-  const [isLoggedIn, setIsLoggedIn] = useState(() => {
-    return localStorage.getItem('swastik_is_logged_in') === 'true';
-  });
-  const [profile, setProfile] = useState(() => {
-    try {
-      const saved = localStorage.getItem('swastik_profile');
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      console.warn("Failed to parse swastik_profile in CartCheckout:", e);
-      return null;
-    }
-  });
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [profile, setProfile] = useState(null);
 
   // Sync authentication status and user profile across storage events
   useEffect(() => {
     const syncAuth = () => {
-      const loggedIn = localStorage.getItem('swastik_is_logged_in') === 'true';
-      setIsLoggedIn(loggedIn);
-      try {
-        const saved = localStorage.getItem('swastik_profile');
-        if (saved) setProfile(JSON.parse(saved));
-      } catch (e) {}
+      fetch('/api/auth/customer/me').then(async response => {
+        if (!response.ok) throw new Error('No active customer session');
+        return response.json();
+      }).then(({ customer }) => {
+        const next = { id: customer.id, fullName: customer.name, phone: customer.phone, email: customer.email || '', address: customer.address || '', points: Number(customer.points || 0), dob: customer.dob || '', anniversary: customer.anniversary || '', membershipStatus: customer.membershipStatus };
+        setProfile(next);
+        setIsLoggedIn(true);
+      }).catch(() => { setProfile(null); setIsLoggedIn(false); });
     };
+    syncAuth();
     window.addEventListener('storage', syncAuth);
     window.addEventListener('swastik_auth_change', syncAuth);
     return () => {
@@ -335,7 +349,6 @@ export default function CartCheckout({ onViewChange }) {
   const [authReferralCode, setAuthReferralCode] = useState('');
   const [resetNewPassword, setResetNewPassword] = useState('');
   const [resetConfirmPassword, setResetConfirmPassword] = useState('');
-  const [simulatedOtpPin, setSimulatedOtpPin] = useState('');
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [authGateError, setAuthGateError] = useState('');
   const [authGateSuccess, setAuthGateSuccess] = useState('');
@@ -363,10 +376,7 @@ export default function CartCheckout({ onViewChange }) {
         setAuthGateError(language === 'hi' ? "ओटीपी भेजने में असमर्थ। कृपया पुनः प्रयास करें।" : "Unable to dispatch OTP. Please check number and retry.");
       }
     } catch (e) {
-      setAuthGateSuccess(language === 'hi' 
-        ? "सुरक्षा ओटीपी कोड आपके व्हाट्सएप नंबर पर भेज दिया गया है।" 
-        : "Security OTP code has been dispatched to your WhatsApp number."
-      );
+      setAuthGateError(language === 'hi' ? "ओटीपी सेवा उपलब्ध नहीं है।" : "OTP delivery service is unavailable.");
     }
   };
 
@@ -380,12 +390,12 @@ export default function CartCheckout({ onViewChange }) {
       return;
     }
     if (!authOtp) {
-      setAuthGateError(language === 'hi' ? "कृपया 4 अंकों का ओटीपी कोड दर्ज करें।" : "Please enter the 4-digit OTP code.");
+      setAuthGateError(language === 'hi' ? "कृपया 6 अंकों का ओटीपी कोड दर्ज करें।" : "Please enter the 6-digit OTP code.");
       return;
     }
     const cleanAuthOtp = (authOtp || '').trim();
     if (!cleanAuthOtp) {
-      setAuthGateError(language === 'hi' ? "कृपया 4 अंकों का ओटीपी कोड दर्ज करें।" : "Please enter the 4-digit OTP code.");
+      setAuthGateError(language === 'hi' ? "कृपया 6 अंकों का ओटीपी कोड दर्ज करें।" : "Please enter the 6-digit OTP code.");
       return;
     }
     
@@ -407,24 +417,18 @@ export default function CartCheckout({ onViewChange }) {
       setAuthGateError(language === 'hi' ? "अमान्य ओटीपी कोड! कृपया सही ओटीपी दर्ज करें।" : "Invalid OTP code! Please enter the correct OTP sent to your WhatsApp.");
       return;
     }
-    if (!resetNewPassword || resetNewPassword.length < 4) {
-      setAuthGateError(language === 'hi' ? "कृपया कम से कम 4 अक्षरों का नया पासवर्ड दर्ज करें।" : "Please enter a new password (min 4 characters).");
+    if (resetNewPassword.length < 10 || resetNewPassword !== resetConfirmPassword) {
+      setAuthGateError(language === 'hi' ? 'पासवर्ड कम से कम 10 अक्षर का हो और पुष्टि से मेल खाए।' : 'Password must be at least 10 characters and match confirmation.');
       return;
     }
-    if (resetNewPassword !== resetConfirmPassword) {
-      setAuthGateError(language === 'hi' ? "नया पासवर्ड और पुष्टि पासवर्ड मेल नहीं खाते!" : "New Password and Confirm Password do not match!");
-      return;
-    }
-
-    setAuthGateSuccess(language === 'hi' ? "पासवर्ड सफलतापूर्वक बदल दिया गया है! अब लॉगिन करें।" : "Password reset successfully! You can now log in.");
-    setAuthPassword(resetNewPassword);
-    setTimeout(() => {
-      setAuthMode('login');
-      setAuthGateSuccess(language === 'hi' ? "नया पासवर्ड सेट हो गया है। कृपया लॉगिन करें।" : "New password set. Please log in.");
-    }, 1500);
+    const passwordResponse = await fetch('/api/auth/customer/password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ newPassword: resetNewPassword }) });
+    const passwordResult = await passwordResponse.json().catch(() => ({}));
+    if (!passwordResponse.ok) { setAuthGateError(passwordResult.error || 'Password reset failed.'); return; }
+    setAuthGateSuccess(language === 'hi' ? 'पासवर्ड सफलतापूर्वक रीसेट हुआ।' : 'Password reset successfully.');
+    setAuthMode('login');
   };
 
-  const handleCheckoutLogin = (e) => {
+  const handleCheckoutLogin = async (e) => {
     e.preventDefault();
     setAuthGateError('');
     setAuthGateSuccess('');
@@ -439,62 +443,20 @@ export default function CartCheckout({ onViewChange }) {
       return;
     }
 
-    const cleanPhone = (ph) => ph ? ph.replace(/[^0-9]/g, "") : "";
-    const targetClean = cleanPhone(authMobile);
-    const existingCust = (customers || []).find(c => cleanPhone(c.phone).endsWith(targetClean.slice(-10)));
-
-    if (!existingCust) {
-      setAuthGateError(language === 'hi' 
-        ? "खाता नहीं मिला! कृपया मोबाइल नंबर जांचें या नया खाता बनाएं।" 
-        : "Account not found! Please check mobile number or create a new account.");
-      return;
-    }
-
-    if (existingCust.password && existingCust.password.trim().length > 0) {
-      if (existingCust.password.trim() !== authPassword.trim()) {
-        setAuthGateError(language === 'hi' 
-          ? "गलत पासवर्ड! कृपया सही पासवर्ड दर्ज करें।" 
-          : "Incorrect password! Please enter the correct password.");
-        return;
-      }
-    } else {
-      setAuthGateError(language === 'hi' 
-        ? "इस खाते में कोई पासवर्ड सेट नहीं है। कृपया ओटीपी के माध्यम से लॉग इन करें।" 
-        : "No password set for this account. Please log in via OTP.");
-      return;
-    }
-
-    const loggedInProfile = {
-      fullName: existingCust.name || (contactSettings?.brandName ? `${contactSettings.brandName} Shopper` : "Valued Shopper"),
-      email: existingCust.email || "",
-      phone: existingCust.phone || `+91 ${authMobile.replace(/^(\+91|91)/, '')}`,
-      address: existingCust.address || "",
-      points: existingCust.points || 100,
-      firstLoginPointsAwarded: existingCust.firstLoginPointsAwarded || 100,
-      referralPointsAwarded: existingCust.referralPointsAwarded || 0,
-      referredBy: existingCust.referredBy || "",
-      dob: existingCust.dob || "",
-      anniversary: existingCust.anniversary || "",
-      isPrimeActive: existingCust.isPrimeActive === true
-    };
-
-    localStorage.setItem('swastik_is_logged_in', 'true');
-    localStorage.setItem('swastik_profile', JSON.stringify(loggedInProfile));
-    
-    setIsLoggedIn(true);
-    setProfile(loggedInProfile);
-    setShippingInfo({
-      fullName: loggedInProfile.fullName,
-      phoneNumber: loggedInProfile.phone,
-      address: loggedInProfile.address || ""
-    });
-    setCustomerEmail(loggedInProfile.email);
-
-    window.dispatchEvent(new Event('storage'));
-    setAuthGateSuccess(language === 'hi' ? `सफलता! ${loggedInProfile.fullName} के रूप में लॉगिन हुआ।` : `Logged in successfully as ${loggedInProfile.fullName}!`);
+    try {
+      const response = await fetch('/api/auth/customer/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phoneNumber: authMobile, password: authPassword }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.customer) throw new Error(data.error || 'Invalid customer credentials.');
+      const customer = data.customer;
+      const loggedInProfile = { id: customer.id, fullName: customer.name, email: customer.email || '', phone: customer.phone, address: customer.address || '', points: Number(customer.points || 0), dob: customer.dob || '', anniversary: customer.anniversary || '', membershipStatus: customer.membershipStatus };
+      setIsLoggedIn(true); setProfile(loggedInProfile);
+      setShippingInfo({ fullName: loggedInProfile.fullName, phoneNumber: loggedInProfile.phone, address: loggedInProfile.address });
+      setCustomerEmail(loggedInProfile.email);
+      setAuthGateSuccess(language === 'hi' ? 'लॉगिन सफल।' : 'Login successful.');
+    } catch (error) { setAuthGateError(error.message); }
   };
 
-  const handleCheckoutSignup = (e) => {
+  const handleCheckoutSignup = async (e) => {
     e.preventDefault();
     setAuthGateError('');
     setAuthGateSuccess('');
@@ -516,64 +478,19 @@ export default function CartCheckout({ onViewChange }) {
       return;
     }
 
-    const firstPoints = referralSettings?.firstLoginPoints ?? 100;
-    let giftPoints = 0;
-    let appliedRefCode = "";
-
-    if (authReferralCode.trim()) {
-      const cleanCode = authReferralCode.toUpperCase().trim();
-      giftPoints = referralSettings?.referralPointsEarned ?? 50;
-      appliedRefCode = cleanCode;
-    }
-
-    const totalPoints = firstPoints + giftPoints;
-    const cleanPhoneStr = `+91 ${authMobile.replace(/^(\+91|91)/, '')}`;
-    const userEmailStr = authEmail || `${authFullName.toLowerCase().replace(/\s+/g, '')}@example.com`;
-
-    const newProfile = {
-      fullName: authFullName.trim(),
-      phone: cleanPhoneStr,
-      email: userEmailStr,
-      address: "",
-      points: totalPoints,
-      firstLoginPointsAwarded: firstPoints,
-      referralPointsAwarded: giftPoints,
-      referredBy: appliedRefCode,
-      isPrimeActive: false,
-      dob: "",
-      anniversary: ""
-    };
-
-    if (addCustomer) {
-      addCustomer({
-        name: authFullName.trim(),
-        phone: cleanPhoneStr,
-        email: userEmailStr,
-        status: 'Active',
-        points: totalPoints,
-        firstLoginPointsAwarded: firstPoints,
-        referralPointsAwarded: giftPoints,
-        isPrimeActive: false,
-        address: "",
-        dob: "",
-        anniversary: ""
-      });
-    }
-
-    localStorage.setItem('swastik_is_logged_in', 'true');
-    localStorage.setItem('swastik_profile', JSON.stringify(newProfile));
-
-    setIsLoggedIn(true);
-    setProfile(newProfile);
-    setShippingInfo({
-      fullName: newProfile.fullName,
-      phoneNumber: newProfile.phone,
-      address: newProfile.address
-    });
-    setCustomerEmail(newProfile.email);
-
-    window.dispatchEvent(new Event('storage'));
-    setAuthGateSuccess(language === 'hi' ? "खाता सफलतापूर्वक तैयार हुआ! आपका स्वागत है।" : "Account created successfully! You can now complete your order.");
+    if (!authOtp) { setAuthGateError(language === 'hi' ? 'ओटीपी आवश्यक है।' : 'Verify the OTP before sign-up.'); return; }
+    try {
+      const verify = await fetch('/api/auth/otp/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phoneNumber: authMobile, code: authOtp }) });
+      const verified = await verify.json().catch(() => ({}));
+      if (!verify.ok || !verified.registrationRequired) throw new Error(verified.error || 'Phone verification failed.');
+      const response = await fetch('/api/customers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: authFullName.trim(), phone: authMobile, email: authEmail.trim(), password: authPassword, referralCode: authReferralCode.trim() }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.customer) throw new Error(data.error || 'Account creation failed.');
+      const customer = data.customer;
+      const newProfile = { id: customer.id, fullName: customer.name, phone: customer.phone, email: customer.email || '', address: customer.address || '', points: Number(customer.points || 0), dob: customer.dob || '', anniversary: customer.anniversary || '', membershipStatus: customer.membershipStatus };
+      setIsLoggedIn(true); setProfile(newProfile); setShippingInfo({ fullName: newProfile.fullName, phoneNumber: newProfile.phone, address: newProfile.address }); setCustomerEmail(newProfile.email);
+      setAuthGateSuccess(language === 'hi' ? 'खाता सफलतापूर्वक तैयार हुआ।' : 'Account created successfully.');
+    } catch (error) { setAuthGateError(error.message); }
   };
 
   // Force default to COD only if all payment gateways are dynamically disabled
@@ -604,7 +521,7 @@ export default function CartCheckout({ onViewChange }) {
     if (profile?.email && c.email && c.email.toLowerCase().trim() === profile.email.toLowerCase().trim()) return true;
     return false;
   });
-  const isPrime = databaseCust ? (databaseCust.isPrimeActive === true) : (profile?.isPrimeActive === true);
+  const isPrime = (databaseCust?.membershipStatus || profile?.membershipStatus) === 'Active';
 
   const minFreeDeliveryAmount = selectedLocationGroup 
     ? (selectedLocationGroup.minFreeDeliveryAmount !== undefined ? Number(selectedLocationGroup.minFreeDeliveryAmount) : 499)
@@ -741,15 +658,7 @@ export default function CartCheckout({ onViewChange }) {
   const [isPlacing, setIsPlacing] = useState(false);
   const [checkoutError, setCheckoutError] = useState('');
 
-  // Cashfree specialized billing, policy, & SDK control states
   const [acceptReturns, setAcceptReturns] = useState(false);
-  const [showCashfreeSDKSimulator, setShowCashfreeSDKSimulator] = useState(false);
-  const [cashfreeOrderSession, setCashfreeOrderSession] = useState(null);
-  const [cashfreePaymentStage, setCashfreePaymentStage] = useState('select_method'); // 'select_method', 'processing', 'success', 'failed'
-  const [cfSelectedMethod, setCfSelectedMethod] = useState('upi'); // 'upi', 'card', 'netbanking'
-  const [cfSimulatorCardNumber, setCfSimulatorCardNumber] = useState('4321 8888 1111 2222');
-  const [cfSimulatorUPI, setCfSimulatorUPI] = useState((typeof import.meta !== 'undefined' && import.meta.env?.VITE_STORE_UPI_ID) || 'customer@okhdfcbank');
-  const [cfSimulatingProgress, setCfSimulatingProgress] = useState('');
 
 
   // Helper to check date validity of a coupon
@@ -832,11 +741,6 @@ export default function CartCheckout({ onViewChange }) {
       return;
     }
 
-    if (code === 'SUPER20') {
-      setAppliedCoupon({ id: 'super20', code: 'SUPER20', discountType: 'fixed', value: 520, minOrder: 0, descriptionEn: 'Special coupon code offering flat 520 off!', descriptionHi: 'फ्लैट 520 की विशेष कूपन छूट!' });
-      return;
-    }
-
     const matchedCoupon = offers?.find(o => o.code.toUpperCase() === code);
     if (matchedCoupon) {
       if (matchedCoupon.minOrder && subtotal < matchedCoupon.minOrder) {
@@ -874,70 +778,17 @@ export default function CartCheckout({ onViewChange }) {
     }
   };
 
-  const handleSuccessfulCheckout = () => {
-    let currentPoints = userPointsAvailable;
-    if (redeemPointsChecked && appliedPoints > 0 && isLoggedIn && profile) {
-      currentPoints = Math.max(0, userPointsAvailable - appliedPoints);
+  const handleSuccessfulCheckout = async () => {
+    const [profileResponse, productsResponse] = await Promise.all([
+      fetch('/api/auth/customer/me'),
+      fetch('/api/products')
+    ]);
+    if (profileResponse.ok) {
+      const { customer } = await profileResponse.json();
+      setProfile({ id: customer.id, fullName: customer.name, phone: customer.phone, email: customer.email || '', address: customer.address || '', points: Number(customer.points || 0), dob: customer.dob || '', anniversary: customer.anniversary || '', membershipStatus: customer.membershipStatus });
     }
-    
-    let referralBonusAdded = false;
-    let updatedUserPoints = currentPoints;
-    const award = referralSettings?.referralPointsEarned ?? 50;
-    
-    if (isLoggedIn && profile && profile.referredBy && !profile.referralOrderPointsAwarded) {
-      const cleanCode = profile.referredBy.toUpperCase().trim();
-      if (cleanCode) {
-        // Find and award referrer
-        const foundReferrer = (customers || []).find(c => {
-          const phSuffix = c.phone ? c.phone.replace(/[^0-9]/g, "").slice(-4) : "8888";
-          const possibleCode = ((c.name || "").substring(0, 4).toUpperCase() + phSuffix).replace(/\s/g, '').replace(/[^A-Z0-9]/gi, '');
-          return possibleCode === cleanCode;
-        });
-
-        if (foundReferrer) {
-          updateCustomer(foundReferrer.id, {
-            points: (foundReferrer.points || 0) + award
-          });
-        }
-        
-        updatedUserPoints += award;
-        referralBonusAdded = true;
-      }
-    }
-    
-    if (isLoggedIn && profile) {
-      const updatedProfile = { 
-        ...profile, 
-        points: updatedUserPoints,
-        ...(referralBonusAdded ? { referralOrderPointsAwarded: true } : {})
-      };
-      localStorage.setItem('swastik_profile', JSON.stringify(updatedProfile));
-      setProfile(updatedProfile);
-      
-      // Update customer directory in context
-      const cleanPhone = (ph) => ph ? ph.replace(/[^0-9]/g, "") : "";
-      const targetClean = cleanPhone(profile.phone);
-      const existingCust = (customers || []).find(c => cleanPhone(c.phone).endsWith(targetClean.slice(-10)));
-      if (existingCust) {
-        updateCustomer(existingCust.id, {
-          points: updatedUserPoints
-        });
-      }
-    }
-
-    // Deduct purchased quantities from frontend products state immediately
-    if (Array.isArray(cartItems) && cartItems.length > 0 && typeof setProducts === 'function') {
-      setProducts(prevProducts => {
-        return prevProducts.map(p => {
-          const matchedItem = cartItems.find(ci => ci.product?.id === p.id);
-          if (matchedItem) {
-            const currentStock = p.stockCount !== undefined ? Number(p.stockCount) : (p.stock !== undefined ? Number(p.stock) : 100);
-            const newStock = Math.max(0, currentStock - matchedItem.quantity);
-            return { ...p, stockCount: newStock, stock: newStock };
-          }
-          return p;
-        });
-      });
+    if (productsResponse.ok && typeof setProducts === 'function') {
+      setProducts(await productsResponse.json());
     }
   };
 
@@ -1025,7 +876,7 @@ export default function CartCheckout({ onViewChange }) {
     // Verify each cart item against dynamic products inventory stock counts
     for (const item of cartItems) {
       const dbProduct = products?.find(p => p.id === item.product.id) || item.product;
-      const maxStock = dbProduct.stockCount !== undefined ? Number(dbProduct.stockCount) : (dbProduct.stock !== undefined ? Number(dbProduct.stock) : 100);
+      const maxStock = dbProduct.stockCount !== undefined ? Number(dbProduct.stockCount) : (dbProduct.stock !== undefined ? Number(dbProduct.stock) : 0);
       const prodName = language === 'hi' ? (dbProduct.nameHi || dbProduct.nameEn || dbProduct.name) : (dbProduct.nameEn || dbProduct.name);
 
       if (maxStock <= 0) {
@@ -1151,17 +1002,17 @@ export default function CartCheckout({ onViewChange }) {
     } else if (isOnlineRzp) {
       // 🥈 Process Razorpay Online Order Sequence
       try {
-        setPendingOrderData(newOrder);
-
+        const pending = await addOrder(newOrder);
+        if (!pending?.success || !pending.order?.id) {
+          setIsPlacing(false);
+          setCheckoutError(pending?.error || "Unable to reserve the order for payment.");
+          return;
+        }
         const response = await fetch('/api/razorpay/create-order', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            orderId: orderId,
-            amount: finalGrandTotal,
-            customerName: finalCustName || "Customer",
-            customerPhone: finalCustPhone || "+91 99999 88888",
-            customerEmail: customerEmail
+            orderId: pending.order.id
           })
         });
 
@@ -1173,10 +1024,8 @@ export default function CartCheckout({ onViewChange }) {
           return;
         }
 
-        setRazorpayOrderSession(data);
-
         // Check if real live/test key was retrieved from Razorpay API
-        const hasRealKey = data.api_called && data.key_id && !data.simulated && !data.key_id.includes('mock');
+        const hasRealKey = data.api_called && data.key_id;
 
         // Load Razorpay JS SDK if needed
         const isLoaded = await ensureRazorpayLoaded();
@@ -1188,33 +1037,27 @@ export default function CartCheckout({ onViewChange }) {
             amount: data.amount,
             currency: data.currency || "INR",
             name: "Swastik Supermarket",
-            description: `Grocery Order #${orderId}`,
+            description: `Grocery Order #${pending.order.id}`,
             image: "/pwa-192x192.png",
             ...(data.razorpay_order_id ? { order_id: data.razorpay_order_id } : {}),
             handler: async function (rzpResponse) {
               setIsPlacing(true);
               try {
-                await fetch('/api/razorpay/verify', {
+                const verification = await fetch('/api/razorpay/verify', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
-                    orderId: orderId,
+                    orderId: pending.order.id,
                     razorpay_order_id: rzpResponse.razorpay_order_id || data.razorpay_order_id,
-                    razorpay_payment_id: rzpResponse.razorpay_payment_id || `pay_${Date.now()}`,
-                    razorpay_signature: rzpResponse.razorpay_signature || ''
+                    razorpay_payment_id: rzpResponse.razorpay_payment_id,
+                    razorpay_signature: rzpResponse.razorpay_signature
                   })
                 });
+                const verificationResult = await verification.json().catch(() => ({}));
+                if (!verification.ok || verificationResult.status !== 'PAID') throw new Error(verificationResult.error || 'Server payment verification failed.');
 
-                // Save confirmed & paid order to DB (which sends WhatsApp and in-app notifications)
-                const paidOrder = {
-                  ...newOrder,
-                  status: "Confirmed",
-                  paymentStatus: "PAID",
-                  razorpayPaymentId: rzpResponse.razorpay_payment_id || `pay_${Date.now()}`
-                };
-
-                await addOrder(paidOrder);
-                handleSuccessfulCheckout();
+                await fetchOrders(true);
+                await fetchProducts(true);
                 setIsPlacing(false);
                 setShowOrderSuccess(true);
                 setSuccessInfo(
@@ -1230,14 +1073,15 @@ export default function CartCheckout({ onViewChange }) {
             },
             prefill: {
               name: shippingInfo.fullName || (contactSettings?.brandName ? `${contactSettings.brandName} Customer` : "Customer"),
-              contact: (shippingInfo.phoneNumber || "").replace(/\D/g, "").slice(-10) || "9999988888",
-              email: customerEmail || "customer@example.com"
+              contact: (shippingInfo.phoneNumber || "").replace(/\D/g, "").slice(-10),
+              email: customerEmail || undefined
             },
             theme: {
               color: "#06b6d4"
             },
             modal: {
               ondismiss: function () {
+                fetch(`/api/payment/orders/${pending.order.id}/cancel`, { method: 'POST' }).catch(() => {});
                 setIsPlacing(false);
                 setCheckoutError(
                   language === 'hi'
@@ -1271,11 +1115,48 @@ export default function CartCheckout({ onViewChange }) {
         console.error("Razorpay order handler error:", err);
         setCheckoutError("Razorpay checkout is unavailable. Please retry or choose Cash on Delivery.");
       }
-    } else {
-      setIsPlacing(false);
-      setCheckoutError(language === 'hi'
-        ? "सुरक्षित कैशफ्री चेकआउट अभी उपलब्ध नहीं है। कृपया कैश ऑन डिलीवरी चुनें।"
-        : "Secure Cashfree checkout is not available yet. Please choose Cash on Delivery.");
+    } else if (isOnlineCF) {
+      let pending;
+      try {
+        pending = await addOrder(newOrder);
+        if (!pending?.success || !pending.order?.id) throw new Error(pending?.error || 'Unable to reserve the order for payment.');
+        const response = await fetch('/api/cashfree/create-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: pending.order.id })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data.status !== 'success' || !data.payment_session_id) throw new Error(data.error || 'Cashfree payment session could not be created.');
+        if (!await ensureCashfreeLoaded() || !window.Cashfree) throw new Error('Cashfree checkout SDK is unavailable.');
+
+        setIsPlacing(false);
+        const cashfree = window.Cashfree({ mode: String(gatewaySettings.environment).toUpperCase() === 'PRODUCTION' ? 'production' : 'sandbox' });
+        const result = await cashfree.checkout({ paymentSessionId: data.payment_session_id, redirectTarget: '_modal' });
+        if (result?.error) {
+          await fetch(`/api/payment/orders/${pending.order.id}/cancel`, { method: 'POST' });
+          throw new Error(result.error.message || 'Cashfree checkout was cancelled.');
+        }
+
+        setIsPlacing(true);
+        const verification = await fetch('/api/cashfree/verify-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: data.order_id })
+        });
+        const verified = await verification.json().catch(() => ({}));
+        if (!verification.ok || verified.status !== 'PAID') throw new Error(verified.error || 'Cashfree payment is not confirmed.');
+        await fetchOrders(true);
+        await fetchProducts(true);
+        setIsPlacing(false);
+        setShowOrderSuccess(true);
+        setSuccessInfo(language === 'hi'
+          ? 'कैशफ्री द्वारा भुगतान सत्यापित हो गया है और आपका ऑर्डर स्वीकार कर लिया गया है।'
+          : `Cashfree payment verified. Your order of ₹${finalGrandTotal} is confirmed.`);
+      } catch (err) {
+        setIsPlacing(false);
+        console.error('Cashfree checkout error:', err);
+        setCheckoutError(err.message || 'Cashfree checkout is unavailable. Please retry or choose Cash on Delivery.');
+      }
     }
   };
 
@@ -1283,112 +1164,6 @@ export default function CartCheckout({ onViewChange }) {
     setShowOrderSuccess(false);
     clearCart();
     onViewChange('home');
-  };
-
-  const handleCashfreePaymentSuccess = async () => {
-    setCashfreePaymentStage('processing');
-    setCfSimulatingProgress(language === 'hi' ? 'कैशफ्री गेटवे और 3डी सिक्योर प्रमाणीकरण शुरू हो रहा है...' : 'Initiating secure handshake with Cashfree Sandbox API...');
-    
-    await new Promise(resolve => setTimeout(resolve, 800));
-    setCfSimulatingProgress(language === 'hi' ? 'स्वास्तिक मर्चेंट वेबहुक अधिसूचना ट्रिगर हो रही है...' : 'Firing secure webhook transaction logs asynchronously...');
-    
-    try {
-      await fetch('/api/cashfree/webhook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: cashfreeOrderSession.order_id,
-          paymentStatus: 'SUCCESS',
-          transactionId: 'CF-MOCK-' + Math.floor(1000000 + Math.random() * 9000000)
-        })
-      });
-
-      await new Promise(resolve => setTimeout(resolve, 600));
-      setCfSimulatingProgress(language === 'hi' ? 'भुगतान स्थिति की पुष्टि हो रही है...' : 'Verifying double-entry ledger state...');
-
-      await fetch('/api/cashfree/verify-payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: cashfreeOrderSession.order_id
-        })
-      });
-
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setCashfreePaymentStage('success');
-    } catch (err) {
-      console.error("Webhook mockup dispatch error:", err);
-      setCashfreePaymentStage('success');
-    }
-  };
-
-  const handleCashfreePaymentFailure = async () => {
-    setCashfreePaymentStage('processing');
-    setCfSimulatingProgress(language === 'hi' ? 'रद्द किए गए लेनदेन का प्रसंस्करण...' : 'Processing aborted transaction response...');
-    
-    await new Promise(resolve => setTimeout(resolve, 700));
-
-    try {
-      await fetch('/api/cashfree/webhook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: cashfreeOrderSession.order_id,
-          paymentStatus: 'FAILED',
-          transactionId: 'CF-FAIL-' + Math.floor(10000)
-        })
-      });
-    } catch(e) {}
-
-    setCashfreePaymentStage('failed');
-  };
-
-  const handleCloseCashfreeSuccess = async () => {
-    try {
-      const targetOrder = pendingOrderData || {
-        id: cashfreeOrderSession?.order_id || ("SW-" + Math.floor(1000 + Math.random() * 9000)),
-        orderDate: new Date().toISOString(),
-        date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-        subtotal: Number(subtotal),
-        deliveryFee: Number(deliveryFee),
-        gst: Number(gst),
-        total: Number(finalGrandTotal),
-        customerName: shippingInfo.fullName || "Swastik Shopper",
-        customerPhone: shippingInfo.phoneNumber || "+91 98765 12345",
-        customerEmail: customerEmail,
-        items: cartItems.map(item => ({
-          productId: Number(item.product.id),
-          nameEn: item.product.nameEn,
-          nameHi: item.product.nameHi,
-          price: Number(getUnitPrice(item.product, item.selectedUnit)),
-          qty: Number(item.quantity),
-          weight: item.selectedUnit || (language === 'hi' ? (item.product.packHi || "100gm") : (item.product.packEn || "100gm"))
-        }))
-      };
-      
-      const paidOrder = {
-        ...targetOrder,
-        status: "Confirmed",
-        paymentStatus: "PAID",
-        paymentMethod: "CASHFREE_ONLINE",
-        cashfreePaymentId: cashfreeOrderSession?.order_id || `CF_${Date.now()}`
-      };
-
-      await addOrder(paidOrder);
-    } catch (err) {
-      console.error("Error saving Cashfree paid order:", err);
-    }
-
-    // Deduct used loyalty points & add automatic referral bonus instantly
-    handleSuccessfulCheckout();
-
-    setShowCashfreeSDKSimulator(false);
-    setShowOrderSuccess(true);
-    setSuccessInfo(
-      language === 'hi' 
-        ? `शानदार! आपका ऑनलाइन भुगतान पूर्ण हुआ। ₹${finalGrandTotal} का भुगतान प्राप्त हुआ। ऑर्डर आईडी: ${cashfreeOrderSession?.order_id || 'N/A'}`
-        : `Success! Online payment of ₹${finalGrandTotal} secured via Cashfree! Order ID: ${cashfreeOrderSession?.order_id || 'N/A'}`
-    );
   };
 
   if (cartItems.length === 0) {
@@ -1513,9 +1288,10 @@ export default function CartCheckout({ onViewChange }) {
               <button
                 type="button"
                 onClick={() => {
-                  localStorage.removeItem('swastik_is_logged_in');
-                  setIsLoggedIn(false);
-                  window.dispatchEvent(new Event('storage'));
+                  fetch('/api/auth/customer/logout', { method: 'POST' }).finally(() => {
+                    setProfile(null);
+                    setIsLoggedIn(false);
+                  });
                 }}
                 className="text-[10px] text-slate-700 hover:text-red-700 font-bold uppercase tracking-wider border border-slate-300 hover:border-red-300 px-3 py-1.5 rounded-lg bg-white transition-all shrink-0 ml-2 shadow-xs"
               >
@@ -1539,7 +1315,7 @@ export default function CartCheckout({ onViewChange }) {
               <div className="space-y-3">
                 {cartItems.map((item, idx) => {
                   const dbProduct = products?.find(p => p.id === item.product.id) || item.product;
-                  const maxStock = dbProduct.stockCount !== undefined ? Number(dbProduct.stockCount) : (dbProduct.stock !== undefined ? Number(dbProduct.stock) : 100);
+                  const maxStock = dbProduct.stockCount !== undefined ? Number(dbProduct.stockCount) : (dbProduct.stock !== undefined ? Number(dbProduct.stock) : 0);
                   const isOutOfStock = maxStock <= 0;
                   const hasStockIssue = isOutOfStock || item.quantity > maxStock;
                   const name = language === 'hi' ? (item.product.nameHi || item.product.nameEn || item.product.name) : (item.product.nameEn || item.product.name);
@@ -2436,7 +2212,7 @@ export default function CartCheckout({ onViewChange }) {
               {/* Stock Issue Banner */}
               {cartItems.some(item => {
                 const dbProduct = products?.find(p => p.id === item.product.id) || item.product;
-                const maxStock = dbProduct.stockCount !== undefined ? Number(dbProduct.stockCount) : (dbProduct.stock !== undefined ? Number(dbProduct.stock) : 100);
+                const maxStock = dbProduct.stockCount !== undefined ? Number(dbProduct.stockCount) : (dbProduct.stock !== undefined ? Number(dbProduct.stock) : 0);
                 return maxStock <= 0 || item.quantity > maxStock;
               }) && (
                 <div className="p-3 bg-red-50 border border-red-300 rounded-xl text-red-800 text-xs font-bold flex items-center gap-2 shadow-xs">
@@ -2527,439 +2303,6 @@ export default function CartCheckout({ onViewChange }) {
         </div>
       )}
 
-      {/* Cashfree PG Interactive Simulator Overlay */}
-      {showCashfreeSDKSimulator && cashfreeOrderSession && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-fade-in text-white overflow-y-auto">
-          <div className="bg-slate-950 border border-cyan-500/30 rounded-2xl max-w-md w-full overflow-hidden shadow-[0_0_50px_rgba(34,211,238,0.15)] flex flex-col font-sans transition-all scale-100 max-h-[90vh] overflow-y-auto custom-scrollbar">
-            
-            {/* Header branding */}
-            <div className="bg-cyan-950/40 p-4 border-b border-cyan-500/20 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="font-black text-xs text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">CASHFREE PG</span>
-                <span className="text-[9px] bg-amber-500/20 text-amber-300 font-extrabold px-1.5 py-0.5 rounded uppercase font-mono">SANDBOX TEST</span>
-              </div>
-              <div className="text-right">
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">AMOUNT TO PAY</p>
-                <p className="text-sm font-black text-white font-mono mt-1">₹{Number(grandTotal).toFixed(2)}</p>
-              </div>
-            </div>
-
-            <div className="p-4 flex-1 overflow-y-auto space-y-4">
-              
-              {/* Dynamic Payment States */}
-              {cashfreePaymentStage === 'select_method' && (
-                <div className="space-y-4">
-                  
-                  {/* Order detail card */}
-                  <div className="bg-white/5 p-3 rounded-xl border border-white/5 space-y-1 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Order ID:</span>
-                      <span className="font-mono text-white font-extrabold">{cashfreeOrderSession.order_id}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Merchant Name:</span>
-                      <span className="text-white font-semibold">Swastik Supermarket</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Customer E-mail:</span>
-                      <span className="text-white font-semibold lowercase font-mono">{cashfreeOrderSession.customer_details?.customer_email || customerEmail}</span>
-                    </div>
-                  </div>
-
-                  {/* Payment Tabs Selection */}
-                  <div className="grid grid-cols-3 gap-1.5 p-1 bg-white/5 rounded-lg border border-white/10">
-                    <button 
-                      onClick={() => setCfSelectedMethod('upi')}
-                      className={`py-1.5 px-1 rounded text-[10px] font-bold uppercase transition-all whitespace-nowrap ${
-                        cfSelectedMethod === 'upi' ? 'bg-cyan-500 text-slate-950 font-black' : 'text-slate-300 hover:text-white'
-                      }`}
-                    >
-                      UPI Payment
-                    </button>
-                    <button 
-                      onClick={() => setCfSelectedMethod('card')}
-                      className={`py-1.5 px-1 rounded text-[10px] font-bold uppercase transition-all whitespace-nowrap ${
-                        cfSelectedMethod === 'card' ? 'bg-cyan-500 text-slate-950 font-black' : 'text-slate-300 hover:text-white'
-                      }`}
-                    >
-                      MOCK CARD
-                    </button>
-                    <button 
-                      onClick={() => setCfSelectedMethod('netbanking')}
-                      className={`py-1.5 px-1 rounded text-[10px] font-bold uppercase transition-all whitespace-nowrap ${
-                        cfSelectedMethod === 'netbanking' ? 'bg-cyan-500 text-slate-950 font-black' : 'text-slate-300 hover:text-white'
-                      }`}
-                    >
-                      NET BANKING
-                    </button>
-                  </div>
-
-                  {/* Dynamic Tab Body */}
-                  {cfSelectedMethod === 'upi' && (
-                    <div className="space-y-3.5 p-3 bg-white/5 rounded-xl border border-white/5 animate-fade-in">
-                      <div className="flex items-center gap-3">
-                        <div className="w-16 h-16 bg-white shrink-0 rounded-lg p-1.5 flex items-center justify-center">
-                          {/* Simulated QR block layout */}
-                          <div className="grid grid-cols-4 gap-0.5 w-full h-full bg-slate-950 p-1 rounded">
-                            <div className="bg-white rounded-sm col-span-2"></div>
-                            <div className="bg-white rounded-sm"></div>
-                            <div className="bg-slate-950 rounded-sm"></div>
-                            <div className="bg-white rounded-sm"></div>
-                            <div className="bg-slate-950 rounded-sm col-span-2"></div>
-                            <div className="bg-white rounded-sm"></div>
-                            <div className="bg-white rounded-sm col-span-3"></div>
-                            <div className="bg-white rounded-sm"></div>
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-[10px] font-black uppercase text-cyan-400 tracking-wider">Fast Scan option</p>
-                          <p className="text-[10px] text-slate-300 font-medium leading-relaxed">
-                            Open BHIM, GPay, PhonePe, or Paytm on your mobile device to scan this sandbox QR tag to initiate test purchase.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1 pt-1">
-                        <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Or Enter UPI ID</label>
-                        <input 
-                          type="text"
-                          value={cfSimulatorUPI}
-                          onChange={(e) => setCfSimulatorUPI(e.target.value)}
-                          className="w-full bg-slate-950 border border-white/10 rounded-lg p-2.5 text-xs text-white outline-none focus:border-cyan-400/50 transition-all font-mono"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {cfSelectedMethod === 'card' && (
-                    <div className="space-y-3 p-3 bg-white/5 rounded-xl border border-white/5 animate-fade-in font-mono">
-                      {/* Virtual card mockup widget */}
-                      <div className="w-full h-24 rounded-lg bg-gradient-to-br from-cyan-900 to-slate-900 p-3 border border-cyan-500/20 relative shadow-inner">
-                        <div className="flex justify-between items-start">
-                          <span className="text-[8px] font-black text-cyan-300 tracking-widest font-sans">RU-PAY SECURED</span>
-                          <span className="text-[10px] font-black text-white/55">TEST CHIP</span>
-                        </div>
-                        <p className="text-sm font-bold text-white tracking-widest absolute bottom-8 left-3 truncate w-11/12">{cfSimulatorCardNumber || '**** **** **** ****'}</p>
-                        <div className="absolute bottom-2.5 left-3 flex gap-4 text-[7px] text-slate-400 font-sans">
-                          <div>
-                            <p className="leading-none text-[6px]">EXPIRY</p>
-                            <p className="font-bold text-white font-mono">12/29</p>
-                          </div>
-                          <div>
-                            <p className="leading-none text-[6px]">CARDHOLDER</p>
-                            <p className="font-bold text-white uppercase">{shippingInfo.fullName || "Amit Shamar"}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-400 block">CARD NUMBER</label>
-                          <input 
-                            type="text"
-                            value={cfSimulatorCardNumber}
-                            onChange={(e) => setCfSimulatorCardNumber(e.target.value)}
-                            className="w-full bg-slate-950 border border-white/10 rounded-lg p-2 text-xs text-white outline-none font-mono tracking-widest"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-400 block">VALID THRU</label>
-                            <input 
-                              type="text" 
-                              placeholder="MM/YY" 
-                              className="w-full bg-slate-950 border border-white/10 rounded-lg p-2 text-xs text-white outline-none text-center" 
-                              defaultValue="12/29"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-400 block">CVV/CVC</label>
-                            <input 
-                              type="password" 
-                              maxLength="3" 
-                              className="w-full bg-slate-950 border border-white/10 rounded-lg p-2 text-xs text-white outline-none text-center" 
-                              defaultValue="999"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {cfSelectedMethod === 'netbanking' && (
-                    <div className="p-3 bg-white/5 rounded-xl border border-white/5 space-y-2 animate-fade-in">
-                      <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Popular Banks (Simulated portal list)</p>
-                      <div className="grid grid-cols-2 gap-2 font-bold text-xs select-none">
-                        <div className="p-3 bg-slate-950 hover:bg-cyan-500/10 border border-white/10 rounded-xl cursor-pointer text-slate-200 hover:text-cyan-300 hover:border-cyan-500/30 transition-all flex items-center gap-2">
-                          <div className="w-5 h-5 rounded-full bg-blue-600 font-extrabold flex items-center justify-center text-[10px] text-white">S</div>
-                          <span>SBI</span>
-                        </div>
-                        <div className="p-3 bg-slate-950 hover:bg-cyan-500/10 border border-white/10 rounded-xl cursor-pointer text-slate-200 hover:text-cyan-300 hover:border-cyan-500/30 transition-all flex items-center gap-2">
-                          <div className="w-5 h-5 rounded-full bg-red-600 font-extrabold flex items-center justify-center text-[10px] text-white">I</div>
-                          <span>ICICI</span>
-                        </div>
-                        <div className="p-3 bg-slate-950 hover:bg-cyan-500/10 border border-white/10 rounded-xl cursor-pointer text-slate-200 hover:text-cyan-300 hover:border-cyan-500/30 transition-all flex items-center gap-2">
-                          <div className="w-5 h-5 rounded-full bg-indigo-700 font-extrabold flex items-center justify-center text-[10px] text-white">H</div>
-                          <span>HDFC BANK</span>
-                        </div>
-                        <div className="p-3 bg-slate-950 hover:bg-cyan-500/10 border border-white/10 rounded-xl cursor-pointer text-slate-200 hover:text-cyan-300 hover:border-cyan-500/30 transition-all flex items-center gap-2">
-                          <div className="w-5 h-5 rounded-full bg-purple-700 font-extrabold flex items-center justify-center text-[10px] text-white">A</div>
-                          <span>AXIS BANK</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Sandbox Simulated Buttons */}
-                  <div className="space-y-2 pt-2 border-t border-white/10">
-                    <button
-                      onClick={handleCashfreePaymentSuccess}
-                      className="w-full bg-emerald-500 text-slate-950 font-black rounded-xl py-3.5 text-xs uppercase tracking-wider flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-emerald-500/15"
-                    >
-                      <CheckCircle className="h-4.5 w-4.5 stroke-[2.5]" />
-                      <span>{language === 'hi' ? 'परीक्षण भुगतान स्वीकृत करें (सफलता)' : 'Approve Test Payment (Click to Success)'}</span>
-                    </button>
-                    
-                    <button
-                      onClick={handleCashfreePaymentFailure}
-                      className="w-full bg-white/5 text-red-400 hover:bg-red-500/10 border border-white/10 rounded-xl py-2.5 text-[10px] font-black uppercase tracking-widest transition-all"
-                    >
-                      {language === 'hi' ? 'भुगतान रद्द / विफल करें' : 'Decline / Fail Simulated Transaction'}
-                    </button>
-                  </div>
-
-                </div>
-              )}
-
-              {cashfreePaymentStage === 'processing' && (
-                <div className="py-12 flex flex-col items-center justify-center text-center space-y-4">
-                  <div className="w-20 h-20 rounded-full bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center shadow-[0_0_30px_rgba(34,211,238,0.1)] relative">
-                    <RefreshCw className="h-10 w-10 text-cyan-400 animate-spin" />
-                  </div>
-                  
-                  <div className="space-y-1.5 px-2">
-                    <h4 className="font-extrabold text-white text-sm uppercase tracking-wider text-glow">Locking Secure Rails</h4>
-                    <p className="text-[10px] text-slate-400 max-w-xs mx-auto font-mono text-center">
-                      Do not refresh this screen or click back. Secured standard 256-bit encryption in progress.
-                    </p>
-                  </div>
-
-                  {/* Real-time sync logs block */}
-                  <div className="w-full bg-slate-950 border border-white/10 rounded-xl p-3 text-left font-mono text-[9px] text-emerald-400 leading-normal max-h-36 overflow-y-auto space-y-1 shadow-inner select-none transition-all">
-                    <p className="text-slate-500">SYSTEM LOGS:</p>
-                    <p className="opacity-70 animate-pulse">&gt; [POST] init: /api/cashfree/create-order</p>
-                    {cfSimulatingProgress && <p className="text-cyan-300">&gt; {cfSimulatingProgress}</p>}
-                    <p className="opacity-55">&gt; payload_origin: verified client session</p>
-                  </div>
-                </div>
-              )}
-
-              {cashfreePaymentStage === 'success' && (
-                <div className="py-8 flex flex-col items-center justify-center text-center space-y-5">
-                  <div className="w-20 h-20 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center justify-center shadow-[0_0_35px_rgba(16,185,129,0.2)]">
-                    <CheckCircle className="h-12 w-12 stroke-[1.5] text-emerald-400" />
-                  </div>
-                  
-                  <div className="space-y-1 text-center font-sans">
-                    <h4 className="font-black text-base text-white uppercase text-glow tracking-wider">Transaction Approved</h4>
-                    <p className="text-xs text-slate-300 px-4 leading-relaxed font-semibold">
-                      Payment ID verified successfully in sandbox! Swastik webhook has parsed the payment success event.
-                    </p>
-                  </div>
-
-                  <div className="w-full bg-white/5 p-3 rounded-lg border border-white/5 text-left text-xs font-mono select-all flex justify-between items-center text-slate-300">
-                    <div className="space-y-0.5">
-                      <p className="text-[8px] text-slate-500 font-bold">CASHFREE PG TRANS-ID</p>
-                      <p className="font-black text-[10.5px]">TXN_MOCK_{cashfreeOrderSession.cf_order_id}</p>
-                    </div>
-                    <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-bold uppercase tracking-widest leading-none">SUCCESSFUL</span>
-                  </div>
-
-                  <button 
-                    onClick={handleCloseCashfreeSuccess}
-                    className="w-full py-4 bg-emerald-500 text-slate-950 font-black rounded-xl text-xs uppercase tracking-wider transition-all hover:brightness-115 active:scale-95 shadow-lg shadow-emerald-500/15"
-                  >
-                    Finish and Confirm Order
-                  </button>
-                </div>
-              )}
-
-              {cashfreePaymentStage === 'failed' && (
-                <div className="py-8 flex flex-col items-center justify-center text-center space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 flex items-center justify-center shadow-[0_0_20px_rgba(239,68,68,0.15)] animate-bounce">
-                    <AlertCircle className="h-10 w-10 text-red-400" />
-                  </div>
-                  
-                  <div className="space-y-1">
-                    <h4 className="font-black text-sm text-white uppercase tracking-wider">Test Payment Voided</h4>
-                    <p className="text-[10px] text-slate-400 max-w-xs mx-auto leading-normal">
-                      The sandbox online payment simulation was decline-cancelled by card/UPI authorization failure. Select COD or retry online checkout.
-                    </p>
-                  </div>
-
-                  <button 
-                    onClick={() => setShowCashfreeSDKSimulator(false)}
-                    className="w-full py-3 bg-white/5 text-white border border-white/15 hover:bg-white/10 font-bold text-xs uppercase tracking-wider rounded-xl transition-all"
-                  >
-                    Return to Cart Checkout
-                  </button>
-                </div>
-              )}
-
-            </div>
-
-            <div className="p-3 bg-slate-950 border-t border-cyan-500/20 text-center flex items-center justify-center gap-1.5 text-[8.5px] text-slate-400 font-mono select-none">
-              <ShieldCheck className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
-              <span>CASHFREE PG COMPLIANT SECURED 256-BIT STANDARD VECTORS</span>
-            </div>
-
-          </div>
-        </div>
-      )}
-
-      {/* RAZORPAY SANDBOX SIMULATOR MODAL */}
-      {showRazorpaySDKSimulator && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-slate-900 border border-cyan-500/30 w-full max-w-md rounded-3xl overflow-hidden shadow-2xl text-white">
-            
-            {/* Header */}
-            <div className="bg-gradient-to-r from-cyan-600 to-blue-600 p-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center text-white font-black">
-                  R
-                </div>
-                <div>
-                  <h4 className="font-extrabold text-sm text-white">Razorpay Checkout Sandbox</h4>
-                  <p className="text-[10px] text-cyan-100 font-medium">Order ID: {razorpayOrderSession?.receipt || 'SW-ORDER'}</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setShowRazorpaySDKSimulator(false)}
-                className="w-7 h-7 rounded-full bg-black/20 hover:bg-black/40 text-white flex items-center justify-center text-xs font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Body */}
-            <div className="p-5 space-y-4">
-              <div className="bg-slate-950 p-3.5 rounded-2xl border border-white/10 flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase block">{isHindi ? "कुल देय राशि" : "Amount Payable"}</span>
-                  <span className="text-xl font-black text-cyan-300">₹{finalGrandTotal}</span>
-                </div>
-                <span className="text-[10px] font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 px-2 py-1 rounded-lg font-bold">
-                  TEST MODE
-                </span>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-xs font-extrabold text-slate-300">
-                  {isHindi ? "सिम्यूलेटेड भुगतान का तरीका चुनें:" : "Select Test Payment Method:"}
-                </p>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="p-3 bg-slate-950 border border-cyan-500/30 rounded-xl text-cyan-300 font-bold flex items-center gap-2">
-                    <Smartphone className="h-4 w-4 text-cyan-400" />
-                    <span>UPI / GPay / PhonePe</span>
-                  </div>
-                  <div className="p-3 bg-slate-950 border border-white/10 rounded-xl text-slate-300 font-bold flex items-center gap-2">
-                    <CreditCard className="h-4 w-4 text-emerald-400" />
-                    <span>Cards & Netbanking</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-white/10 space-y-2">
-                <button
-                  disabled={rzpSimulating}
-                  onClick={() => {
-                    const mockPaymentId = `pay_rzp_mock_${Date.now()}`;
-                    const mockSignature = `sig_rzp_mock_${Math.floor(100000 + Math.random() * 900000)}`;
-                    const orderRec = razorpayOrderSession?.receipt || 'SW-TEST';
-                    
-                    setRzpSimulating(true);
-                    setTimeout(async () => {
-                      try {
-                        await fetch('/api/razorpay/verify', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            orderId: orderRec,
-                            razorpay_order_id: razorpayOrderSession?.razorpay_order_id || 'order_mock',
-                            razorpay_payment_id: mockPaymentId,
-                            razorpay_signature: mockSignature
-                          })
-                        });
-
-                        const targetOrder = pendingOrderData || {
-                          id: orderRec,
-                          orderDate: new Date().toISOString(),
-                          date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-                          subtotal: Number(subtotal),
-                          deliveryFee: Number(deliveryFee),
-                          gst: Number(gst),
-                          total: Number(finalGrandTotal),
-                          customerName: shippingInfo.fullName || "Swastik Customer",
-                          customerPhone: shippingInfo.phoneNumber || "+91 98765 12345",
-                          customerEmail: customerEmail,
-                          items: cartItems.map(item => ({
-                            productId: Number(item.product.id),
-                            nameEn: item.product.nameEn,
-                            nameHi: item.product.nameHi,
-                            price: Number(getUnitPrice(item.product, item.selectedUnit)),
-                            qty: Number(item.quantity),
-                            weight: item.selectedUnit || (language === 'hi' ? (item.product.packHi || "100gm") : (item.product.packEn || "100gm"))
-                          }))
-                        };
-
-                        const paidOrder = {
-                          ...targetOrder,
-                          status: "Confirmed",
-                          paymentStatus: "PAID",
-                          paymentMethod: "RAZORPAY_ONLINE",
-                          razorpayPaymentId: mockPaymentId
-                        };
-
-                        await addOrder(paidOrder);
-
-                        handleSuccessfulCheckout();
-                        setShowRazorpaySDKSimulator(false);
-                        setShowOrderSuccess(true);
-                        setSuccessInfo(
-                          language === 'hi' 
-                            ? `शानदार! रेज़रपे टेस्ट भुगतान सफल (Payment ID: ${mockPaymentId})। ऑर्डर आईडी: ${orderRec}`
-                            : `Success! Test Razorpay payment of ₹${finalGrandTotal} completed! Payment ID: ${mockPaymentId}`
-                        );
-                      } catch (err) {
-                        console.error("Razorpay mock verify error:", err);
-                      } finally {
-                        setRzpSimulating(false);
-                      }
-                    }, 800);
-                  }}
-                  className="w-full py-3.5 bg-gradient-to-r from-cyan-400 to-emerald-400 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-cyan-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <CheckCircle className="h-4 w-4" />
-                  <span>{rzpSimulating ? "Processing Razorpay Payment..." : (isHindi ? "सिम्यूलेटेड भुगतान स्वीकृत करें (सफलता)" : "Complete Test Razorpay Payment (Success)")}</span>
-                </button>
-
-                <button
-                  onClick={() => setShowRazorpaySDKSimulator(false)}
-                  className="w-full py-2 bg-white/5 hover:bg-white/10 text-red-400 border border-white/10 text-[10px] font-extrabold uppercase rounded-xl transition-all"
-                >
-                  {isHindi ? "भुगतान रद्द करें" : "Cancel Razorpay Transaction"}
-                </button>
-              </div>
-
-            </div>
-
-            <div className="bg-slate-950 p-3 text-center text-[9px] text-slate-400 font-mono border-t border-white/10">
-              Razorpay 256-bit SSL Encrypted Sandbox Session
-            </div>
-
-          </div>
-        </div>
-      )}
 
     </div>
   );

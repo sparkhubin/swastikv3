@@ -141,15 +141,6 @@ export default function AdminDashboard({ onViewChange }) {
   const [modalNewPassword, setModalNewPassword] = useState('');
   const [modalStatus, setModalStatus] = useState({ success: null, message: '' });
 
-  // Password Recovery Drawer States
-  const [showForgot, setShowForgot] = useState(false);
-  const [recoveryStep, setRecoveryStep] = useState(1); // 1: Enter phone, 2: OTP, 3: Password Update
-  const [recoveryPhone, setRecoveryPhone] = useState('');
-  const [incomingOTP, setIncomingOTP] = useState('');
-  const [userTypedOTP, setUserTypedOTP] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [recoveryLogs, setRecoveryLogs] = useState('');
-
   // Isolated Dashboard Date Range States (Requirement 2)
   const [dateFrom, setDateFrom] = useState('2026-06-01');
   const [dateTo, setDateTo] = useState('2026-06-30');
@@ -318,38 +309,6 @@ export default function AdminDashboard({ onViewChange }) {
     setUserRole('customer');
   };
 
-  // Request Recovery OTP on WhatsApp (Requirement 8)
-  const handleRequestOTP = () => {
-    setRecoveryLogs('Self-service staff recovery is disabled. Ask an authenticated super administrator to reset this account.');
-  };
-
-  const verifyOTP = async () => {
-    if (!userTypedOTP) {
-      setRecoveryLogs('❌ Please enter the 4-digit verification code.');
-      return;
-    }
-    try {
-      const res = await fetch('/api/auth/otp/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneNumber: recoveryPhone, code: userTypedOTP })
-      });
-      const data = await res.json();
-      if (res.ok && data.status === 'verified') {
-        setRecoveryLogs('✓ Security OTP matches successfully! Enter your new password below.');
-        setRecoveryStep(3);
-      } else {
-        setRecoveryLogs(`❌ ${data.error || 'Incorrect verification code. Please check your WhatsApp.'}`);
-      }
-    } catch (e) {
-      setRecoveryLogs('❌ Verification failed. Please enter the OTP sent to your WhatsApp.');
-    }
-  };
-
-  const updateStaffForgotPass = () => {
-    setRecoveryLogs('❌ Self-service staff password reset is unavailable. Contact a super administrator.');
-  };
-
   // Staff creation Super Admin CRUD
   const handleCreateStaffSubmit = async (e) => {
     e.preventDefault();
@@ -507,17 +466,6 @@ export default function AdminDashboard({ onViewChange }) {
             <div className="space-y-1">
               <div className="flex justify-between items-center">
                 <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Access PIN / Password</label>
-                <button 
-                  type="button" 
-                  onClick={() => {
-                    setShowForgot(true);
-                    setRecoveryLogs('');
-                    setRecoveryStep(1);
-                  }}
-                  className="text-[10px] text-cyan-400 font-extrabold hover:underline"
-                >
-                  Forgot Code?
-                </button>
               </div>
               <input 
                 type="password"
@@ -545,103 +493,6 @@ export default function AdminDashboard({ onViewChange }) {
 
         </div>
 
-        {/* Dynamic Forgot Password OTP Reset Drawer (Requirement 8) */}
-        {showForgot && (
-          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-            <div className="w-full max-w-sm bg-slate-900 border border-white/12 p-6 rounded-3xl space-y-5 relative shadow-2xl">
-              
-              <button 
-                onClick={() => setShowForgot(false)}
-                className="absolute top-4 right-4 text-slate-500 hover:text-white transition-all active:scale-90"
-              >
-                <X className="h-5 w-5" />
-              </button>
-
-              <h3 className="text-sm font-black text-white uppercase tracking-wider border-b border-white/10 pb-2.5 flex items-center gap-1.5">
-                <Smartphone className="h-4.5 w-4.5 text-cyan-300" />
-                <span>WhatsApp OTP Recover</span>
-              </h3>
-
-              {/* Step 1: Input registered mobile */}
-              {recoveryStep === 1 && (
-                <div className="space-y-4">
-                  <p className="text-[11px] text-slate-400 leading-normal">Enter your registered Swastik systems mobile number. We will dispatch a 4-digit reset OTP via simulated WhatsApp API.</p>
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-black uppercase text-slate-400">Registered phone (10-digit)</label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. 9999999999"
-                      value={recoveryPhone}
-                      onChange={(e) => setRecoveryPhone(e.target.value)}
-                      className="w-full bg-slate-950 border border-white/10 px-3.5 py-2.5 rounded-xl text-xs font-mono text-white"
-                    />
-                  </div>
-                  <button 
-                    onClick={handleRequestOTP}
-                    className="w-full py-2 bg-cyan-400 text-slate-950 font-black text-xs uppercase rounded-xl hover:bg-cyan-500"
-                  >
-                    Send code via WhatsApp API
-                  </button>
-                </div>
-              )}
-
-              {/* Step 2: Code Verification */}
-              {recoveryStep === 2 && (
-                <div className="space-y-4">
-                  <p className="text-[11px] text-slate-400 leading-normal">OTP code is sent to your device. Review the green simulated Meta API logs outbox console below to copy the randomly generated OTP digits!</p>
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-black uppercase text-slate-400">Enter digits</label>
-                    <input 
-                      type="text" 
-                      maxLength="4"
-                      placeholder="e.g. 4910"
-                      value={userTypedOTP}
-                      onChange={(e) => setUserTypedOTP(e.target.value)}
-                      className="w-full bg-slate-950 border border-white/10 px-3.5 py-2.5 rounded-xl text-center text-base tracking-widest font-mono font-black text-cyan-400"
-                    />
-                  </div>
-                  <button 
-                    onClick={verifyOTP}
-                    className="w-full py-2 bg-emerald-400 text-slate-950 font-black text-xs uppercase rounded-xl hover:bg-emerald-500"
-                  >
-                    Confirm Validation OTP
-                  </button>
-                </div>
-              )}
-
-              {/* Step 3: Enter new password update */}
-              {recoveryStep === 3 && (
-                <div className="space-y-4">
-                  <p className="text-[11px] text-slate-400 leading-normal">Approved! Key in your new Swastik staff security gate password passcode below.</p>
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-black uppercase text-slate-400">New system password</label>
-                    <input 
-                      type="password" 
-                      placeholder="e.g. secretPass91"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      className="w-full bg-slate-950 border border-white/10 px-3.5 py-2.5 rounded-xl text-xs text-white"
-                    />
-                  </div>
-                  <button 
-                    onClick={updateStaffForgotPass}
-                    className="w-full py-2 bg-cyan-400 text-slate-950 font-black text-xs uppercase rounded-xl hover:bg-cyan-500"
-                  >
-                    Confirm password modification
-                  </button>
-                </div>
-              )}
-
-              {/* Green Sandbox WA logger */}
-              {recoveryLogs && (
-                <div className="bg-slate-950 border border-emerald-500/20 p-3 rounded-xl font-mono text-[9px] text-emerald-400 leading-normal">
-                  {recoveryLogs}
-                </div>
-              )}
-
-            </div>
-          </div>
-        )}
 
       </div>
     );
@@ -1514,7 +1365,7 @@ export default function AdminDashboard({ onViewChange }) {
                   })}
                 </div>
 
-                {/* Performance Graphs / Charts simulated layout */}
+                {/* Performance graphs and charts */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   
                   {/* Chart 1: Sales Delivery Trends */}

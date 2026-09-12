@@ -146,7 +146,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
     unit: '1 Unit', // Single unit default
     unitPrices: '',
     image: '',
-    stockCount: '100',
+    stockCount: '0',
     code: '',
     gstPercent: '5'
   });
@@ -181,10 +181,9 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
   const getStockCount = (p) => {
     if (!p) return 0;
     if (p.stockCount !== undefined && p.stockCount !== null && p.stockCount !== '') return Number(p.stockCount);
-    if (p.stock_count !== undefined && p.stock_count !== null && p.stock_count !== '') return Number(p.stock_count);
     if (p.stock !== undefined && p.stock !== null && p.stock !== '') return Number(p.stock);
     if (p.quantity !== undefined && p.quantity !== null && p.quantity !== '') return Number(p.quantity);
-    return 100;
+    return 0;
   };
 
   const { lowStockCount, outOfStockCount, inStockCount } = React.useMemo(() => {
@@ -425,7 +424,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
       packEn: productForm.unit ? productForm.unit.split(',')[0].trim() : '1 Unit',
       packHi: productForm.unit ? productForm.unit.split(',')[0].trim() : '1 Unit',
       image: extractCleanImageName(productForm.image || ''),
-      stockCount: productForm.stockCount !== '' ? Number(productForm.stockCount) : 100,
+      stockCount: productForm.stockCount !== '' ? Number(productForm.stockCount) : 0,
       code: finalCode,
       gstPercent: productForm.gstPercent !== '' ? Number(productForm.gstPercent) : 5
     };
@@ -448,7 +447,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
       unit: '1 Unit',
       unitPrices: '',
       image: '',
-      stockCount: '100',
+      stockCount: '0',
       code: '',
       gstPercent: '5'
     });
@@ -466,7 +465,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
       unit: prod.unit || '1 Unit',
       unitPrices: prod.unitPrices || '',
       image: extractCleanImageName(prod.image || prod.image_url || ''),
-      stockCount: prod.stockCount !== undefined ? String(prod.stockCount) : (prod.stock_count !== undefined ? String(prod.stock_count) : '100'),
+      stockCount: prod.stockCount !== undefined ? String(prod.stockCount) : '0',
       code: prod.code || prod.Code || '',
       gstPercent: prod.gstPercent !== undefined ? String(prod.gstPercent) : (prod.gst_percent !== undefined ? String(prod.gst_percent) : '5')
     });
@@ -489,8 +488,8 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
       discount: prod.discount || prod.discount_tag || '',
       unit: prod.unit || '1 Unit',
       unitPrices: prod.unitPrices || '',
-      image: prod.image || prod.image_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400',
-      stockCount: prod.stockCount !== undefined ? String(prod.stockCount) : (prod.stock_count !== undefined ? String(prod.stock_count) : '100'),
+      image: prod.image || prod.image_url || '',
+      stockCount: prod.stockCount !== undefined ? String(prod.stockCount) : '0',
       code: prod.code || prod.Code || '',
       gstPercent: prod.gstPercent !== undefined ? String(prod.gstPercent) : (prod.gst_percent !== undefined ? String(prod.gst_percent) : '5')
     });
@@ -521,7 +520,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
         packEn: quickEditProduct.unit ? quickEditProduct.unit.split(',')[0].trim() : '1 Unit',
         packHi: quickEditProduct.unit ? quickEditProduct.unit.split(',')[0].trim() : '1 Unit',
         image: quickEditProduct.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400',
-        stockCount: quickEditProduct.stockCount !== '' && quickEditProduct.stockCount !== undefined ? Number(quickEditProduct.stockCount) : 100,
+        stockCount: quickEditProduct.stockCount !== '' && quickEditProduct.stockCount !== undefined ? Number(quickEditProduct.stockCount) : 0,
         code: finalCode,
         gstPercent: quickEditProduct.gstPercent !== '' && quickEditProduct.gstPercent !== undefined ? Number(quickEditProduct.gstPercent) : 5
       };
@@ -1376,7 +1375,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
                         unit: '100gm, 200gm, 500gm, 1kg',
                         unitPrices: '',
                         image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400',
-                        stockCount: '100'
+                        stockCount: '0'
                       });
                     }}
                     className="bg-white/5 hover:bg-white/10 border border-white/10 px-5 py-2.5 rounded-xl font-bold text-xs text-slate-300 uppercase tracking-wider transition-all"
@@ -2106,13 +2105,13 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
 
                   <div className="pt-1">
                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-mono font-bold ${
-                      (viewingProduct.stockCount !== undefined ? viewingProduct.stockCount : 100) <= 0
+                      (viewingProduct.stockCount !== undefined ? viewingProduct.stockCount : 0) <= 0
                         ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                        : ((viewingProduct.stockCount !== undefined ? viewingProduct.stockCount : 100) <= 10
+                        : ((viewingProduct.stockCount !== undefined ? viewingProduct.stockCount : 0) <= 10
                           ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                           : 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20')
                     }`}>
-                      Stock: {viewingProduct.stockCount !== undefined ? viewingProduct.stockCount : 100} units available
+                      Stock: {viewingProduct.stockCount !== undefined ? viewingProduct.stockCount : 0} units available
                     </span>
                   </div>
                 </div>
@@ -2154,7 +2153,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
                   </div>
                   <div className="p-3 flex items-center justify-between">
                     <span className="text-slate-400 font-medium">8. Physical Stock Count (Qty):</span>
-                    <span className="font-mono font-bold text-amber-300">{viewingProduct.stockCount !== undefined ? viewingProduct.stockCount : 100}</span>
+                    <span className="font-mono font-bold text-amber-300">{viewingProduct.stockCount !== undefined ? viewingProduct.stockCount : 0}</span>
                   </div>
                   <div className="p-3 flex items-center justify-between">
                     <span className="text-slate-400 font-medium">9. Unique Product Code:</span>
@@ -2433,4 +2432,3 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
     </div>
   );
 }
-

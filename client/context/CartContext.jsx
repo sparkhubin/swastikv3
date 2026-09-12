@@ -12,23 +12,6 @@ export const CartProvider = ({ children }) => {
   const { language } = useLanguage();
   const [cartItems, setCartItems] = useState(defaultCartItems);
   const [appliedCoupon, setAppliedCoupon] = useState(null);
-  const couponApplied = !!appliedCoupon;
-
-  const setCouponApplied = (val) => {
-    const isLoggedIn = typeof window !== 'undefined' && localStorage.getItem('swastik_is_logged_in') === 'true';
-    if (!isLoggedIn) {
-      alert(language === 'hi'
-        ? "कूपन कोड लागू करने के लिए कृपया पहले लॉगिन करें!"
-        : "Please login first before applying coupons!");
-      setAppliedCoupon(null);
-      return false;
-    }
-    if (!val) {
-      setAppliedCoupon(null);
-    } else {
-      setAppliedCoupon({ id: 'super20', code: 'SUPER20', discountType: 'fixed', value: 520, minOrder: 0 });
-    }
-  };
 
   const [shippingInfo, setShippingInfo] = useState({
     fullName: "",
@@ -42,7 +25,7 @@ export const CartProvider = ({ children }) => {
     const unit = selectedUnit || product.unit || product.packEn || '1 Unit';
     // Match against dynamic products list to get latest real-time stock
     const dbProduct = products?.find(p => p.id === product.id) || product;
-    const maxStock = dbProduct.stockCount !== undefined ? Number(dbProduct.stockCount) : (dbProduct.stock !== undefined ? Number(dbProduct.stock) : 100);
+    const maxStock = dbProduct.stockCount !== undefined ? Number(dbProduct.stockCount) : (dbProduct.stock !== undefined ? Number(dbProduct.stock) : 0);
 
     if (maxStock <= 0) {
       alert(language === 'hi' 
@@ -123,7 +106,7 @@ export const CartProvider = ({ children }) => {
     if (!targetItem) return;
 
     const dbProduct = products?.find(p => p.id === id) || targetItem.product;
-    const maxStock = dbProduct.stockCount !== undefined ? Number(dbProduct.stockCount) : (dbProduct.stock !== undefined ? Number(dbProduct.stock) : 100);
+    const maxStock = dbProduct.stockCount !== undefined ? Number(dbProduct.stockCount) : (dbProduct.stock !== undefined ? Number(dbProduct.stock) : 0);
 
     // If item is completely out of stock, remove it from cart immediately
     if (maxStock <= 0) {
@@ -255,8 +238,6 @@ export const CartProvider = ({ children }) => {
       removeFromCart,
       updateQuantity,
       clearCart,
-      couponApplied,
-      setCouponApplied,
       appliedCoupon,
       setAppliedCoupon,
       shippingInfo,

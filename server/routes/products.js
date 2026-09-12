@@ -1,1376 +1,168 @@
 import express from "express";
 import { db } from "../../database/db.js";
-import { mapProduct } from "../utils.js";
-import { requirePermission, requireStaffAuth } from "../auth.js";
+import { audit, requirePermission, requireStaffAuth } from "../auth.js";
 
 const router = express.Router();
+const PRODUCT_SELECT = `SELECT p.*,c.name_en AS category_name,c.slug AS category_slug,b.name AS brand_name,
+  COALESCE(i.stock_qty,0) AS stock_qty,COALESCE(i.reserved_qty,0) AS reserved_qty,COALESCE(i.reorder_level,0) AS reorder_level
+  FROM product p LEFT JOIN category c ON c.id=p.category_id LEFT JOIN brand b ON b.id=p.brand_id LEFT JOIN inventory i ON i.product_id=p.id`;
 
-// Helper to ensure database never stores full domain URLs; only clean filenames/codes
-export function cleanImageStorageValue(raw, code = '') {
-  if (!raw || typeof raw !== 'string') return '';
-  const trimmed = raw.trim();
-  if (!trimmed || trimmed.includes('photo-1542838132-92c53300491e') || trimmed.includes('unsplash.com')) {
-    return '';
+function mapProduct(row) {
+  let unitPrices = {};
+  try { unitPrices = JSON.parse(row.unit_prices || "{}"); } catch { unitPrices = {}; }
+  const available = Math.max(0, Number(row.stock_qty) - Number(row.reserved_qty));
+  return {
+    id: Number(row.id), code: row.code, nameEn: row.name_en, nameHi: row.name_hi || "",
+    categoryId: row.category_id, category: row.category_slug || row.category_name || "",
+    brandId: row.brand_id, brand: row.brand_name || row.sub_en || "", subEn: row.sub_en || "", subHi: row.sub_hi || "",
+    price: Number(row.price), originalPrice: Number(row.original_price || 0), discountTag: row.discount_tag || "",
+    imageUrl: row.image_url || "", isImage: Boolean(row.is_image), unit: row.unit || "", unitPrices,
+    packEn: row.pack_en || "", packHi: row.pack_hi || "", gstPercent: Number(row.gst_percent),
+    stockCount: available, stockQty: Number(row.stock_qty), reservedQty: Number(row.reserved_qty),
+    reorderLevel: Number(row.reorder_level), isActive: Boolean(row.is_active)
+  };
+}
+
+function number(value, fallback = null) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+async function categoryId(input, transaction = db) {
+  if (input === undefined || input === null || input === "") return null;
+  if (Number.isInteger(Number(input))) return Number(input);
+  const row = await transaction.get("SELECT id FROM category WHERE slug=? OR lower(name_en)=lower(?) LIMIT 1", [String(input), String(input)]);
+  if (!row) { const error = new Error("Unknown product category."); error.status = 400; throw error; }
+  return row.id;
+}
+
+function normalizeProduct(body, current = {}) {
+  const price = number(body.price, number(current.price, 0));
+  const originalPrice = number(body.originalPrice ?? body.original_price, number(current.original_price, 0));
+  const gst = number(body.gstPercent ?? body.gst_percent, number(current.gst_percent, 0));
+  const nameEn = String(body.nameEn ?? body.name ?? current.name_en ?? "").trim();
+  const code = String(body.code ?? current.code ?? "").trim();
+  if (!code || code.length > 100 || !nameEn || nameEn.length > 255 || price < 0 || originalPrice < 0 || gst < 0) {
+    const error = new Error("Code, name, price, original price, or GST value is invalid."); error.status = 400; throw error;
   }
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-    try {
-      const parsed = new URL(trimmed);
-      const parts = parsed.pathname.split('/');
-      const last = parts[parts.length - 1];
-      if (last && !last.includes('photo-1542838132-92c53300491e')) {
-        return decodeURIComponent(last);
-      }
-      return '';
-    } catch {
-      return '';
-    }
-  }
-  if (trimmed.startsWith('/uploads/')) {
-    return trimmed.replace(/^\/uploads\//, '');
-  }
-  return trimmed;
+  const rawUnitPrices = body.unitPrices ?? body.unit_prices ?? current.unit_prices ?? {};
+  const unitPrices = typeof rawUnitPrices === "string" ? rawUnitPrices : JSON.stringify(rawUnitPrices);
+  try { JSON.parse(unitPrices || "{}"); } catch { const error = new Error("unitPrices must be valid JSON."); error.status = 400; throw error; }
+  return {
+    code, nameEn, nameHi: String(body.nameHi ?? current.name_hi ?? ""), subEn: String(body.subEn ?? body.brand ?? current.sub_en ?? ""),
+    subHi: String(body.subHi ?? current.sub_hi ?? ""), price, originalPrice, discountTag: String(body.discountTag ?? current.discount_tag ?? ""),
+    imageUrl: String(body.imageUrl ?? body.image ?? current.image_url ?? ""), unit: String(body.unit ?? current.unit ?? ""), unitPrices,
+    packEn: String(body.packEn ?? current.pack_en ?? ""), packHi: String(body.packHi ?? current.pack_hi ?? ""), gst,
+    isImage: body.isImage === undefined ? Number(current.is_image || Boolean(body.imageUrl || body.image)) : Number(Boolean(body.isImage)),
+    isActive: body.isActive === undefined ? Number(current.is_active ?? 1) : Number(Boolean(body.isActive))
+  };
 }
 
 router.get("/products", async (req, res) => {
   try {
-    const category = req.query.category;
-    const isImageParam = req.query.is_image;
-
-    let sql = "SELECT * FROM product";
-    const params = [];
-    const conditions = [];
-
-    if (category) {
-      conditions.push("category = ?");
-      params.push(category);
-    }
-
-    if (isImageParam !== undefined) {
-      const value =
-        isImageParam === "1" || isImageParam.toLowerCase() === "true"
-          ? 1
-          : 0;
-
-      conditions.push("is_image = ?");
-      params.push(value);
-    }
-
-    if (conditions.length) {
-      sql += " WHERE " + conditions.join(" AND ");
-    }
-
-    sql += " ORDER BY id ASC";
-
-    const rows = await db.query(sql, params);
-
+    const conditions = ["p.is_active=1"], params = [];
+    if (req.query.is_image !== undefined) { conditions.push("p.is_image=?"); params.push(["1", "true"].includes(String(req.query.is_image).toLowerCase()) ? 1 : 0); }
+    const rows = await db.query(`${PRODUCT_SELECT} WHERE ${conditions.join(" AND ")} ORDER BY p.id`, params);
     res.json(rows.map(mapProduct));
+  } catch (error) { console.error("Product list failed:", error.message); res.status(500).json({ error: "Unable to load products." }); }
+});
 
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+router.get("/products/:id", async (req, res) => {
+  const row = await db.get(`${PRODUCT_SELECT} WHERE p.id=? AND p.is_active=1`, [req.params.id]);
+  if (!row) return res.status(404).json({ error: "Product not found." });
+  res.json(mapProduct(row));
 });
 
 router.post("/products", requireStaffAuth, requirePermission("products"), async (req, res) => {
   try {
-    const p = req.body;
-    const productName = String(p.nameEn || p.name || "").trim();
-    const priceValue = Number(p.price);
-    const stockValue = p.stockCount === undefined ? 0 : Number(p.stockCount);
-    if (!productName || !Number.isFinite(priceValue) || priceValue < 0) {
-      return res.status(400).json({ error: "Product name and a non-negative price are required." });
-    }
-    if (!Number.isFinite(stockValue) || stockValue < 0) {
-      return res.status(400).json({ error: "Stock count must be a non-negative number." });
-    }
-    const gstVal = p.gstPercent !== undefined ? Number(p.gstPercent) : (p.gst_percent !== undefined ? Number(p.gst_percent) : 5);
-    const cleanedImg = cleanImageStorageValue(p.imageUrl || p.image || "", p.code || "");
-    const isImage = cleanedImg ? 1 : 0;
-    const resId = await db.execute(
-      `INSERT INTO product (
-        code, name_en, name_hi, category, sub_en, sub_hi, 
-        price, original_price, discount_tag, image_url, is_image, stock_count,
-        unit, unit_prices, pack_en, pack_hi, gst_percent
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        p.code || "", productName, p.nameHi || p.name || "", p.category || "swastik",
-        p.subEn || p.brand || "General", p.subHi || p.brand || "General", priceValue,
-        p.originalPrice || null, p.discountTag || "", cleanedImg,isImage, Math.floor(stockValue),
-        p.unit || "", p.unitPrices || "", p.packEn || "", p.packHi || "", gstVal
-      ]
-    );
-    const rows = resId.lastID
-      ? await db.query("SELECT * FROM product WHERE id = ?", [resId.lastID])
-      : await db.query("SELECT * FROM product WHERE code = ? AND name_en = ? ORDER BY id DESC LIMIT 1", [p.code || "", productName]);
-    if (!rows[0]) throw new Error("Product was inserted but could not be read back.");
-    if (db.savePersistentSnapshot) {
-      try { await db.savePersistentSnapshot(); } catch (e) {}
-    }
-    res.status(201).json(mapProduct(rows[0]));
-  } catch (err) {
-    // Self-healing: if a missing column like gst_percent caused the failure, auto-migrate and retry once
-    if (err.message && (err.message.includes("no column named") || err.message.includes("Unknown column"))) {
-      try {
-        console.log("⚠️ Missing column detected in product table. Auto-triggering db.migrateSchema()...");
-        await db.migrateSchema();
-        const p = req.body;
-        const productName = String(p.nameEn || p.name || "").trim();
-        const priceValue = Number(p.price);
-        const stockValue = p.stockCount === undefined ? 0 : Number(p.stockCount);
-        if (!productName || !Number.isFinite(priceValue) || priceValue < 0 || !Number.isFinite(stockValue) || stockValue < 0) {
-          return res.status(400).json({ error: "Product name, price, or stock value is invalid." });
-        }
-        const gstVal = p.gstPercent !== undefined ? Number(p.gstPercent) : (p.gst_percent !== undefined ? Number(p.gst_percent) : 5);
-        const cleanedImg = cleanImageStorageValue(p.imageUrl || p.image || "", p.code || "");
-        const isImage = cleanedImg ? 1 : 0;
-        const retryResId = await db.execute(
-          `INSERT INTO product (
-            code, name_en, name_hi, category, sub_en, sub_hi, 
-            price, original_price, discount_tag, image_url, is_image, stock_count,
-            unit, unit_prices, pack_en, pack_hi, gst_percent
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            p.code || "", productName, p.nameHi || p.name || "", p.category || "swastik",
-            p.subEn || p.brand || "General", p.subHi || p.brand || "General", priceValue,
-            p.originalPrice || null, p.discountTag || "", cleanedImg,isImage, Math.floor(stockValue),
-            p.unit || "", p.unitPrices || "", p.packEn || "", p.packHi || "", gstVal
-          ]
-        );
-        const retryRows = retryResId.lastID
-          ? await db.query("SELECT * FROM product WHERE id = ?", [retryResId.lastID])
-          : await db.query("SELECT * FROM product WHERE code = ? AND name_en = ? ORDER BY id DESC LIMIT 1", [p.code || "", productName]);
-        if (!retryRows[0]) throw new Error("Product was inserted but could not be read back.");
-        if (db.savePersistentSnapshot) {
-          try { await db.savePersistentSnapshot(); } catch (e) {}
-        }
-        return res.status(201).json(mapProduct(retryRows[0]));
-      } catch (retryErr) {
-        return res.status(500).json({ error: retryErr.message });
-      }
-    }
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Helper to flexibly extract field values regardless of casing, punctuation (e.g. M.R.P. vs MRP), or alternative column labels
-function extractFieldValue(raw, candidateKeys) {
-  if (!raw || typeof raw !== 'object') return undefined;
-  
-  // 1. Exact key match
-  for (const key of candidateKeys) {
-    if (raw[key] !== undefined && raw[key] !== null && String(raw[key]).trim() !== '') {
-      return raw[key];
-    }
-  }
-
-  // 2. Normalized alphanumeric key match (strips punctuation, dots, spaces, parens, currency signs)
-  const entries = Object.entries(raw);
-  for (const key of candidateKeys) {
-    const cleanKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
-    for (const [rKey, rVal] of entries) {
-      if (rVal !== undefined && rVal !== null && String(rVal).trim() !== '') {
-        const cleanRKey = rKey.toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (cleanRKey === cleanKey) {
-          return rVal;
-        }
-      }
-    }
-  }
-  return undefined;
-}
-
-// Bulk Upload Products (Excel & JSON with validation: skip or update, preserve code, prevent duplicate names)
-router.post("/products/bulk-upload-before", requireStaffAuth, requirePermission("products"), async (req, res) => {
-  try {
-    const { items = [], mode = "update_existing", defaultCategory = "swastik" } = req.body;
-    if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: "No products provided in items array" });
-    }
-
-    // Fetch all existing products from database
-    const allProducts = await db.query("SELECT * FROM product ORDER BY id ASC");
-    
-    // Index by lowercase trimmed code and lowercase trimmed name_en / name_hi
-    const codeMap = new Map();
-    const nameMap = new Map();
-    
-    allProducts.forEach(p => {
-      if (p.code && String(p.code).trim()) {
-        codeMap.set(String(p.code).trim().toLowerCase(), p);
-      }
-      if (p.name_en && String(p.name_en).trim()) {
-        nameMap.set(String(p.name_en).trim().toLowerCase(), p);
-      }
-      if (p.name_hi && String(p.name_hi).trim()) {
-        nameMap.set(String(p.name_hi).trim().toLowerCase(), p);
-      }
+    const product = normalizeProduct(req.body || {});
+    const stock = number(req.body?.stockCount ?? req.body?.stockQty, 0);
+    const reorder = number(req.body?.reorderLevel, 0);
+    if (stock < 0 || reorder < 0) return res.status(400).json({ error: "Stock values cannot be negative." });
+    const createdId = await db.transaction(async tx => {
+      const category = await categoryId(req.body?.categoryId ?? req.body?.category, tx);
+      const result = await tx.execute(`INSERT INTO product (code,name_en,name_hi,category_id,brand_id,sub_en,sub_hi,price,original_price,discount_tag,image_url,unit,unit_prices,pack_en,pack_hi,gst_percent,is_image,is_active)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [product.code,product.nameEn,product.nameHi,category,req.body?.brandId || null,product.subEn,product.subHi,product.price,product.originalPrice,product.discountTag,product.imageUrl,product.unit,product.unitPrices,product.packEn,product.packHi,product.gst,product.isImage,product.isActive]);
+      await tx.execute("INSERT INTO inventory (product_id,stock_qty,reserved_qty,reorder_level,unit) VALUES (?,?,0,?,?)", [result.lastID,stock,reorder,product.unit]);
+      if (stock) await tx.execute("INSERT INTO stock_movement (product_id,type,quantity,before_qty,after_qty,reference_type,note,created_by_user_id) VALUES (?,'INITIAL',?,0,?,'PRODUCT','Initial stock',?)", [result.lastID,stock,stock,req.staff.id]);
+      return result.lastID;
     });
-
-    let insertedCount = 0;
-    let updatedCount = 0;
-    let skippedCount = 0;
-    let duplicatesPrevented = 0;
-    let codesPreserved = 0;
-    const details = [];
-
-    // Helper for auto-generating unique SP code if needed (e.g. SP000001)
-    let maxNum = 0;
-    allProducts.forEach(p => {
-      const match = String(p.code || '').match(/(\d+)/);
-      if (match) {
-        const num = parseInt(match[1], 10);
-        if (num > maxNum) maxNum = num;
-      }
-    });
-    if (maxNum < allProducts.length) maxNum = allProducts.length;
-
-    const generateUniqueCode = (category) => {
-      maxNum++;
-      const prefix = "SP";
-      return `${prefix}${String(maxNum).padStart(6, '0')}`;
-    };
-
-    for (let index = 0; index < items.length; index++) {
-      const raw = items[index];
-      if (!raw || typeof raw !== 'object') continue;
-
-      // Extract all 11 fields supporting both user friendly exact names and camelCase/shorthand
-      const name = (
-        raw["Product Display Name"] ||
-        raw["Product Name"] ||
-        raw["Name"] ||
-        raw.name ||
-        raw.nameEn ||
-        raw.nameHi ||
-        ""
-      ).trim();
-
-      if (!name) {
-        details.push({ index, status: "skipped", reason: "Missing Product Name" });
-        continue;
-      }
-
-      // 2. M.R.P. (Primary user requested column, e.g. "60.00" or 60)
-      const mrpVal = extractFieldValue(raw, [
-        "M.R.P.",
-        "M.R.P",
-        "MRP",
-        "Original Price crossed out (₹)",
-        "Original Price",
-        "OriginalPrice",
-        "List Price",
-        "originalPrice",
-        "original_price",
-        "mrp"
-      ]);
-      const mrpNum = (mrpVal !== undefined && mrpVal !== null && String(mrpVal).trim() !== "")
-        ? Number(String(mrpVal).replace(/[^0-9.]/g, ''))
-        : null;
-      const originalPrice = (mrpNum !== null && !isNaN(mrpNum) && mrpNum > 0) ? mrpNum : null;
-
-      // 3. Sales Price (Primary user requested column, e.g. "50.00" or 50)
-      const salesPriceVal = extractFieldValue(raw, [
-        "Sales Price",
-        "Sale Price",
-        "Selling Price",
-        "Base Price / Default rate (₹)",
-        "Price",
-        "Rate",
-        "price",
-        "salesPrice",
-        "sales_price",
-        "sale_price"
-      ]);
-      const salesPriceNum = (salesPriceVal !== undefined && salesPriceVal !== null && String(salesPriceVal).trim() !== "")
-        ? Number(String(salesPriceVal).replace(/[^0-9.]/g, ''))
-        : 0;
-      const price = Math.max(0, (!isNaN(salesPriceNum) ? salesPriceNum : 0));
-
-      // 4. Category (Defaults to "swastik")
-      const catVal = extractFieldValue(raw, [
-        "Category",
-        "Product Department Category",
-        "Department",
-        "category",
-        "cat"
-      ]);
-      const category = String(catVal || defaultCategory || "swastik").trim().toLowerCase();
-
-      // 5. Brand (Defaults to detected first word from name or "Swastik")
-      const brandVal = extractFieldValue(raw, [
-        "Brand",
-        "Brand / Segment Tag",
-        "Brand Name",
-        "brand",
-        "brandTag",
-        "subEn",
-        "subHi"
-      ]);
-      let brandTag = String(brandVal || "").trim();
-      if (!brandTag) {
-        const firstWord = name.split(/\s+/)[0];
-        if (firstWord && firstWord.length >= 2 && !/^\d+$/.test(firstWord)) {
-          brandTag = firstWord.toUpperCase();
-        } else {
-          brandTag = "Swastik";
-        }
-      }
-
-      // 6. Unit (Extracts weight from name like "200G" in "ZOFF SOYA BADI 200G" or defaults to "1 Unit")
-      const unitVal = extractFieldValue(raw, [
-        "Unit",
-        "Available Weight / Product Units",
-        "Units",
-        "Weight",
-        "Pack",
-        "Pack Size",
-        "unit",
-        "packEn",
-        "packHi"
-      ]);
-      let unit = String(unitVal || "").trim();
-      if (!unit) {
-        const unitMatch = name.match(/(\d+(?:\.\d+)?\s*(?:kg|g|gm|gms|gram|grams|ml|l|ltr|litre|litres|pcs|pc|pack|dozen|badi))\b/i);
-        if (unitMatch) {
-          unit = unitMatch[1].trim();
-        } else {
-          unit = "1 Unit";
-        }
-      }
-
-      // 7. Discount Ribbon (Auto-computes from MRP and Sales Price if not provided)
-      const discountVal = extractFieldValue(raw, [
-        "Discount",
-        "Discount ribbon label text",
-        "Discount (%)",
-        "discount",
-        "discountTag",
-        "DiscountRibbon"
-      ]);
-      let discount = String(discountVal || "").trim();
-      if (!discount && originalPrice && price && originalPrice > price) {
-        const saveAmt = Math.round(originalPrice - price);
-        const pct = Math.round(((originalPrice - price) / originalPrice) * 100);
-        if (pct >= 5) {
-          discount = `${pct}% OFF`;
-        } else if (saveAmt > 0) {
-          discount = `Save ₹${saveAmt}`;
-        }
-      }
-
-      // 8. Stock Count (missing inventory starts unavailable)
-      const stockVal = extractFieldValue(raw, [
-        "Stock",
-        "Physical Stock Count (Qty)",
-        "Stock Count",
-        "Qty",
-        "Quantity",
-        "stockCount",
-        "stock",
-        "qty"
-      ]);
-      const stockNum = (stockVal !== undefined && stockVal !== null && String(stockVal).trim() !== "")
-        ? Math.floor(Number(String(stockVal).replace(/[^0-9]/g, '')))
-        : 0;
-      const stockCount = (!isNaN(stockNum) && stockNum >= 0) ? stockNum : 0;
-
-      // 9. Product Code (Preserved if matching existing item, auto-assigned if empty)
-      const codeVal = extractFieldValue(raw, [
-        "Product Code",
-        "Code",
-        "Unique Product Code (e.g. SP000001)",
-        "Barcode",
-        "Item Code",
-        "code",
-        "productCode"
-      ]);
-      const incomingCode = String(codeVal || "").trim();
-
-      // 10. GST (%) (Defaults to 5%)
-      const gstVal = extractFieldValue(raw, [
-        "GST (%)",
-        "GST Rate (%) / जीएसटी दर",
-        "GST Rate",
-        "GST",
-        "GstPercent",
-        "gstPercent",
-        "gst_percent",
-        "gst"
-      ]);
-      const gstNum = (gstVal !== undefined && gstVal !== null && String(gstVal).trim() !== "")
-        ? Number(String(gstVal).replace(/[^0-9.]/g, ''))
-        : 5;
-      const gstPercent = (!isNaN(gstNum) && gstNum >= 0) ? gstNum : 5;
-
-      // 11. Image URL (Retains existing product photo or sets clean fallback)
-      const imageVal = extractFieldValue(raw, [
-        "Image URL",
-        "Product Illustration Image URL",
-        "Image",
-        "ImageUrl",
-        "image",
-        "imageUrl",
-        "Photo",
-        "photo"
-      ]);
-      const image = String(imageVal || "").trim();
-
-      const normalizedName = name.toLowerCase();
-      const normalizedIncomingCode = incomingCode.toLowerCase();
-
-      // Check if already exists by code OR by name
-      let existing = null;
-      let matchedBy = null;
-
-      if (normalizedIncomingCode && codeMap.has(normalizedIncomingCode)) {
-        existing = codeMap.get(normalizedIncomingCode);
-        matchedBy = "code";
-      } else if (nameMap.has(normalizedName)) {
-        existing = nameMap.get(normalizedName);
-        matchedBy = "name";
-      }
-
-      if (existing) {
-        if (mode === "skip_existing") {
-          skippedCount++;
-          details.push({
-            name,
-            code: existing.code,
-            status: "skipped",
-            reason: `Already exists (${matchedBy === 'code' ? 'by Unique Code' : 'by Name'})`
-          });
-          continue;
-        } else {
-          // Update existing, PRESERVING product code and PREVENTING duplicate names!
-          const finalCode = (incomingCode && incomingCode !== "") ? incomingCode : (existing.code || generateUniqueCode(category));
-          codesPreserved++;
-          if (matchedBy === "name") {
-            duplicatesPrevented++;
-          }
-
-          const cleanedIncomingImage = cleanImageStorageValue(image, finalCode);
-          const finalImage = cleanedIncomingImage || cleanImageStorageValue(existing.image_url, finalCode);
-          const isImage = finalImage ? 1 : 0;
-          const finalPrice = price > 0 ? price : (existing.price || 0);
-          const finalOrigPrice = originalPrice !== null ? originalPrice : existing.original_price;
-          const finalDiscount = discount || existing.discount_tag || "";
-          const finalCategory = (catVal ? category : existing.category) || "swastik";
-          const finalBrand = (brandVal ? brandTag : existing.sub_en) || brandTag;
-          const finalStock = stockVal !== undefined ? stockCount : (existing.stock_count ?? 0);
-          const packEn = unit ? unit.split(',')[0].trim() : (existing.pack_en || "1 Unit");
-          const packHi = packEn;
-          const finalUnit = unit || existing.unit || "1 Unit";
-          const finalUnitPrices = raw.unitPrices || existing.unit_prices || `${packEn}:${finalPrice}`;
-
-          await db.execute(
-            `UPDATE product SET 
-              code = ?, name_en = ?, name_hi = ?, category = ?, sub_en = ?, sub_hi = ?, 
-              price = ?, original_price = ?, discount_tag = ?, image_url = ?, is_image = ?, stock_count = ?,
-              unit = ?, unit_prices = ?, pack_en = ?, pack_hi = ?, gst_percent = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?`,
-            [
-              finalCode,
-              name,
-              name,
-              finalCategory,
-              finalBrand,
-              finalBrand,
-              finalPrice,
-              finalOrigPrice,
-              finalDiscount,
-              finalImage,
-              isImage,
-              finalStock,
-              finalUnit,
-              finalUnitPrices,
-              packEn,
-              packHi,
-              gstPercent,
-              existing.id
-            ]
-          );
-
-          existing.code = finalCode;
-          existing.name_en = name;
-          existing.name_hi = name;
-          existing.price = finalPrice;
-          existing.original_price = finalOrigPrice;
-          existing.category = finalCategory;
-          codeMap.set(finalCode.toLowerCase(), existing);
-          nameMap.set(name.toLowerCase(), existing);
-
-          updatedCount++;
-          details.push({
-            name,
-            code: finalCode,
-            status: "updated",
-            matchedBy
-          });
-        }
-      } else {
-        // Brand new item: insert into database
-        const finalCode = incomingCode || generateUniqueCode(category);
-        const finalImage = cleanImageStorageValue(image, finalCode);
-        const packEn = unit ? unit.split(',')[0].trim() : "1 Unit";
-        const packHi = packEn;
-        const finalUnitPrices = raw.unitPrices || `${packEn}:${price}`;
-
-        const isImage = finalImage ? 1 : 0;
-        const insertRes = await db.execute(
-          `INSERT INTO product (
-            code, name_en, name_hi, category, sub_en, sub_hi, 
-            price, original_price, discount_tag, image_url, is_image, stock_count,
-            unit, unit_prices, pack_en, pack_hi, gst_percent
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            finalCode, name, name, category, brandTag, brandTag,
-            price, originalPrice, discount, finalImage,isImage, stockCount,
-            unit, finalUnitPrices, packEn, packHi, gstPercent
-          ]
-        );
-
-        const newId = insertRes.lastID || (maxNum + 100);
-        const newProductObj = {
-          id: newId,
-          code: finalCode,
-          name_en: name,
-          name_hi: name,
-          category,
-          sub_en: brandTag,
-          sub_hi: brandTag,
-          price,
-          original_price: originalPrice,
-          discount_tag: discount,
-          image_url: finalImage,
-          is_image: isImage,
-          stock_count: stockCount,
-          unit,
-          unit_prices: finalUnitPrices,
-          pack_en: packEn,
-          pack_hi: packHi,
-          gst_percent: gstPercent
-        };
-
-        codeMap.set(finalCode.toLowerCase(), newProductObj);
-        nameMap.set(name.toLowerCase(), newProductObj);
-
-        insertedCount++;
-        details.push({
-          name,
-          code: finalCode,
-          status: "inserted"
-        });
-      }
-    }
-
-    if (db.savePersistentSnapshot) {
-      try { await db.savePersistentSnapshot(); } catch (e) {}
-    }
-
-    const updatedCatalog = await db.query("SELECT * FROM product ORDER BY id ASC");
-
-    return res.json({
-      success: true,
-      stats: {
-        totalProcessed: items.length,
-        insertedCount,
-        updatedCount,
-        skippedCount,
-        codesPreserved,
-        duplicatesPrevented,
-        totalCatalogItems: updatedCatalog.length
-      },
-      details: details.slice(0, 50),
-      products: updatedCatalog.map(mapProduct)
-    });
-  } catch (err) {
-    console.error("Bulk upload error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-
-router.post("/products/bulk-upload", requireStaffAuth, requirePermission("products"), async (req, res) => {
-  try {
-    const {
-      items = [],
-      defaultCategory = "vegetables"
-    } = req.body;
-
-    // ============================================================
-    // 1. VALIDATE INPUT
-    // ============================================================
-
-    if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: "No products provided in items array"
-      });
-    }
-
-    // ============================================================
-    // 2. FETCH EXISTING PRODUCTS
-    // ============================================================
-
-    const allProducts = await db.query(
-      "SELECT * FROM product ORDER BY id ASC"
-    );
-
-    // ============================================================
-    // 3. CREATE NAME MAP
-    //
-    // Same name = SKIP
-    //
-    // Case-insensitive + trims spaces.
-    //
-    // Example:
-    // "ZOFF SOYA BADI 200G"
-    // "zoff soya badi 200g"
-    // " ZOFF SOYA BADI 200G "
-    //
-    // All are considered the same product.
-    // ============================================================
-
-    const nameMap = new Map();
-
-    allProducts.forEach((p) => {
-      if (p.name_en && String(p.name_en).trim()) {
-        nameMap.set(
-          String(p.name_en).trim().toLowerCase(),
-          p
-        );
-      }
-
-      if (p.name_hi && String(p.name_hi).trim()) {
-        nameMap.set(
-          String(p.name_hi).trim().toLowerCase(),
-          p
-        );
-      }
-    });
-
-    // ============================================================
-    // 4. CREATE CODE MAP
-    //
-    // Used only to make sure automatically generated codes
-    // are unique.
-    // ============================================================
-
-    const codeMap = new Map();
-
-    allProducts.forEach((p) => {
-      if (p.code && String(p.code).trim()) {
-        codeMap.set(
-          String(p.code).trim().toLowerCase(),
-          p
-        );
-      }
-    });
-
-    // ============================================================
-    // 5. FIND HIGHEST EXISTING SP CODE
-    //
-    // Example:
-    // SP000001
-    // SP000002
-    // SP000250
-    //
-    // Next generated code = SP000251
-    // ============================================================
-
-    let maxNum = 0;
-
-    allProducts.forEach((p) => {
-      const code = String(p.code || "");
-
-      const match = code.match(/SP(\d+)/i);
-
-      if (match) {
-        const num = parseInt(match[1], 10);
-
-        if (Number.isFinite(num) && num > maxNum) {
-          maxNum = num;
-        }
-      }
-    });
-
-    // Safety fallback
-    if (maxNum < allProducts.length) {
-      maxNum = allProducts.length;
-    }
-
-    const generateUniqueCode = () => {
-      let code;
-
-      do {
-        maxNum++;
-
-        code = `SP${String(maxNum).padStart(6, "0")}`;
-      } while (codeMap.has(code.toLowerCase()));
-
-      return code;
-    };
-
-    // ============================================================
-    // 6. STATISTICS
-    // ============================================================
-
-    let insertedCount = 0;
-    let skippedCount = 0;
-    let invalidCount = 0;
-
-    const details = [];
-
-    // ============================================================
-    // 7. PROCESS EVERY IMPORTED PRODUCT
-    // ============================================================
-
-    for (let index = 0; index < items.length; index++) {
-      const raw = items[index];
-
-      // ----------------------------------------------------------
-      // Invalid row
-      // ----------------------------------------------------------
-
-      if (!raw || typeof raw !== "object") {
-        invalidCount++;
-
-        details.push({
-          index,
-          status: "invalid",
-          reason: "Invalid product object"
-        });
-
-        continue;
-      }
-
-      // ==========================================================
-      // 8. PRODUCT NAME
-      //
-      // Your JSON format:
-      //
-      // "Product Name": "ZOFF SOYA BADI 200G"
-      //
-      // ==========================================================
-
-      const nameRaw =
-        raw["Product Name"] ??
-        raw["Product Display Name"] ??
-        raw["Name"] ??
-        raw.name ??
-        "";
-
-      const name = String(nameRaw).trim();
-
-      // Product name is mandatory
-      if (!name) {
-        invalidCount++;
-
-        details.push({
-          index,
-          status: "invalid",
-          reason: "Missing Product Name"
-        });
-
-        continue;
-      }
-
-      // Normalize name for duplicate checking
-      const normalizedName = name
-        .trim()
-        .toLowerCase();
-
-      // ==========================================================
-      // 9. CHECK IF SAME PRODUCT NAME ALREADY EXISTS
-      //
-      // IMPORTANT:
-      //
-      // If same name exists:
-      //      SKIP
-      //
-      // We DO NOT:
-      //      update
-      //      delete
-      //      replace
-      //      change price
-      //      change image
-      //      change stock
-      //
-      // Existing product remains EXACTLY as it is.
-      // ==========================================================
-
-      if (nameMap.has(normalizedName)) {
-        const existing = nameMap.get(normalizedName);
-
-        skippedCount++;
-
-        details.push({
-          index,
-          name,
-          code: existing.code || null,
-          status: "skipped",
-          reason: "Product with same name already exists"
-        });
-
-        continue;
-      }
-
-      // ==========================================================
-      // 10. M.R.P.
-      //
-      // Your JSON:
-      //
-      // "M.R.P.": "60.00"
-      //
-      // Stored as:
-      //
-      // original_price
-      //
-      // ==========================================================
-
-      const mrpRaw =
-        raw["M.R.P."] ??
-        raw["MRP"] ??
-        raw["Original Price"] ??
-        raw["OriginalPrice"] ??
-        null;
-
-      let originalPrice = null;
-
-      if (
-        mrpRaw !== null &&
-        mrpRaw !== undefined &&
-        String(mrpRaw).trim() !== ""
-      ) {
-        const parsedMRP = Number(
-          String(mrpRaw).replace(/[^0-9.-]/g, "")
-        );
-
-        if (Number.isFinite(parsedMRP) && parsedMRP > 0) {
-          originalPrice = parsedMRP;
-        }
-      }
-
-      // ==========================================================
-      // 11. SALES PRICE
-      //
-      // Your JSON:
-      //
-      // "Sales Price": "50.00"
-      //
-      // Stored as:
-      //
-      // price
-      //
-      // ==========================================================
-
-      const salesPriceRaw =
-        raw["Sales Price"] ??
-        raw["Price"] ??
-        raw.price ??
-        0;
-
-      let price = Number(
-        String(salesPriceRaw).replace(/[^0-9.-]/g, "")
-      );
-
-      if (!Number.isFinite(price) || price < 0) {
-        price = 0;
-      }
-
-      // ==========================================================
-      // 12. OPTIONAL FIELDS
-      //
-      // These are NOT required for your current JSON.
-      //
-      // If they don't exist, sensible defaults are used because
-      // this is a BRAND NEW product.
-      // ==========================================================
-
-      const category = String(
-        raw["Product Department Category"] ??
-        raw["Category"] ??
-        raw.category ??
-        defaultCategory ??
-        "swastik"
-      )
-        .trim()
-        .toLowerCase();
-
-      const brandTag = String(
-        raw["Brand / Segment Tag"] ??
-        raw["Brand"] ??
-        raw.brandTag ??
-        raw.brand ??
-        "General"
-      ).trim();
-
-      const unit = String(
-        raw["Available Weight / Product Units"] ??
-        raw["Unit"] ??
-        raw["Units"] ??
-        raw.unit ??
-        "1 Unit"
-      ).trim();
-
-      const discount = String(
-        raw["Discount ribbon label text"] ??
-        raw["Discount"] ??
-        raw["DiscountRibbon"] ??
-        raw.discount ??
-        raw.discountTag ??
-        ""
-      ).trim();
-
-      const stockRaw =
-        raw["Physical Stock Count (Qty)"] ??
-        raw["Stock"] ??
-        raw["StockCount"] ??
-        raw["Qty"] ??
-        raw.stockCount ??
-        0;
-
-      let stockCount = Number(stockRaw);
-
-      if (!Number.isFinite(stockCount) || stockCount < 0) {
-        stockCount = 0;
-      } else {
-        stockCount = Math.floor(stockCount);
-      }
-
-      const gstRaw =
-        raw["GST Rate (%) / जीएसटी दर"] ??
-        raw["GST (%)"] ??
-        raw["GST"] ??
-        raw["GstPercent"] ??
-        raw.gstPercent ??
-        raw.gst_percent ??
-        5;
-
-      let gstPercent = Number(
-        String(gstRaw).replace(/[^0-9.-]/g, "")
-      );
-
-      if (!Number.isFinite(gstPercent) || gstPercent < 0) {
-        gstPercent = 5;
-      }
-
-      // ==========================================================
-      // 13. IMAGE
-      //
-      // Your current JSON doesn't contain an image.
-      //
-      // Therefore use your existing default image.
-      //
-      // You can later upload/replace images separately.
-      // ==========================================================
-
-
-      //const finalImage = image.length > 5 ? image : "";
-      const finalImage = "";
-
-      const isImage = finalImage ? 1 : 0;
-      // ==========================================================
-      // 14. PRODUCT CODE
-      //
-      // Your current JSON doesn't have a code.
-      //
-      // Generate one automatically.
-      //
-      // Example:
-      // SP000301
-      // ==========================================================
-
-      const finalCode = generateUniqueCode();
-
-      // ==========================================================
-      // 15. UNIT PRICE
-      // ==========================================================
-
-      const packEn = unit
-        ? unit.split(",")[0].trim()
-        : "1 Unit";
-
-      const packHi = packEn;
-
-      const finalUnitPrices =
-        raw.unitPrices ||
-        `${packEn}:${price}`;
-
-      // ==========================================================
-      // 16. INSERT NEW PRODUCT
-      // ==========================================================
-
-      const insertRes = await db.execute(
-        `INSERT INTO product (
-          code,
-          name_en,
-          name_hi,
-          category,
-          sub_en,
-          sub_hi,
-          price,
-          original_price,
-          discount_tag,
-          image_url,
-          is_image,
-          stock_count,
-          unit,
-          unit_prices,
-          pack_en,
-          pack_hi,
-          gst_percent
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          finalCode,
-          name,
-          name,
-          category,
-          brandTag,
-          brandTag,
-          price,
-          originalPrice,
-          discount,
-          finalImage,
-          isImage,
-          stockCount,
-          unit,
-          finalUnitPrices,
-          packEn,
-          packHi,
-          gstPercent
-        ]
-      );
-
-      // ==========================================================
-      // 17. GET NEW PRODUCT ID
-      // ==========================================================
-
-      const newId =
-        insertRes.lastID ||
-        insertRes.insertId ||
-        null;
-
-      // ==========================================================
-      // 18. ADD NEW PRODUCT TO MAP
-      //
-      // This is VERY important.
-      //
-      // If the same product appears twice inside your 300-item
-      // JSON file, the second one will now be skipped.
-      // ==========================================================
-
-      const newProductObj = {
-        id: newId,
-        code: finalCode,
-        name_en: name,
-        name_hi: name,
-        category,
-        sub_en: brandTag,
-        sub_hi: brandTag,
-        price,
-        original_price: originalPrice,
-        discount_tag: discount,
-        image_url: finalImage,
-        is_image: isImage,
-        stock_count: stockCount,
-        unit,
-        unit_prices: finalUnitPrices,
-        pack_en: packEn,
-        pack_hi: packHi,
-        gst_percent: gstPercent
-      };
-
-      nameMap.set(
-        normalizedName,
-        newProductObj
-      );
-
-      codeMap.set(
-        finalCode.toLowerCase(),
-        newProductObj
-      );
-
-      // ==========================================================
-      // 19. STATISTICS
-      // ==========================================================
-
-      insertedCount++;
-
-      details.push({
-        index,
-        name,
-        code: finalCode,
-        status: "inserted"
-      });
-    }
-
-    // ============================================================
-    // 20. SAVE PERSISTENT SNAPSHOT
-    // ============================================================
-
-    if (db.savePersistentSnapshot) {
-      try {
-        await db.savePersistentSnapshot();
-      } catch (snapshotError) {
-        console.error(
-          "Persistent snapshot save error:",
-          snapshotError
-        );
-      }
-    }
-
-    // ============================================================
-    // 21. FETCH FINAL CATALOG
-    // ============================================================
-
-    const updatedCatalog = await db.query(
-      "SELECT * FROM product ORDER BY id ASC"
-    );
-
-    // ============================================================
-    // 22. RESPONSE
-    // ============================================================
-
-    return res.json({
-      success: true,
-
-      stats: {
-        totalProcessed: items.length,
-        insertedCount,
-        skippedCount,
-        invalidCount,
-        totalCatalogItems: updatedCatalog.length
-      },
-
-      details: details.slice(0, 500),
-
-      products: updatedCatalog.map(mapProduct)
-    });
-
-  } catch (err) {
-    console.error("Bulk upload error:", err);
-
-    return res.status(500).json({
-      success: false,
-      error: err.message
-    });
-  }
-});
-
-// Bulk Stock Update Menu API (Updates stock count across multiple items in one batch)
-router.post("/products/bulk-stock", requireStaffAuth, requirePermission("products", "inventory"), async (req, res) => {
-  try {
-    const { updates = [], action, category, value } = req.body;
-
-    // 1. Batch item updates: [{ id, stockCount }, { code, stockCount }]
-    if (Array.isArray(updates) && updates.length > 0) {
-      let updatedCount = 0;
-      for (const item of updates) {
-        const stock = Number(item.stockCount ?? item.stock ?? item.quantity);
-        if (isNaN(stock) || stock < 0) continue;
-
-        if (item.id) {
-          await db.execute(
-            "UPDATE product SET stock_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            [Math.floor(stock), Number(item.id)]
-          );
-          updatedCount++;
-        } else if (item.code) {
-          await db.execute(
-            "UPDATE product SET stock_count = ?, updated_at = CURRENT_TIMESTAMP WHERE code = ?",
-            [Math.floor(stock), String(item.code).trim()]
-          );
-          updatedCount++;
-        }
-      }
-
-      if (db.savePersistentSnapshot) {
-        try { await db.savePersistentSnapshot(); } catch (e) {}
-      }
-
-      const rows = await db.query("SELECT * FROM product ORDER BY id ASC");
-      return res.json({
-        success: true,
-        updatedCount,
-        products: rows.map(mapProduct)
-      });
-    }
-
-    // 2. Mass category adjustment
-    if (action && typeof value === 'number') {
-      const catFilter = category && category !== 'all' ? " WHERE category = ?" : "";
-      const params = category && category !== 'all' ? [category] : [];
-
-      if (action === 'set') {
-        const sql = `UPDATE product SET stock_count = ?, updated_at = CURRENT_TIMESTAMP${catFilter}`;
-        await db.execute(sql, [Math.max(0, Math.floor(value)), ...params]);
-      } else if (action === 'add') {
-        const sql = `UPDATE product SET stock_count = MAX(0, stock_count + ?), updated_at = CURRENT_TIMESTAMP${catFilter}`;
-        await db.execute(sql, [Math.floor(value), ...params]);
-      }
-
-      if (db.savePersistentSnapshot) {
-        try { await db.savePersistentSnapshot(); } catch (e) {}
-      }
-
-      const rows = await db.query("SELECT * FROM product ORDER BY id ASC");
-      return res.json({
-        success: true,
-        products: rows.map(mapProduct)
-      });
-    }
-
-    return res.status(400).json({ error: "Invalid bulk stock payload: please supply updates array or category action" });
-  } catch (err) {
-    console.error("Bulk stock update error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.get("/products/:id", async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const rows = await db.query("SELECT * FROM product WHERE id = ?", [id]);
-    if (rows.length > 0) {
-      res.json(mapProduct(rows[0]));
-    } else {
-      res.status(404).json({ error: "Product not found" });
-    }
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+    await audit("USER", req.staff.id, "CREATE_PRODUCT", "product", createdId, {}, req);
+    res.status(201).json(mapProduct(await db.get(`${PRODUCT_SELECT} WHERE p.id=?`, [createdId])));
+  } catch (error) { console.error("Product create failed:", error.message); res.status(error.status || (error.code === "SQLITE_CONSTRAINT" ? 409 : 500)).json({ error: error.status ? error.message : "Unable to create product." }); }
 });
 
 router.put("/products/:id", requireStaffAuth, requirePermission("products"), async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const p = req.body;
-    
-    // Fetch existing product first for safe partial update
-    const existing = await db.query("SELECT * FROM product WHERE id = ?", [id]);
-    if (existing.length === 0) {
-      return res.status(404).json({ error: "Product not found" });
-    }
-    const current = existing[0];
-
-    const code = p.code !== undefined ? p.code : current.code;
-    const nameEn = p.nameEn !== undefined ? p.nameEn : (p.name !== undefined ? p.name : current.name_en);
-    const nameHi = p.nameHi !== undefined ? p.nameHi : (p.name !== undefined ? p.name : current.name_hi);
-    const category = p.category !== undefined ? p.category : current.category;
-    const subEn = p.subEn !== undefined ? p.subEn : (p.brand !== undefined ? p.brand : current.sub_en);
-    const subHi = p.subHi !== undefined ? p.subHi : (p.brand !== undefined ? p.brand : current.sub_hi);
-    const price = p.price !== undefined ? p.price : current.price;
-    const originalPrice = p.originalPrice !== undefined ? p.originalPrice : (p.mrp !== undefined ? p.mrp : current.original_price);
-    const discountTag = p.discountTag !== undefined ? p.discountTag : current.discount_tag;
-    const rawImg = p.imageUrl !== undefined ? p.imageUrl : (p.image !== undefined ? p.image : current.image_url);
-    const imageUrl = cleanImageStorageValue(rawImg, code);
-    const isImage = imageUrl ? 1 : 0;
-    const stockCount = p.stockCount !== undefined ? p.stockCount : (p.stock !== undefined ? p.stock : current.stock_count);
-    const unit = p.unit !== undefined ? p.unit : current.unit;
-    const unitPrices = p.unitPrices !== undefined ? p.unitPrices : current.unit_prices;
-    const packEn = p.packEn !== undefined ? p.packEn : current.pack_en;
-    const packHi = p.packHi !== undefined ? p.packHi : current.pack_hi;
-    const gstVal = p.gstPercent !== undefined ? Number(p.gstPercent) : (p.gst_percent !== undefined ? Number(p.gst_percent) : (p.gstRate !== undefined ? Number(p.gstRate) : current.gst_percent));
-
-    await db.execute(
-      `UPDATE product SET 
-        code = ?, name_en = ?, name_hi = ?, category = ?, sub_en = ?, sub_hi = ?, 
-        price = ?, original_price = ?, discount_tag = ?, image_url = ?,  is_image = ?, stock_count = ?, 
-        unit = ?, unit_prices = ?, pack_en = ?, pack_hi = ?, gst_percent = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?`,
-      [
-        code, nameEn, nameHi, category, subEn, subHi,
-        price, originalPrice, discountTag, imageUrl, isImage, stockCount,
-        unit, unitPrices, packEn, packHi, gstVal, id
-      ]
-    );
-    const rows = await db.query("SELECT * FROM product WHERE id = ?", [id]);
-    if (db.savePersistentSnapshot) {
-      try { await db.savePersistentSnapshot(); } catch (e) {}
-    }
-    res.json(mapProduct(rows[0]));
-  } catch (err) {
-    if (err.message && (err.message.includes("no column named") || err.message.includes("Unknown column"))) {
-      try {
-        console.log("⚠️ Missing column detected in product table. Auto-triggering db.migrateSchema()...");
-        await db.migrateSchema();
-        const p = req.body;
-        const currentRes = await db.query("SELECT * FROM product WHERE id = ?", [req.params.id]);
-        const current = currentRes[0] || {};
-        const code = p.code !== undefined ? p.code : current.code;
-        const nameEn = p.nameEn !== undefined ? p.nameEn : (p.name !== undefined ? p.name : current.name_en);
-        const nameHi = p.nameHi !== undefined ? p.nameHi : (p.name !== undefined ? p.name : current.name_hi);
-        const category = p.category !== undefined ? p.category : current.category;
-        const subEn = p.subEn !== undefined ? p.subEn : (p.brand !== undefined ? p.brand : current.sub_en);
-        const subHi = p.subHi !== undefined ? p.subHi : (p.brand !== undefined ? p.brand : current.sub_hi);
-        const price = p.price !== undefined ? p.price : current.price;
-        const originalPrice = p.originalPrice !== undefined ? p.originalPrice : (p.mrp !== undefined ? p.mrp : current.original_price);
-        const discountTag = p.discountTag !== undefined ? p.discountTag : current.discount_tag;
-        const rawImg = p.imageUrl !== undefined ? p.imageUrl : (p.image !== undefined ? p.image : current.image_url);
-        const imageUrl = cleanImageStorageValue(rawImg, code);
-        const isImage = imageUrl ? 1 : 0;
-        const stockCount = p.stockCount !== undefined ? p.stockCount : (p.stock !== undefined ? p.stock : current.stock_count);
-        const unit = p.unit !== undefined ? p.unit : current.unit;
-        const unitPrices = p.unitPrices !== undefined ? p.unitPrices : current.unit_prices;
-        const packEn = p.packEn !== undefined ? p.packEn : current.pack_en;
-        const packHi = p.packHi !== undefined ? p.packHi : current.pack_hi;
-        const gstVal = p.gstPercent !== undefined ? Number(p.gstPercent) : (p.gst_percent !== undefined ? Number(p.gst_percent) : (p.gstRate !== undefined ? Number(p.gstRate) : (current.gst_percent || 5)));
-
-        await db.execute(
-          `UPDATE product SET 
-            code = ?, name_en = ?, name_hi = ?, category = ?, sub_en = ?, sub_hi = ?, 
-            price = ?, original_price = ?, discount_tag = ?, image_url = ?, is_image = ?, stock_count = ?, 
-            unit = ?, unit_prices = ?, pack_en = ?, pack_hi = ?, gst_percent = ?, updated_at = CURRENT_TIMESTAMP
-          WHERE id = ?`,
-          [
-            code, nameEn, nameHi, category, subEn, subHi,
-            price, originalPrice, discountTag, imageUrl, isImage, stockCount,
-            unit, unitPrices, packEn, packHi, gstVal, req.params.id
-          ]
-        );
-        const retryRows = await db.query("SELECT * FROM product WHERE id = ?", [req.params.id]);
-        if (db.savePersistentSnapshot) {
-          try { await db.savePersistentSnapshot(); } catch (e) {}
-        }
-        return res.json(mapProduct(retryRows[0]));
-      } catch (retryErr) {
-        return res.status(500).json({ error: retryErr.message });
+    const current = await db.get("SELECT * FROM product WHERE id=?", [id]);
+    if (!current) return res.status(404).json({ error: "Product not found." });
+    const product = normalizeProduct(req.body || {}, current);
+    await db.transaction(async tx => {
+      const category = await categoryId(req.body?.categoryId ?? req.body?.category ?? current.category_id, tx);
+      await tx.execute(`UPDATE product SET code=?,name_en=?,name_hi=?,category_id=?,brand_id=?,sub_en=?,sub_hi=?,price=?,original_price=?,discount_tag=?,image_url=?,unit=?,unit_prices=?,pack_en=?,pack_hi=?,gst_percent=?,is_image=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`, [product.code,product.nameEn,product.nameHi,category,req.body?.brandId ?? current.brand_id,product.subEn,product.subHi,product.price,product.originalPrice,product.discountTag,product.imageUrl,product.unit,product.unitPrices,product.packEn,product.packHi,product.gst,product.isImage,product.isActive,id]);
+      if (req.body?.stockCount !== undefined || req.body?.stockQty !== undefined) {
+        const stock = number(req.body.stockCount ?? req.body.stockQty);
+        const inventory = await tx.get("SELECT * FROM inventory WHERE product_id=?", [id]);
+        if (stock === null || stock < Number(inventory.reserved_qty) || stock < 0) { const error = new Error("Stock cannot be negative or below reserved quantity."); error.status=409; throw error; }
+        await tx.execute("UPDATE inventory SET stock_qty=?,unit=?,updated_at=CURRENT_TIMESTAMP WHERE product_id=?", [stock,product.unit,id]);
+        if (stock !== Number(inventory.stock_qty)) await tx.execute("INSERT INTO stock_movement (product_id,type,quantity,before_qty,after_qty,reference_type,note,created_by_user_id) VALUES (?,'ADJUSTMENT',?,?,?,'PRODUCT','Product stock adjustment',?)", [id,stock-Number(inventory.stock_qty),inventory.stock_qty,stock,req.staff.id]);
       }
-    }
-    res.status(500).json({ error: err.message });
-  }
+    });
+    await audit("USER", req.staff.id, "UPDATE_PRODUCT", "product", id, {}, req);
+    res.json(mapProduct(await db.get(`${PRODUCT_SELECT} WHERE p.id=?`, [id])));
+  } catch (error) { console.error("Product update failed:", error.message); res.status(error.status || (error.code === "SQLITE_CONSTRAINT" ? 409 : 500)).json({ error: error.status ? error.message : "Unable to update product." }); }
 });
 
-router.delete("/products", requireStaffAuth, requirePermission("products"), async (req, res) => {
+router.post(["/products/bulk-upload", "/products/bulk-upload-before"], requireStaffAuth, requirePermission("products"), async (req, res) => {
+  const items = req.body?.items;
+  if (!Array.isArray(items) || !items.length || items.length > 5000) return res.status(400).json({ error: "Provide 1-5000 products." });
   try {
-    try {
-      await db.execute("UPDATE order_item SET product_id = NULL");
-    } catch (e) {}
-    await db.execute("DELETE FROM product");
-    if (db.savePersistentSnapshot) {
-      try { await db.savePersistentSnapshot(); } catch (e) {}
-    }
-    res.json({ status: "ok", message: "All products deleted" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+    const stats = { totalProcessed: items.length, insertedCount: 0, skippedCount: 0, invalidCount: 0 };
+    await db.transaction(async tx => {
+      for (const item of items) {
+        let product;
+        try { product = normalizeProduct(item); } catch { stats.invalidCount++; continue; }
+        if (await tx.get("SELECT id FROM product WHERE code=?", [product.code])) { stats.skippedCount++; continue; }
+        const category = await categoryId(item.categoryId ?? item.category ?? req.body.defaultCategory, tx);
+        const stock = number(item.stockCount ?? item.stockQty, 0);
+        if (stock < 0) { stats.invalidCount++; continue; }
+        const result = await tx.execute(`INSERT INTO product (code,name_en,name_hi,category_id,sub_en,sub_hi,price,original_price,discount_tag,image_url,unit,unit_prices,pack_en,pack_hi,gst_percent,is_image,is_active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [product.code,product.nameEn,product.nameHi,category,product.subEn,product.subHi,product.price,product.originalPrice,product.discountTag,product.imageUrl,product.unit,product.unitPrices,product.packEn,product.packHi,product.gst,product.isImage,product.isActive]);
+        await tx.execute("INSERT INTO inventory (product_id,stock_qty,reserved_qty,reorder_level,unit) VALUES (?,?,0,0,?)", [result.lastID,stock,product.unit]);
+        stats.insertedCount++;
+      }
+    });
+    await audit("USER", req.staff.id, "BULK_IMPORT_PRODUCTS", "product", "", stats, req);
+    res.json({ success: true, stats, products: (await db.query(`${PRODUCT_SELECT} WHERE p.is_active=1 ORDER BY p.id`)).map(mapProduct) });
+  } catch (error) { console.error("Product import failed:", error.message); res.status(500).json({ error: "Unable to import products." }); }
 });
 
+router.post("/products/bulk-stock", requireStaffAuth, requirePermission("inventory"), async (req, res) => {
+  const updates = req.body?.updates;
+  if (!Array.isArray(updates) || !updates.length || updates.length > 5000) return res.status(400).json({ error: "Explicit stock updates are required." });
+  try {
+    await db.transaction(async tx => {
+      for (const update of updates) {
+        const product = update.id ? await tx.get("SELECT id FROM product WHERE id=?", [update.id]) : await tx.get("SELECT id FROM product WHERE code=?", [String(update.code || "")]);
+        const stock = number(update.stockCount ?? update.stock ?? update.quantity);
+        if (!product || stock === null || stock < 0) { const error = new Error("Every stock update must identify a product and non-negative quantity."); error.status=400; throw error; }
+        const inventory = await tx.get("SELECT * FROM inventory WHERE product_id=?", [product.id]);
+        if (stock < Number(inventory.reserved_qty)) { const error = new Error(`Stock for product ${product.id} is below reserved quantity.`); error.status=409; throw error; }
+        await tx.execute("UPDATE inventory SET stock_qty=?,updated_at=CURRENT_TIMESTAMP WHERE product_id=?", [stock,product.id]);
+        if (stock !== Number(inventory.stock_qty)) await tx.execute("INSERT INTO stock_movement (product_id,type,quantity,before_qty,after_qty,reference_type,note,created_by_user_id) VALUES (?,'BULK_ADJUSTMENT',?,?,?,'INVENTORY','Bulk stock update',?)", [product.id,stock-Number(inventory.stock_qty),inventory.stock_qty,stock,req.staff.id]);
+      }
+    });
+    await audit("USER", req.staff.id, "BULK_STOCK", "inventory", "", { count: updates.length }, req);
+    res.json({ success: true, updatedCount: updates.length, products: (await db.query(`${PRODUCT_SELECT} WHERE p.is_active=1 ORDER BY p.id`)).map(mapProduct) });
+  } catch (error) { res.status(error.status || 500).json({ error: error.status ? error.message : "Unable to update stock." }); }
+});
+
+router.delete("/products", requireStaffAuth, requirePermission("products"), (_req, res) => res.status(405).json({ error: "Bulk product deletion is disabled." }));
 router.delete("/products/:id", requireStaffAuth, requirePermission("products"), async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    try {
-      await db.execute("UPDATE order_item SET product_id = NULL WHERE product_id = ?", [id]);
-    } catch (e) {}
-    await db.execute("DELETE FROM product WHERE id = ?", [id]);
-    if (db.savePersistentSnapshot) {
-      try { await db.savePersistentSnapshot(); } catch (e) {}
-    }
-    res.json({ status: "ok", message: "Deleted" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  const result = await db.execute("UPDATE product SET is_active=0,updated_at=CURRENT_TIMESTAMP WHERE id=?", [req.params.id]);
+  if (!result.changes) return res.status(404).json({ error: "Product not found." });
+  await audit("USER", req.staff.id, "DEACTIVATE_PRODUCT", "product", req.params.id, {}, req);
+  res.json({ success: true });
 });
 
 export default router;

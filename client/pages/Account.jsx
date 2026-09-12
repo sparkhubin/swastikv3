@@ -377,324 +377,69 @@ export default function Account({ onViewChange }) {
     });
   };
 
+  const ensureCashfreeLoaded = () => {
+    return new Promise((resolve) => {
+      if (typeof window !== 'undefined' && window.Cashfree) return resolve(true);
+      if (typeof window === 'undefined') return resolve(false);
+      const source = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+      const existingScript = document.querySelector(`script[src="${source}"]`);
+      if (existingScript) {
+        existingScript.addEventListener('load', () => resolve(true), { once: true });
+        existingScript.addEventListener('error', () => resolve(false), { once: true });
+        setTimeout(() => resolve(Boolean(window.Cashfree)), 1500);
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = source;
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
   const handleProcessPrimePayment = async () => {
     setPrimePaymentStep('processing');
     setPaymentErrorMessage('');
 
-    const primeFee = primeSettings?.primePlanFee ?? 299;
-
-    if (selectedGateway === 'OFFLINE') {
-      await handleOfflinePrimePurchase();
-      setShowPrimePayment(false);
-      return;
-    }
-
-    // --- RAZORPAY GATEWAY PROCESS ---
-    if (selectedGateway === 'RAZORPAY') {
-      if (!gatewaySettings.razorpayEnabled) {
-        setPrimePaymentStep('error');
-        setPaymentErrorMessage(isHindi ? "रेज़रपे पेमेंट गेटवे वर्तमान में अक्षम है।" : "Razorpay payment gateway is currently disabled.");
-        return;
-      }
-
-      setCfSimulatingProgress(isHindi ? 'रेज़रपे मर्चेंट गेटवे कनेक्ट हो रहा है...' : 'Initiating Razorpay Session...');
-      try {
-        const orderId = `PRIME_RZP_${Date.now()}`;
-        const newPrimeOrder = {
-          id: orderId,
-          customerName: profile?.fullName || profile?.name || (contactSettings?.brandName ? `${contactSettings.brandName} Member` : "VIP Member"),
-          customerPhone: profile?.phone || contactSettings?.phone || "+91 99999 88888",
-          customerEmail: profile?.email || contactSettings?.email || "customer@example.com",
-          shippingAddress: "Digital VIP Prime Pass Account",
-          subtotal: primeFee,
-          deliveryFee: 0,
-          gst: 0,
-          total: primeFee,
-          grand_total: primeFee,
-          paymentMethod: 'RAZORPAY_ONLINE',
-          paymentStatus: 'PAID',
-          status: 'Paid',
-          status_label: 'Paid',
-          step: 1,
-          orderDate: new Date().toISOString(),
-          date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-          items: [
-            {
-              productId: 9999,
-              name: `${contactSettings?.brandName || 'Store'} Prime Gold Membership (1 Year Pass)`,
-              nameEn: `${contactSettings?.brandName || 'Store'} Prime Gold Membership (1 Year Pass)`,
-              nameHi: `${contactSettings?.brandName || 'स्टोर'} प्राइम गोल्ड मेंबरशिप (१ वर्ष पास)`,
-              price: primeFee,
-              qty: 1,
-              quantity: 1,
-              weight: '1 Year Access'
-            }
-          ],
-          deliveryPartnerName: `${contactSettings?.brandName || 'Store'} System`,
-          deliveryPartnerPhone: contactSettings?.phone || '+91 99999 88888',
-          hubName: 'VIP Membership Desk',
-          eta: 'Instant Activation'
-        };
-
-        const res = await fetch('/api/razorpay/create-order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            orderId: orderId,
-            amount: primeFee,
-            customerName: profile?.fullName || profile?.name || "VIP Member",
-            customerPhone: profile?.phone || contactSettings?.phone || "+91 99999 88888",
-            customerEmail: profile?.email || contactSettings?.email || "customer@example.com"
-          })
-        });
-
-        const data = await res.json();
-        if (!res.ok || data.status !== 'success') {
-          setPrimePaymentStep('error');
-          setPaymentErrorMessage(data.error || (isHindi ? "रेज़रपे ऑर्डर शुरू करने में विफलता।" : "Failed to initialize Razorpay order."));
-          return;
-        }
-
-        const hasRealKey = data.api_called && data.key_id && !data.simulated && !data.key_id.includes('mock');
-        const isLoaded = await ensureRazorpayLoaded();
-
-        if (hasRealKey && isLoaded && typeof window !== 'undefined' && window.Razorpay) {
-          const options = {
-            key: data.key_id,
-            amount: data.amount,
-            currency: data.currency || "INR",
-            name: "Swastik Supermarket",
-            description: "Swastik Prime VIP Gold Membership Pass",
-            image: "/pwa-192x192.png",
-            ...(data.razorpay_order_id ? { order_id: data.razorpay_order_id } : {}),
-            handler: async function (rzpResponse) {
-              setPrimePaymentStep('processing');
-              try {
-                await fetch('/api/razorpay/verify', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    orderId: orderId,
-                    razorpay_order_id: rzpResponse.razorpay_order_id || data.razorpay_order_id,
-                    razorpay_payment_id: rzpResponse.razorpay_payment_id || `pay_${Date.now()}`,
-                    razorpay_signature: rzpResponse.razorpay_signature || ''
-                  })
-                });
-
-                await addOrder(newPrimeOrder);
-
-                setProfile(prev => ({ ...prev, isPrimeActive: true }));
-                const found = (customers || []).find(c => (c.phone && c.phone === profile?.phone) || (c.email && c.email === profile?.email));
-                if (found) {
-                  updateCustomer(found.id, { ...found, isPrimeActive: true });
-                }
-                setPrimePaymentStep('success');
-              } catch (err) {
-                console.error("Razorpay verify error:", err);
-                setPrimePaymentStep('error');
-                setPaymentErrorMessage(isHindi ? "भुगतान सत्यापन में समस्या आई।" : "Razorpay payment verification failed.");
-              }
-            },
-            prefill: {
-              name: profile?.fullName || "Member",
-              contact: (profile?.phone || "").replace(/\D/g, "").slice(-10) || "9999988888",
-              email: profile?.email || contactSettings?.email || "customer@example.com"
-            },
-            theme: { color: "#0284c7" },
-            modal: {
-              ondismiss: function () {
-                setPrimePaymentStep('select');
-              }
-            }
-          };
-
-          const rzpObj = new window.Razorpay(options);
-          rzpObj.open();
-        } else {
-          // Test Mode / Simulated flow
-          await addOrder(newPrimeOrder);
-          setCfSimulatingProgress(isHindi ? 'रेज़रपे डिजिटल वेरिफिकेशन पूर्ण हो रहा है...' : 'Processing Razorpay verification...');
-          await new Promise(r => setTimeout(r, 900));
-
-          setProfile(prev => ({ ...prev, isPrimeActive: true }));
-          const found = (customers || []).find(c => (c.phone && c.phone === profile?.phone) || (c.email && c.email === profile?.email));
-          if (found) {
-            updateCustomer(found.id, { ...found, isPrimeActive: true });
-          }
-          setPrimePaymentStep('success');
-        }
-      } catch (err) {
-        console.error("Razorpay Prime Error:", err);
-        setPrimePaymentStep('error');
-        setPaymentErrorMessage(isHindi ? "रेज़रपे गेटवे पेमेंट सत्यापन में समस्या आई।" : "Failed to verify Razorpay payment gateway transaction.");
-      }
-      return;
-    }
-
-    // --- CASHFREE GATEWAY PROCESS ---
-    if (selectedGateway === 'CASHFREE') {
-      if (!gatewaySettings.cashfreeEnabled) {
-        setPrimePaymentStep('error');
-        setPaymentErrorMessage(isHindi ? "कैशफ्री पेमेंट गेटवे वर्तमान में अक्षम है।" : "Cashfree payment gateway is currently disabled.");
-        return;
-      }
-
-      setCfSimulatingProgress(isHindi ? 'कैशफ्री गेटवे और 3डी सिक्योर प्रमाणीकरण शुरू हो रहा है...' : 'Initiating secure handshake with Cashfree Gateway API...');
-      try {
-        const orderId = `PRIME_CF_${Date.now()}`;
-
-        const newPrimeOrder = {
-          id: orderId,
-          customerName: profile?.fullName || profile?.name || (contactSettings?.brandName ? `${contactSettings.brandName} Member` : "VIP Member"),
-          customerPhone: profile?.phone || contactSettings?.phone || "+91 99999 88888",
-          customerEmail: profile?.email || contactSettings?.email || "customer@example.com",
-          shippingAddress: "Digital VIP Prime Pass Account",
-          subtotal: primeFee,
-          deliveryFee: 0,
-          gst: 0,
-          total: primeFee,
-          grand_total: primeFee,
-          paymentMethod: 'CASHFREE_ONLINE',
-          paymentStatus: 'PAID',
-          status: 'Paid',
-          status_label: 'Paid',
-          step: 1,
-          orderDate: new Date().toISOString(),
-          date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-          items: [
-            {
-              productId: 9999,
-              name: `${contactSettings?.brandName || 'Store'} Prime Gold Membership (1 Year Pass)`,
-              nameEn: `${contactSettings?.brandName || 'Store'} Prime Gold Membership (1 Year Pass)`,
-              nameHi: `${contactSettings?.brandName || 'स्टोर'} प्राइम गोल्ड मेंबरशिप (१ वर्ष पास)`,
-              price: primeFee,
-              qty: 1,
-              quantity: 1,
-              weight: '1 Year Access'
-            }
-          ],
-          deliveryPartnerName: `${contactSettings?.brandName || 'Store'} System`,
-          deliveryPartnerPhone: contactSettings?.phone || '+91 99999 88888',
-          hubName: 'VIP Membership Desk',
-          eta: 'Instant Activation'
-        };
-
-        await addOrder(newPrimeOrder);
-
-        const res = await fetch('/api/cashfree/create-order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            orderId: orderId,
-            amount: primeFee,
-            customerName: profile?.fullName || profile?.name || "VIP Member",
-            customerPhone: profile?.phone || contactSettings?.phone || "+91 99999 88888",
-            customerEmail: profile?.email || contactSettings?.email || "customer@example.com"
-          })
-        });
-
-        const data = await res.json();
-        setCashfreeOrderSession(data);
-
-        await new Promise(resolve => setTimeout(resolve, 800));
-        setCfSimulatingProgress(isHindi ? 'स्वास्तिक मर्चेंट वेबहुक अधिसूचना ट्रिगर हो रही है...' : 'Firing secure webhook transaction logs asynchronously...');
-
-        await fetch('/api/cashfree/webhook', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            orderId: data?.order_id || orderId,
-            paymentStatus: 'SUCCESS',
-            transactionId: 'CF-PRIME-' + Math.floor(1000000 + Math.random() * 9000000)
-          })
-        });
-
-        await new Promise(resolve => setTimeout(resolve, 600));
-        setCfSimulatingProgress(isHindi ? 'भुगतान स्थिति की पुष्टि हो रही है...' : 'Verifying double-entry ledger state...');
-
-        await fetch('/api/cashfree/verify-payment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            orderId: data?.order_id || orderId
-          })
-        });
-
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        setProfile(prev => ({ ...prev, isPrimeActive: true }));
-        const found = (customers || []).find(c => (c.phone && c.phone === profile?.phone) || (c.email && c.email === profile?.email));
-        if (found) {
-          updateCustomer(found.id, { ...found, isPrimeActive: true });
-        }
-
-        setPrimePaymentStep('success');
-      } catch (err) {
-        console.error("Cashfree Prime Payment Error:", err);
-        setPrimePaymentStep('error');
-        setPaymentErrorMessage(isHindi ? "कैशफ्री गेटवे पेमेंट सत्यापन में समस्या आई।" : "Failed to verify Cashfree payment gateway transaction.");
-      }
-    }
-  };
-
-  const handleOfflinePrimePurchase = async () => {
     try {
-      const primeFee = primeSettings?.primePlanFee ?? 299;
-      const orderId = `PRIME_CASH_${Date.now()}`;
-
-      const newPrimeOrder = {
-        id: orderId,
-        customerName: profile?.fullName || profile?.name || (contactSettings?.brandName ? `${contactSettings.brandName} Member` : "VIP Member"),
-        customerPhone: profile?.phone || contactSettings?.phone || "+91 99999 88888",
-        customerEmail: profile?.email || contactSettings?.email || "customer@example.com",
-        shippingAddress: "Store Counter / COD",
-        subtotal: primeFee,
-        deliveryFee: 0,
-        gst: 0,
-        total: primeFee,
-        grand_total: primeFee,
-        paymentMethod: 'COD',
-        paymentStatus: 'PAID',
-        status: 'Paid',
-        status_label: 'Paid',
-        step: 1,
-        orderDate: new Date().toISOString(),
-        date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-        items: [
-          {
-            productId: 9999,
-            name: `${contactSettings?.brandName || 'Store'} Prime Gold Membership (1 Year Pass - Cash)`,
-            nameEn: `${contactSettings?.brandName || 'Store'} Prime Gold Membership (1 Year Pass - Cash)`,
-            nameHi: `${contactSettings?.brandName || 'स्टोर'} प्राइम गोल्ड मेंबरशिप (१ वर्ष पास - नकद)`,
-            price: primeFee,
-            qty: 1,
-            quantity: 1,
-            weight: '1 Year Access'
-          }
-        ],
-        deliveryPartnerName: `${contactSettings?.brandName || 'Store'} Sales Desk`,
-        deliveryPartnerPhone: contactSettings?.phone || '+91 99999 88888',
-        hubName: 'Main Store Hub',
-        eta: 'Offline Cash Confirmed'
-      };
-
-      await addOrder(newPrimeOrder);
-
-      setProfile(prev => ({ ...prev, isPrimeActive: true }));
-      const found = (customers || []).find(c => (c.phone && c.phone === profile?.phone) || (c.email && c.email === profile?.email));
-      if (found) {
-        updateCustomer(found.id, { ...found, isPrimeActive: true });
+      if (!['RAZORPAY', 'CASHFREE'].includes(selectedGateway)) throw new Error('Choose a configured online payment gateway.');
+      const plansResponse = await fetch('/api/membership/plans');
+      const plans = await plansResponse.json().catch(() => []);
+      if (!plansResponse.ok || plans.length !== 1) throw new Error('Configure exactly one active membership plan before purchase.');
+      const intentResponse = await fetch('/api/membership/purchase-intent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ planId: plans[0].id, gateway: selectedGateway }) });
+      const intent = await intentResponse.json().catch(() => ({}));
+      if (!intentResponse.ok) throw new Error(intent.error || 'Unable to create membership payment.');
+      if (selectedGateway === 'CASHFREE') {
+        if (!intent.payment_session_id || !await ensureCashfreeLoaded() || !window.Cashfree) throw new Error('Cashfree checkout SDK is unavailable.');
+        const cashfree = window.Cashfree({ mode: String(gatewaySettings.environment).toUpperCase() === 'PRODUCTION' ? 'production' : 'sandbox' });
+        const checkout = await cashfree.checkout({ paymentSessionId: intent.payment_session_id, redirectTarget: '_modal' });
+        if (checkout?.error) throw new Error(checkout.error.message || 'Cashfree checkout was cancelled.');
+        const verification = await fetch('/api/cashfree/verify-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: intent.order_id }) });
+        const result = await verification.json().catch(() => ({}));
+        if (!verification.ok || result.status !== 'PAID') throw new Error(result.error || 'Membership payment verification failed.');
+        const me = await fetch('/api/auth/customer/me').then(value => value.json());
+        setProfile(previous => ({ ...previous, membershipStatus: me.customer?.membershipStatus || null, membershipNumber: me.customer?.membershipNumber || null }));
+        setPrimePaymentStep('success');
+        return;
       }
-      alert(isHindi ? "स्वास्तिक प्राइम मेंबरशिप सफलतापूर्वक सक्रिय हो गई है!" : "Swastik Prime Gold Membership Activated via Offline Cash Payment!");
-    } catch (err) {
-      console.error("Offline Prime purchase error:", err);
+      if (!await ensureRazorpayLoaded() || !window.Razorpay) throw new Error('Razorpay checkout SDK is unavailable.');
+      new window.Razorpay({ key: intent.key_id, amount: intent.amount, currency: intent.currency, order_id: intent.razorpay_order_id, name: 'Swastik Supermarket', description: plans[0].name,
+        handler: async response => {
+          const verification = await fetch('/api/razorpay/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(response) });
+          const result = await verification.json().catch(() => ({}));
+          if (!verification.ok) { setPrimePaymentStep('error'); setPaymentErrorMessage(result.error || 'Membership payment verification failed.'); return; }
+          const me = await fetch('/api/auth/customer/me').then(value => value.json());
+          setProfile(previous => ({ ...previous, membershipStatus: me.customer?.membershipStatus || null, membershipNumber: me.customer?.membershipNumber || null }));
+          setPrimePaymentStep('success');
+        }, modal: { ondismiss: () => setPrimePaymentStep('select') } }).open();
+    } catch (error) {
+      setPrimePaymentStep('error');
+      setPaymentErrorMessage(error.message);
     }
   };
-
   // --- 1. USER SESSION CONTROLS WITH LOCALSTORAGE SYNC ---
-  const [isLoggedIn, setIsLoggedIn] = useState(() => {
-    return localStorage.getItem('swastik_is_logged_in') === 'true';
-  });
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [authMode, setAuthMode] = useState('login'); // login | signup | forgot_password
   const [authType, setAuthType] = useState('password'); // password | otp
 
@@ -744,8 +489,6 @@ export default function Account({ onViewChange }) {
   const [emailAddress, setEmailAddress] = useState('');
   const [referralAppliedCode, setReferralAppliedCode] = useState('');
   
-  // Simulated verification alerts
-  const [simulatedOtp, setSimulatedOtp] = useState('');
   const [authError, setAuthError] = useState('');
   const [authSuccess, setAuthSuccess] = useState('');
 
@@ -804,134 +547,22 @@ export default function Account({ onViewChange }) {
       .catch(e => console.warn("Could not fetch payment settings for membership:", e));
   }, [showPrimePayment]);
 
-  // --- USER PROFILE STATES WITH LOCALSTORAGE SYNC ---
-  const [profile, setProfile] = useState(() => {
-    let parsed = null;
-    try {
-      const saved = localStorage.getItem('swastik_profile');
-      parsed = saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      console.warn("Failed to parse swastik_profile from localStorage:", e);
-    }
-    const defaultName = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEFAULT_USER_NAME) || "Guest User";
-    const defaultEmail = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEFAULT_USER_EMAIL) || "user@example.com";
-    const defaultPhone = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEFAULT_USER_PHONE) || "";
-    const defaultAddr = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEFAULT_USER_ADDRESS) || "";
-
-    return parsed ? {
-      fullName: parsed.fullName || defaultName,
-      email: parsed.email || defaultEmail,
-      phone: parsed.phone || defaultPhone,
-      address: parsed.address || defaultAddr,
-      points: parsed.points !== undefined ? parsed.points : 100,
-      dob: parsed.dob || "",
-      anniversary: parsed.anniversary || "",
-      isPrimeActive: parsed.isPrimeActive !== undefined ? parsed.isPrimeActive : false
-    } : {
-      fullName: defaultName,
-      email: defaultEmail,
-      phone: defaultPhone,
-      address: defaultAddr,
-      points: 100,
-      dob: "",
-      anniversary: "",
-      isPrimeActive: false
-    };
-  });
+  // Customer identity is authoritative only when returned by the server session.
+  const [profile, setProfile] = useState({ fullName: "", email: "", phone: "", address: "", points: 0, dob: "", anniversary: "", membershipStatus: null, membershipNumber: null });
 
   useEffect(() => {
-    localStorage.setItem('swastik_is_logged_in', isLoggedIn ? 'true' : 'false');
-    window.dispatchEvent(new CustomEvent('swastik_auth_change'));
-  }, [isLoggedIn]);
+    let active = true;
+    fetch('/api/auth/customer/me').then(async response => {
+      if (!response.ok) throw new Error('No active customer session');
+      return response.json();
+    }).then(({ customer }) => {
+      if (!active || !customer) return;
+      setProfile({ id: customer.id, fullName: customer.name, phone: customer.phone, email: customer.email || '', address: customer.address || '', points: Number(customer.points || 0), dob: customer.dob || '', anniversary: customer.anniversary || '', membershipStatus: customer.membershipStatus, membershipNumber: customer.membershipNumber || null, referralCode: customer.referralCode || '' });
+      setIsLoggedIn(true);
+    }).catch(() => { if (active) setIsLoggedIn(false); });
+    return () => { active = false; };
+  }, []);
 
-  useEffect(() => {
-    localStorage.setItem('swastik_profile', JSON.stringify(profile));
-    window.dispatchEvent(new CustomEvent('swastik_auth_change'));
-  }, [profile]);
-
-  // Synchronise the local profile state with updates to the customers database
-  useEffect(() => {
-    if (!customers || customers.length === 0) return;
-    const cleanDigits = (ph) => ph ? String(ph).replace(/\D/g, "") : "";
-    const pDigits = cleanDigits(profile?.phone);
-    const databaseCust = customers.find(c => {
-      if (profile?.id && Number(c.id) === Number(profile.id)) return true;
-      const cDigits = cleanDigits(c.phone);
-      if (pDigits && cDigits && (cDigits.endsWith(pDigits.slice(-10)) || pDigits.endsWith(cDigits.slice(-10)))) return true;
-      if (profile?.email && c.email && c.email.toLowerCase().trim() === profile.email.toLowerCase().trim()) return true;
-      return false;
-    });
-
-    if (databaseCust) {
-      setProfile(prev => {
-        let changed = false;
-        const updated = { ...prev };
-        if (databaseCust.id && prev.id !== databaseCust.id) {
-          updated.id = databaseCust.id;
-          changed = true;
-        }
-        if (databaseCust.name && databaseCust.name !== prev.fullName) {
-          updated.fullName = databaseCust.name;
-          changed = true;
-        }
-        if (databaseCust.email && databaseCust.email !== prev.email && prev.email.includes('example.com')) {
-          updated.email = databaseCust.email;
-          changed = true;
-        }
-        if (databaseCust.phone && databaseCust.phone !== prev.phone && (!prev.phone || prev.phone.includes('43210'))) {
-          updated.phone = databaseCust.phone;
-          changed = true;
-        }
-        if (databaseCust.address && databaseCust.address !== prev.address && !prev.address) {
-          updated.address = databaseCust.address;
-          changed = true;
-        }
-        if (databaseCust.isPrimeActive !== undefined && databaseCust.isPrimeActive !== prev.isPrimeActive) {
-          updated.isPrimeActive = databaseCust.isPrimeActive;
-          changed = true;
-        }
-        if (databaseCust.points !== undefined && databaseCust.points !== prev.points) {
-          updated.points = databaseCust.points;
-          changed = true;
-        }
-        if (databaseCust.dob && databaseCust.dob !== prev.dob && !prev.dob) {
-          updated.dob = databaseCust.dob;
-          changed = true;
-        }
-        if (databaseCust.anniversary && databaseCust.anniversary !== prev.anniversary && !prev.anniversary) {
-          updated.anniversary = databaseCust.anniversary;
-          changed = true;
-        }
-        return changed ? updated : prev;
-      });
-    }
-  }, [customers, profile?.id, profile?.phone, profile?.email]);
-
-  useEffect(() => {
-    const handleStorageUpdate = () => {
-      const saved = localStorage.getItem('swastik_profile');
-      const loggedIn = localStorage.getItem('swastik_is_logged_in') === 'true';
-      setIsLoggedIn(loggedIn);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (parsed && JSON.stringify(parsed) !== JSON.stringify(profile)) {
-            setProfile(parsed);
-          }
-        } catch (e) {
-          console.error("Error updating profile from storage", e);
-        }
-      }
-    };
-    window.addEventListener('storage', handleStorageUpdate);
-    window.addEventListener('swastik_auth_change', handleStorageUpdate);
-    return () => {
-      window.removeEventListener('storage', handleStorageUpdate);
-      window.removeEventListener('swastik_auth_change', handleStorageUpdate);
-    };
-  }, [profile]);
-
-  const [inputReferralCode, setInputReferralCode] = useState('');
   const [copied, setCopied] = useState(false);
 
   const [activeTab, setActiveTab] = useState('profile'); // profile | orders | password | membership | rewards | cart | preferences
@@ -942,8 +573,8 @@ export default function Account({ onViewChange }) {
     const customerId = profile?.id;
     if (!customerId || activeTab !== 'rewards') return;
     fetch(`/api/customers/${customerId}/points`)
-      .then(r => r.ok ? r.json() : [])
-      .then(rows => setPointsHistory(Array.isArray(rows) ? rows : []))
+      .then(r => r.ok ? r.json() : { history: [] })
+      .then(payload => setPointsHistory(Array.isArray(payload.history) ? payload.history : []))
       .catch(() => setPointsHistory([]));
   }, [profile?.id, activeTab]);
 
@@ -960,51 +591,21 @@ export default function Account({ onViewChange }) {
         title: type === 'WELCOME'
           ? (isHindi ? '🎁 नए सदस्य का स्वागत बोनस' : '🎁 New Member Welcome Bonus')
           : type === 'REFERRAL'
-            ? (isHindi ? `👥 रेफ़रल बोनस (${tx.reference_id || 'Referral'})` : `👥 Referral Bonus (${tx.reference_id || 'Referral'})`)
+            ? (isHindi ? `👥 रेफ़रल बोनस (${tx.referenceId || 'Referral'})` : `👥 Referral Bonus (${tx.referenceId || 'Referral'})`)
             : (tx.description || type),
-        date: tx.created_at || 'Completed',
+        date: tx.createdAt || '',
         points: Math.abs(amount),
         isAddition
       });
     });
 
-    // Order rewards/redemptions are represented by the existing order fields.
-    const cleanPhone = (ph) => ph ? String(ph).replace(/[^0-9]/g, '').slice(-10) : '';
-    const myPhoneClean = cleanPhone(profile?.phone);
-    if (myPhoneClean) {
-      (orders || []).forEach(o => {
-        const oPhoneClean = cleanPhone(o.customerMobile || o.customerPhone || o.phone);
-        if (oPhoneClean === myPhoneClean) {
-          const earned = Number(o.pointsEarned ?? o.points_earned ?? 0);
-          const applied = Number(o.pointsRedeemed ?? o.points_redeemed ?? o.appliedPoints ?? o.applied_points ?? 0);
-          if (earned > 0) ledger.push({ id: `order_${o.id}`, type: 'ORDER_EARNED', title: isHindi ? `🛒 ऑर्डर #${o.id} रिवॉर्ड` : `🛒 Order #${o.id} Reward`, date: o.date || o.orderDate || 'Completed', points: earned, isAddition: true });
-          if (applied > 0) ledger.push({ id: `redeem_${o.id}`, type: 'REDEEM', title: isHindi ? `🛒 ऑर्डर #${o.id} में उपयोग` : `🛒 Redeemed on Order #${o.id}`, date: o.date || o.orderDate || 'Completed', points: applied, isAddition: false });
-        }
-      });
-    }
-
     return ledger;
-  }, [pointsHistory, orders, profile?.phone, isHindi]);
+  }, [pointsHistory, isHindi]);
 
-  const userReferralCode = profile.fullName 
-    ? (profile.fullName.substring(0, 4).toUpperCase() + (profile.phone ? profile.phone.slice(-4) : "8888")).replace(/\s/g, '').replace(/[^A-Z0-9]/gi, '')
-    : "SWASTIK50";
+  const userReferralCode = profile.referralCode || '';
 
-  // Filter orders strictly for current logged-in user
-  const myOrders = React.useMemo(() => {
-    const userPhoneDigits = (profile?.phone || '').replace(/\D/g, '').slice(-10);
-    const userEmailLower = (profile?.email || '').toLowerCase().trim();
-
-    return (orders || []).filter(o => {
-      const oPhoneDigits = (o.customerPhone || o.customerMobile || o.deliveryPartnerPhone || '').replace(/\D/g, '').slice(-10);
-      const oEmailLower = (o.customerEmail || o.email || '').toLowerCase().trim();
-
-      if (userPhoneDigits && oPhoneDigits && oPhoneDigits === userPhoneDigits) return true;
-      if (userEmailLower && oEmailLower && oEmailLower === userEmailLower) return true;
-      if (profile?.fullName && o.customerName && o.customerName.toLowerCase().trim() === profile.fullName.toLowerCase().trim()) return true;
-      return false;
-    });
-  }, [orders, profile?.phone, profile?.email, profile?.fullName]);
+  // The server already scopes this collection to the authenticated customer.
+  const myOrders = orders || [];
 
   // Referral history comes from customer_points, not customer columns.
   const [referralsHistory, setReferralsHistory] = useState([]);
@@ -1021,100 +622,10 @@ export default function Account({ onViewChange }) {
   const myReferredCustomers = React.useMemo(() => referralsHistory || [], [referralsHistory]);
 
   const handleCopyCode = () => {
+    if (!userReferralCode) return;
     navigator.clipboard.writeText(userReferralCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleClaimReferral = async (e) => {
-    e.preventDefault();
-    const cleanCode = inputReferralCode.toUpperCase().trim();
-    if (!cleanCode) return;
-
-    if ((pointsHistory || []).some(tx => String(tx.type || '').toUpperCase() === 'REFERRAL')) {
-      alert(isHindi ? "आप पहले ही एक रेफ़रल कोड का दावा कर चुके हैं!" : "You have already claimed a referral code!");
-      return;
-    }
-    if (cleanCode === userReferralCode) {
-      alert(isHindi ? "आप खुद के रेफ़रल कोड का उपयोग नहीं कर सकते!" : "You cannot apply your own referral code!");
-      return;
-    }
-
-    let referrerCustomerId = null;
-    if (cleanCode !== 'SWASTIK50') {
-      const cleanPhone = (ph) => ph ? String(ph).replace(/\D/g, '').slice(-10) : '';
-      const foundReferrer = (customers || []).find(c => {
-        const suffix = cleanPhone(c.phone).slice(-4);
-        const possible = ((c.name || '').substring(0, 4).toUpperCase() + suffix).replace(/[^A-Z0-9]/gi, '');
-        return possible === cleanCode;
-      });
-
-      if (!foundReferrer) {
-        alert(isHindi ? "यह रेफ़रल कोड अमान्य है।" : "Invalid referral code.");
-        return;
-      }
-      if (foundReferrer.status && foundReferrer.status !== 'Active') {
-        alert(isHindi ? "रेफ़रलकर्ता ग्राहक सक्रिय नहीं है।" : "The referring customer is not active.");
-        return;
-      }
-      const hasShopped = (orders || []).some(o =>
-        cleanPhone(o.customerPhone || o.customerMobile) === cleanPhone(foundReferrer.phone) &&
-        String(o.status || '').toLowerCase() === 'delivered'
-      );
-      if (!hasShopped) {
-        alert(isHindi ? "रेफ़रलकर्ता ने अभी तक खरीदारी पूरी नहीं की है।" : "The referring customer has not completed a purchase yet.");
-        return;
-      }
-      referrerCustomerId = Number(foundReferrer.id);
-    }
-
-    if (!profile?.id) {
-      alert(isHindi ? "कृपया पहले लॉगिन करें।" : "Please login first.");
-      return;
-    }
-
-    const award = Number(referralSettings?.referralPointsEarned ?? 50);
-    try {
-      const response = await fetch(`/api/customers/${profile.id}/points`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          points: award,
-          type: 'REFERRAL',
-          referenceId: cleanCode,
-          description: `Referral code ${cleanCode} claimed`,
-          referrerCustomerId,
-          referredCustomerId: Number(profile.id)
-        })
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        alert(data.error || (isHindi ? 'रेफ़रल लागू नहीं हो सका।' : 'Referral could not be applied.'));
-        return;
-      }
-
-      const updatedProfile = { ...profile, points: Number(data.balance || 0), referredBy: cleanCode };
-      setProfile(updatedProfile);
-      setPointsHistory(prev => [{
-        id: `local_${Date.now()}`,
-        points: award,
-        type: 'REFERRAL',
-        reference_id: cleanCode,
-        description: `Referral code ${cleanCode} claimed`,
-        created_at: new Date().toISOString(),
-        referrer_customer_id: referrerCustomerId,
-        referred_customer_id: Number(profile.id)
-      }, ...prev]);
-      await fetchCustomers(true);
-
-      alert(isHindi
-        ? `सफलता! ${award} रेफ़रल पॉइंट्स क्रेडिट किए गए।`
-        : `Success! ${award} referral points have been credited.`);
-      setInputReferralCode('');
-    } catch (err) {
-      console.error('Referral claim error:', err);
-      alert(isHindi ? 'रेफ़रल लागू करने में समस्या हुई।' : 'Unable to apply referral right now.');
-    }
   };
 
   const handleWhatsAppShare = () => {
@@ -1139,7 +650,7 @@ export default function Account({ onViewChange }) {
   }, [activeTab, fetchOrders, fetchCustomers, fetchProducts, fetchDataDeletionRequests]);
 
   const [isEditing, setIsEditing] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('••••••••');
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   
@@ -1164,7 +675,7 @@ export default function Account({ onViewChange }) {
         body: JSON.stringify({ phoneNumber: phone, code: cleanCode })
       });
       const data = await res.json();
-      return res.ok && data.status === 'verified';
+      return res.ok && data.status === 'verified' ? data : null;
     } catch (e) {
       return false;
     }
@@ -1192,10 +703,7 @@ export default function Account({ onViewChange }) {
         setAuthError(isHindi ? "ओटीपी भेजने में असमर्थ। कृपया पुनः प्रयास करें।" : "Unable to dispatch OTP. Please check your number and retry.");
       }
     } catch(e) {
-      setAuthSuccess(isHindi 
-        ? "सुरक्षा ओटीपी कोड आपके व्हाट्सएप नंबर पर भेज दिया गया है।" 
-        : "Security OTP code has been dispatched to your WhatsApp number."
-      );
+      setAuthError(isHindi ? "ओटीपी सेवा उपलब्ध नहीं है।" : "OTP delivery service is unavailable.");
     }
   };
 
@@ -1226,8 +734,8 @@ export default function Account({ onViewChange }) {
     if (!otpCode) {
       setAuthError(
         isHindi
-          ? "कृपया सत्यापित करने के लिए चार अंकों का ओटीपी पिन दर्ज करें।"
-          : "Please enter the four digit OTP code pin."
+          ? "कृपया सत्यापित करने के लिए छह अंकों का ओटीपी पिन दर्ज करें।"
+          : "Please enter the six digit OTP code pin."
       );
       return;
     }
@@ -1238,9 +746,9 @@ export default function Account({ onViewChange }) {
     try {
       const cleanCode = (otpCode || '').trim();
   
-      const isValid = await verifyServerOtp(mobileNumber, cleanCode);
-  
-      if (!isValid) {
+      const otpResult = await verifyServerOtp(mobileNumber, cleanCode);
+
+      if (!otpResult) {
         setAuthError(
           isHindi
             ? "गलत ओटीपी कोड! कृपया सही ओटीपी दर्ज करें।"
@@ -1248,401 +756,38 @@ export default function Account({ onViewChange }) {
         );
         return;
       }
-  
-      setAuthSuccess(
-        isHindi
-          ? "सत्यापित! आपका स्वागत है।"
-          : "OTP Validated! Granting access."
-      );
-  
-      const clean = (ph) =>
-        ph ? String(ph).replace(/\D/g, "").slice(-10) : "";
-  
-      const targetClean = clean(mobileNumber);
-  
-      const existingCust = (customers || []).find(
-        c => clean(c.phone) === targetClean
-      );
-  
-      const firstPoints = Number(
-        referralSettings?.firstLoginPoints ?? 10
-      );
-  
-      // ============================================================
-      // OTP LOGIN FOR STAFF
-      // ============================================================
-      if (!fullName) {
-        const matchedStaff = (staff || []).find(
-          s => clean(s.mobile) === targetClean
-        );
-  
-        if (matchedStaff) {
-          if (matchedStaff.status === 'disabled') {
-            setAuthError(
-              isHindi
-                ? "यह कर्मचारी खाता एडमिन द्वारा निष्क्रिय कर दिया गया है।"
-                : "This staff account has been disabled by Administrator."
-            );
-            setAuthSuccess('');
-            return;
-          }
-  
-          localStorage.setItem(
-            'swastik_logged_in_staff',
-            JSON.stringify(matchedStaff)
-          );
-  
-          const perms = matchedStaff.permissions || [];
-  
-          const isSuper =
-            matchedStaff.id === 1 ||
-            matchedStaff.mobile === '9999999999' ||
-            perms.includes('staff');
-  
-          const isDeliveryOnly =
-            perms.length === 1 && perms[0] === 'delivery';
-  
-          const newRole = isDeliveryOnly
-            ? 'delivery'
-            : (isSuper ? 'admin' : 'manager');
-  
-          if (setUserRole) {
-            setUserRole(newRole);
-          }
-  
-          setTimeout(() => {
-            setIsLoggedIn(true);
-            setAuthSuccess('');
-  
-            if (onViewChange) {
-              onViewChange('admin');
-            }
-          }, 1000);
-  
-          return;
-        }
-      }
-  
-      // ============================================================
-      // CUSTOMER SIGNUP
-      // ============================================================
-      if (fullName) {
-        // Signup is CREATE only.
-        // Existing phone must not be converted into another customer.
-        if (existingCust) {
-          setAuthError(
-            isHindi
-              ? "यह मोबाइल नंबर पहले से पंजीकृत है। कृपया Login करें।"
-              : "This mobile number is already registered. Please login instead."
-          );
-          setAuthSuccess('');
-          return;
-        }
-  
-        const normalizedEmail = String(emailAddress || '')
-          .trim()
-          .toLowerCase();
-  
-        // Check duplicate email on the currently loaded customer list.
-        if (normalizedEmail) {
-          const emailOwner = (customers || []).find(
-            c =>
-              String(c.email || '')
-                .trim()
-                .toLowerCase() === normalizedEmail
-          );
-  
-          if (emailOwner) {
-            setAuthError(
-              isHindi
-                ? "यह ईमेल पहले से पंजीकृत है। कृपया दूसरा ईमेल उपयोग करें।"
-                : "This email address is already registered. Please use another email."
-            );
-            setAuthSuccess('');
-            return;
-          }
-        }
-  
-        // ==========================================================
-        // REFERRAL VALIDATION
-        // ==========================================================
-        let giftPoints = 0;
-        let referrerCustomerId = null;
-  
-        if (referralAppliedCode.trim()) {
-          const code = referralAppliedCode
-            .toUpperCase()
-            .trim();
-  
-          // System promotional code.
-          if (code === 'SWASTIK50') {
-            giftPoints = Number(
-              referralSettings?.referralPointsEarned ?? 50
-            );
-          } else {
-            const foundReferrer = (customers || []).find(c => {
-              const suffix = clean(c.phone).slice(-4);
-  
-              const possible = (
-                (c.name || '')
-                  .substring(0, 4)
-                  .toUpperCase() + suffix
-              ).replace(/[^A-Z0-9]/gi, '');
-  
-              return possible === code;
-            });
-  
-            if (!foundReferrer) {
-              alert(
-                isHindi
-                  ? 'रेफ़रल कोड अमान्य है।'
-                  : 'Invalid referral code.'
-              );
-              setAuthSuccess('');
-              return;
-            }
-  
-            if (
-              foundReferrer.status &&
-              foundReferrer.status !== 'Active'
-            ) {
-              alert(
-                isHindi
-                  ? 'रेफ़रलकर्ता ग्राहक सक्रिय नहीं है।'
-                  : 'The referring customer is not active.'
-              );
-              setAuthSuccess('');
-              return;
-            }
-  
-            const hasShopped = (orders || []).some(o =>
-              clean(o.customerPhone || o.customerMobile) ===
-                clean(foundReferrer.phone) &&
-              String(o.status || '').toLowerCase() === 'delivered'
-            );
-  
-            if (!hasShopped) {
-              alert(
-                isHindi
-                  ? 'रेफ़रलकर्ता ने अभी तक खरीदारी पूरी नहीं की है।'
-                  : 'The referring customer has not completed a purchase yet.'
-              );
-              setAuthSuccess('');
-              return;
-            }
-  
-            giftPoints = Number(
-              referralSettings?.referralPointsEarned ?? 50
-            );
-  
-            referrerCustomerId = Number(foundReferrer.id);
-          }
-        }
-  
-        // ==========================================================
-        // BACKEND CREATES CUSTOMER + POINT LEDGER
-        // ==========================================================
-        const payload = {
-          operation: 'register',
-          name: fullName.trim(),
-          phone: `+91 ${targetClean}`,
-          email: normalizedEmail,
-          password: password || '',
-          status: 'Active',
-  
-          // Customer.points is only the cached/current balance.
-          // Actual point transactions are created by the backend.
-          points: 0,
-  
-          isPrimeActive: false,
-          address: 'address',
-          dob: '',
-          anniversary: '',
-  
-          // Backend creates WELCOME transaction.
-          welcomePoints: firstPoints,
-  
-          // Backend creates REFERRAL transaction when applicable.
-          referralPoints: giftPoints,
-  
-          // A referral transaction records who referred whom.
-          referrerCustomerId: referrerCustomerId || null
-        };
-  
-        const response = await fetch('/api/customers', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(payload)
-        });
-  
-        const result = await response.json().catch(() => ({}));
-  
-        if (!response.ok) {
-          throw new Error(
-            result.error || 'Customer registration failed.'
-          );
-        }
-  
-        const createdCustomer = result.customer;
-  
-        if (!createdCustomer?.id) {
-          throw new Error(
-            'Customer was created but customer ID was not returned.'
-          );
-        }
-  
-        // Refresh frontend customer state after backend creation.
-        await fetchCustomers(true);
-  
-        // IMPORTANT:
-        // Use the customer returned by the backend.
-        // Do not calculate points again on the frontend.
-        const newProfileData = {
-          id: createdCustomer.id,
-          fullName:
-            createdCustomer.name || fullName.trim(),
-          phone:
-            createdCustomer.phone ||
-            `+91 ${targetClean}`,
-          email:
-            createdCustomer.email ||
-            normalizedEmail,
-          address:
-            createdCustomer.address ||
-            payload.address,
-          points:
-            Number(createdCustomer.points || 0),
-          isPrimeActive:
-            Boolean(createdCustomer.isPrimeActive),
-          dob:
-            createdCustomer.dob || '',
-          anniversary:
-            createdCustomer.anniversary || ''
-        };
-  
-        setProfile(newProfileData);
-  
-        if (giftPoints > 0) {
-          alert(
-            isHindi
-              ? `बधाई हो! ${giftPoints} रेफ़रल पॉइंट्स क्रेडिट किए गए।`
-              : `Congratulations! ${giftPoints} referral points have been credited.`
-          );
-        }
-      }
-  
-      // ============================================================
-      // EXISTING CUSTOMER OTP LOGIN / FIRST-TIME OTP CUSTOMER
-      // ============================================================
-      else {
-        // ----------------------------------------------------------
-        // EXISTING CUSTOMER
-        // NEVER AWARD WELCOME POINTS AGAIN
-        // ----------------------------------------------------------
-        if (existingCust) {
-          setProfile({
-            id: existingCust.id,
-            fullName: existingCust.name,
-            phone: existingCust.phone,
-            email: existingCust.email || '',
-            address:
-              existingCust.address ||
-              '123 Swastik Colony',
-            points:
-              Number(existingCust.points || 0),
-            isPrimeActive:
-              existingCust.isPrimeActive === true,
-            dob: existingCust.dob || '',
-            anniversary:
-              existingCust.anniversary || ''
-          });
-        }
-  
-        // ----------------------------------------------------------
-        // FIRST-TIME OTP-ONLY CUSTOMER
-        // ----------------------------------------------------------
-        else {
-          const name = `Customer ${targetClean.slice(-4)}`;
-  
-          const payload = {
-            operation: 'upsert',
-            name,
-            phone: `+91 ${targetClean}`,
-            email: `customer${targetClean.slice(-4)}@example.com`,
-            status: 'Active',
-  
-            // Do not directly put points into customer.points.
-            // Backend creates the WELCOME ledger transaction.
-            points: 0,
-  
-            isPrimeActive: false,
-            address: '123 Swastik Colony',
-            welcomePoints: firstPoints
-          };
-  
-          const response = await fetch('/api/customers', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-          });
-  
-          const result = await response.json().catch(() => ({}));
-  
-          if (!response.ok) {
-            throw new Error(
-              result.error ||
-              'OTP customer creation failed.'
-            );
-          }
-  
-          const createdCustomer = result.customer;
-  
-          if (!createdCustomer?.id) {
-            throw new Error(
-              'OTP customer was created but customer ID was not returned.'
-            );
-          }
-  
-          await fetchCustomers(true);
-  
-          // Again, use backend result.
-          // Do not set points:firstPoints manually.
-          setProfile({
-            id: createdCustomer.id,
-            fullName:
-              createdCustomer.name || name,
-            phone:
-              createdCustomer.phone ||
-              `+91 ${targetClean}`,
-            email:
-              createdCustomer.email ||
-              payload.email,
-            address:
-              createdCustomer.address ||
-              payload.address,
-            points:
-              Number(createdCustomer.points || 0),
-            isPrimeActive:
-              Boolean(createdCustomer.isPrimeActive),
-            dob:
-              createdCustomer.dob || '',
-            anniversary:
-              createdCustomer.anniversary || ''
-          });
-        }
-      }
-  
-      // ============================================================
-      // LOGIN SUCCESS
-      // ============================================================
-      setTimeout(() => {
+
+      if (otpResult.customer) {
+        const customer = otpResult.customer;
+        setProfile({ id: customer.id, fullName: customer.name, phone: customer.phone, email: customer.email || '', address: customer.address || '', points: Number(customer.points || 0), dob: customer.dob || '', anniversary: customer.anniversary || '', membershipStatus: customer.membershipStatus, membershipNumber: customer.membershipNumber || null, referralCode: customer.referralCode || '' });
         setIsLoggedIn(true);
-        setAuthSuccess('');
-      }, 1200);
+        setAuthSuccess(isHindi ? "लॉगिन सफल।" : "Login successful.");
+        return;
+      }
+
+      if (!otpResult.registrationRequired || authMode !== 'signup' || fullName.trim().length < 2) {
+        throw new Error('Complete sign-up with your real name before creating an account.');
+      }
+      const response = await fetch('/api/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: fullName.trim(),
+          phone: mobileNumber,
+          email: String(emailAddress || '').trim().toLowerCase(),
+          password: password || undefined,
+          referralCode: String(referralAppliedCode || '').trim()
+        })
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.customer) throw new Error(result.error || 'Customer registration failed.');
+      const customer = result.customer;
+      setProfile({ id: customer.id, fullName: customer.name, phone: customer.phone, email: customer.email || '', address: customer.address || '', points: Number(customer.points || 0), dob: customer.dob || '', anniversary: customer.anniversary || '', membershipStatus: customer.membershipStatus, membershipNumber: customer.membershipNumber || null, referralCode: customer.referralCode || '' });
+      setIsLoggedIn(true);
+      setAuthSuccess(isHindi ? 'खाता सफलतापूर्वक बनाया गया।' : 'Account created successfully.');
+      return;
+  
+
   
     } catch (err) {
       console.error('OTP verification/login failed:', err);
@@ -1671,9 +816,6 @@ export default function Account({ onViewChange }) {
       return;
     }
 
-    const clean = (ph) => ph ? ph.replace(/[^0-9]/g, "") : "";
-    const targetClean = clean(mobileNumber);
-
     // Staff credentials are always verified by the server.
     try {
       const staffResponse = await fetch('/api/auth/staff/login', {
@@ -1698,59 +840,26 @@ export default function Account({ onViewChange }) {
       console.error('Staff authentication request failed:', error);
     }
 
-    // 2. Regular Customer Login
-    const existingCust = (customers || []).find(c => clean(c.phone).endsWith(targetClean.slice(-10)));
-    const firstPoints = referralSettings?.firstLoginPoints ?? 100;
-
-    if (!existingCust) {
-      setAuthError(isHindi 
-        ? "खाता नहीं मिला! कृपया अपना मोबाइल नंबर जांचें या साइन अप करें।" 
-        : "Account not found! Please check mobile number or sign up.");
-      setAuthSuccess('');
-      return;
-    }
-
-    if (existingCust.password && existingCust.password.trim().length > 0) {
-      if (existingCust.password.trim() !== password.trim()) {
-        setAuthError(isHindi 
-          ? "गलत पासवर्ड! कृपया सही पासवर्ड दर्ज करें या ओटीपी के माध्यम से लॉग इन करें।" 
-          : "Incorrect password! Please enter the correct password or login via OTP.");
-        setAuthSuccess('');
-        return;
-      }
-    } else {
-      setAuthError(isHindi 
-        ? "इस खाते के लिए कोई पासवर्ड सेट नहीं है! कृपया ओटीपी के माध्यम से लॉग इन करें।" 
-        : "No password set for this account yet! Please log in via OTP.");
-      setAuthSuccess('');
-      return;
-    }
-
-    // Grant login
-    setAuthSuccess(isHindi ? "लॉगिन सफल! अपनी सेटिंग्स प्रबंधित करें।" : "Login success! Loading profile center.");
-    setAuthError('');
-    setProfile({
-      fullName: existingCust.name,
-      phone: existingCust.phone,
-      email: existingCust.email || "",
-      address: existingCust.address || "",
-      points: existingCust.points !== undefined ? existingCust.points : firstPoints,
-      isPrimeActive: existingCust.isPrimeActive === true,
-      dob: existingCust.dob || "",
-      anniversary: existingCust.anniversary || ""
-    });
-
-    setTimeout(() => {
+    try {
+      const response = await fetch('/api/auth/customer/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phoneNumber: mobileNumber, password }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.customer) throw new Error(data.error || 'Invalid customer credentials.');
+      const customer = data.customer;
+      setProfile({ id: customer.id, fullName: customer.name, phone: customer.phone, email: customer.email || '', address: customer.address || '', points: Number(customer.points || 0), dob: customer.dob || '', anniversary: customer.anniversary || '', membershipStatus: customer.membershipStatus, membershipNumber: customer.membershipNumber || null, referralCode: customer.referralCode || '' });
       setIsLoggedIn(true);
+      setAuthSuccess(isHindi ? "लॉगिन सफल।" : "Login successful.");
+      setAuthError('');
+    } catch (error) {
+      setAuthError(error.message);
       setAuthSuccess('');
-    }, 1200);
+    }
   };
 
   const handleForgotPasswordReset = async (e) => {
     e.preventDefault();
     const cleanCode = (otpCode || '').trim();
     if (!cleanCode) {
-      setAuthError(isHindi ? "कृपया 4 अंकों का ओटीपी कोड दर्ज करें।" : "Please enter 4-digit OTP code.");
+      setAuthError(isHindi ? "कृपया 6 अंकों का ओटीपी कोड दर्ज करें।" : "Please enter 6-digit OTP code.");
       return;
     }
     const isValid = await verifyServerOtp(mobileNumber, cleanCode);
@@ -1767,14 +876,16 @@ export default function Account({ onViewChange }) {
       return;
     }
     
-    setAuthError(isHindi
-      ? "स्वयं-सेवा पासवर्ड रीसेट अभी उपलब्ध नहीं है। कृपया व्यवस्थापक से संपर्क करें।"
-      : "Self-service password reset is not available. Please contact an administrator.");
-    setAuthSuccess('');
+    const response = await fetch('/api/auth/customer/password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ newPassword: password }) });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) { setAuthError(result.error || 'Password reset failed.'); setAuthSuccess(''); return; }
+    setAuthError('');
+    setAuthSuccess(isHindi ? 'पासवर्ड सफलतापूर्वक रीसेट हुआ।' : 'Password reset successfully.');
+    setAuthMode('login');
   };
 
   // --- 4. PROFILE LOGICS ---
-  const handleUpdatePassword = (e) => {
+  const handleUpdatePassword = async (e) => {
     e.preventDefault();
     if (!newPassword.trim()) {
       alert(isHindi ? 'कृपया नया पासवर्ड दर्ज करें!' : 'Please enter a new password!');
@@ -1784,13 +895,17 @@ export default function Account({ onViewChange }) {
       alert(isHindi ? 'नया पासवर्ड और पुष्टि पासवर्ड मेल नहीं खाते!' : 'New Password and Confirm Password do not match!');
       return;
     }
+    const response = await fetch('/api/auth/customer/password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ currentPassword, newPassword }) });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) { setSecurityMessage(result.error || 'Password update failed.'); return; }
     setSecurityMessage(isHindi ? 'पासवर्ड सफलतापूर्वक बदल गया!' : 'Password updated successfully!');
+    setCurrentPassword('');
     setNewPassword('');
     setConfirmNewPassword('');
     setTimeout(() => setSecurityMessage(''), 2000);
   };
 
-  const handleUpdateProfile = () => {
+  const handleUpdateProfile = async () => {
     if (isEditing) {
       if (!profile.address || !profile.address.trim()) {
         const msg = isHindi ? 'कृपया डिलीवरी पता दर्ज करें! डिलीवरी पता अनिवार्य है।' : 'Please enter delivery address! Delivery address is mandatory.';
@@ -1799,35 +914,11 @@ export default function Account({ onViewChange }) {
         return;
       }
 
-      // Sync to database
-      const cleanPhone = (ph) => ph ? ph.replace(/[^0-9]/g, "") : "";
-      const targetClean = cleanPhone(profile.phone);
-      const existingCust = (customers || []).find(c => {
-        if (profile.id && Number(c.id) === Number(profile.id)) return true;
-        const cPhone = c.phone || "";
-        return targetClean && cleanPhone(cPhone).endsWith(targetClean.slice(-10));
-      });
-      if (existingCust) {
-        updateCustomer(existingCust.id, {
-          ...existingCust,
-          name: profile.fullName,
-          email: profile.email,
-          phone: profile.phone,
-          address: profile.address,
-          dob: profile.dob,
-          anniversary: profile.anniversary
-        });
-      } else {
-        upsertCustomer({
-          name: profile.fullName,
-          phone: profile.phone,
-          email: profile.email,
-          address: profile.address,
-          dob: profile.dob,
-          anniversary: profile.anniversary
-        });
-      }
-
+      const response = await fetch('/api/customers/me', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: profile.fullName, email: profile.email, address: profile.address, dob: profile.dob, anniversary: profile.anniversary }) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) { setProfileMessage(result.error || 'Profile update failed.'); return; }
+      const customer = result.customer;
+      setProfile({ id: customer.id, fullName: customer.name, phone: customer.phone, email: customer.email || '', address: customer.address || '', points: Number(customer.points || 0), dob: customer.dob || '', anniversary: customer.anniversary || '', membershipStatus: customer.membershipStatus, membershipNumber: customer.membershipNumber || null, referralCode: customer.referralCode || '' });
       setProfileMessage(isHindi ? 'प्रोफ़ाइल अपडेट हो गई!' : 'Profile updated successfully!');
       setTimeout(() => setProfileMessage(''), 2000);
     }
@@ -1836,7 +927,7 @@ export default function Account({ onViewChange }) {
 
   // --- --- --- RENDERING --- --- ---
 
-  // Check if DOB and Anniversary were already submitted (saved in DB/localStorage) and should be locked
+  // Check if DOB and Anniversary were already submitted in the database.
   const cleanPhoneForLock = (ph) => ph ? ph.replace(/[^0-9]/g, "") : "";
   const dbCustForLock = (customers || []).find(c => {
     const cPhone = c.phone || "";
@@ -1844,19 +935,8 @@ export default function Account({ onViewChange }) {
     return cPhone && pPhone && cleanPhoneForLock(cPhone).endsWith(cleanPhoneForLock(pPhone).slice(-10));
   });
 
-  const savedRawForLock = localStorage.getItem('swastik_profile');
-  let savedDobVal = "";
-  let savedAnnivVal = "";
-  if (savedRawForLock) {
-    try {
-      const parsed = JSON.parse(savedRawForLock);
-      savedDobVal = parsed.dob || "";
-      savedAnnivVal = parsed.anniversary || "";
-    } catch(e){}
-  }
-
-  const isDobLocked = !!savedDobVal || !!(dbCustForLock && dbCustForLock.dob);
-  const isAnniversaryLocked = !!savedAnnivVal || !!(dbCustForLock && dbCustForLock.anniversary);
+  const isDobLocked = !!profile.dob || !!(dbCustForLock && dbCustForLock.dob);
+  const isAnniversaryLocked = !!profile.anniversary || !!(dbCustForLock && dbCustForLock.anniversary);
 
   return (
     <div className="flex flex-col gap-6 pb-20 justify-center items-center w-full" id="account-view">
@@ -1967,7 +1047,7 @@ export default function Account({ onViewChange }) {
                       <Key className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                       <input
                         type="text"
-                        maxLength="4"
+                        maxLength="6"
                         placeholder="Enter OTP"
                         value={otpCode}
                         onChange={(e) => setOtpCode(e.target.value.replace(/\D/g,''))}
@@ -2087,7 +1167,7 @@ export default function Account({ onViewChange }) {
                   <label className="block text-[10px] font-extrabold text-slate-600 uppercase tracking-widest mb-1">{isHindi ? "रेफ़रल कोड (वैकल्पिक)" : "Referral Code (Optional)"}</label>
                   <input
                     type="text"
-                    placeholder={isHindi ? "उदाहरण: SWASTIK50" : "e.g. AMIT4321"}
+                    placeholder={isHindi ? "रेफ़रल कोड" : "Referral code"}
                     value={referralAppliedCode}
                     onChange={(e) => setReferralAppliedCode(e.target.value.toUpperCase().replace(/\s/g, ''))}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-xs text-slate-900 placeholder-slate-400 font-extrabold outline-none tracking-widest font-mono focus:bg-white focus:border-emerald-500 transition-all"
@@ -2108,8 +1188,8 @@ export default function Account({ onViewChange }) {
                   <input
                     type="text"
                     required
-                    placeholder="Enter 4-digit OTP"
-                    maxLength="4"
+                    placeholder="Enter 6-digit OTP"
+                    maxLength="6"
                     value={otpCode}
                     onChange={(e) => setOtpCode(e.target.value.replace(/\D/g,''))}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-xs text-slate-900 placeholder-slate-400 font-bold outline-none tracking-widest font-mono focus:bg-white focus:border-emerald-500 transition-all"
@@ -2168,7 +1248,7 @@ export default function Account({ onViewChange }) {
                   <input
                     type="text"
                     required
-                    maxLength="4"
+                    maxLength="6"
                     placeholder="Reset code pin"
                     value={otpCode}
                     onChange={(e) => setOtpCode(e.target.value.replace(/\D/g,''))}
@@ -2246,9 +1326,9 @@ export default function Account({ onViewChange }) {
             </div>
             <button 
               onClick={() => {
+                fetch('/api/auth/customer/logout', { method: 'POST' }).catch(() => {});
                 setIsLoggedIn(false);
-                localStorage.removeItem('swastik_is_logged_in');
-                fetch('/api/auth/staff/logout', { method: 'POST' }).catch(() => {});
+                setProfile({ fullName: "", email: "", phone: "", address: "", points: 0, dob: "", anniversary: "", membershipStatus: null, membershipNumber: null });
                 sessionStorage.removeItem('swastik_logged_in_staff');
                 sessionStorage.removeItem('swastik_staff_token');
                 setActiveStaffSession(null);
@@ -2258,7 +1338,6 @@ export default function Account({ onViewChange }) {
                 setMobileNumber('');
                 setPassword('');
                 setOtpCode('');
-                setSimulatedOtp('');
                 alert(isHindi ? 'सफलतापूर्वक लॉगआउट किया गया।' : 'Successfully logged out.');
               }}
               className="bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider self-start active:scale-95 shadow-xs shrink-0 transition-all cursor-pointer"
@@ -2317,7 +1396,7 @@ export default function Account({ onViewChange }) {
               { id: 'profile', icon: User, labelEn: 'My Profile', labelHi: 'मेरी प्रोफ़ाइल' },
               { id: 'orders', icon: Package, labelEn: 'My Orders', labelHi: 'मेरे ऑर्डर', badge: myOrders.length },
               { id: 'password', icon: Lock, labelEn: 'Security & Password', labelHi: 'सुरक्षा एवं पासवर्ड' },
-              { id: 'membership', icon: Crown, labelEn: 'Prime Membership', labelHi: 'प्राइम सदस्यता', badgeText: profile.isPrimeActive ? 'VIP' : null, color: 'text-amber-500' },
+              { id: 'membership', icon: Crown, labelEn: 'Prime Membership', labelHi: 'प्राइम सदस्यता', badgeText: profile.membershipStatus === 'Active' ? 'VIP' : null, color: 'text-amber-500' },
               { id: 'rewards', icon: Gift, labelEn: 'Rewards & Referrals', labelHi: 'रिवॉर्ड्स और रेफ़रल', badgeText: `${profile.points || 0} PTS`, color: 'text-amber-500' },
               { id: 'cart', icon: ShoppingCart, labelEn: 'My Cart', labelHi: 'मेरी कार्ट', badge: (cartItems || []).reduce((acc, item) => acc + item.quantity, 0), color: 'text-emerald-600' },
               { id: 'preferences', icon: Languages, labelEn: 'Preferences', labelHi: 'प्राथमिकताएं' },
@@ -2404,7 +1483,6 @@ export default function Account({ onViewChange }) {
                 profile={profile}
                 setProfile={setProfile}
                 setShowPrimePayment={setShowPrimePayment}
-                onOfflinePurchase={handleOfflinePrimePurchase}
                 primeSettings={primeSettings}
                 isHindi={isHindi}
               />
@@ -2416,9 +1494,6 @@ export default function Account({ onViewChange }) {
                 userReferralCode={userReferralCode}
                 handleCopyCode={handleCopyCode}
                 copied={copied}
-                inputReferralCode={inputReferralCode}
-                setInputReferralCode={setInputReferralCode}
-                handleClaimReferral={handleClaimReferral}
                 handleWhatsAppShare={handleWhatsAppShare}
                 referralSettings={referralSettings}
                 myReferredCustomers={myReferredCustomers}
@@ -3056,7 +2131,7 @@ export default function Account({ onViewChange }) {
                   <span>{isHindi ? "स्वास्तिक प्राइम मेंबरशिप" : "Swastik Prime Membership"}</span>
                 </h3>
 
-                {!profile.isPrimeActive ? (
+                {profile.membershipStatus !== 'Active' ? (
                   <div className="space-y-4 flex-1 flex flex-col justify-between">
                     <div className="space-y-2.5">
                       <p className="text-xs text-slate-300 font-medium leading-relaxed">
@@ -3159,19 +2234,19 @@ export default function Account({ onViewChange }) {
                           <div className="space-y-0.5">
                             <span className="text-[7px] font-bold text-slate-400 uppercase tracking-widest block">{isHindi ? "सदस्यता पहचान संख्या" : "Membership Identifier"}</span>
                             <span className="text-[10px] font-mono font-bold text-amber-300 block">
-                              {profile.primeMembershipNo || `SWS-PRM-${(profile.phone || "8888").replace(/\s/g, '').slice(-6)}`}
+                              {profile.membershipNumber || (isHindi ? 'उपलब्ध नहीं' : 'Not available')}
                             </span>
                           </div>
                         </div>
 
                         <div className="col-span-4 flex flex-col items-center justify-center bg-white p-1 rounded-lg shadow-lg border border-indigo-400/20">
                           {/* QR Code dynamically loaded to redirect to swastiksupermarket.com */}
-                          <img 
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent('https://swastiksupermarket.com/verify?card=' + (profile.primeMembershipNo || 'VIP'))}`}
-                            alt="Verification QR" 
+                          {profile.membershipNumber && <img
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(profile.membershipNumber)}`}
+                            alt="Membership number QR"
                             className="w-14 h-14 object-contain"
                             referrerPolicy="no-referrer"
-                          />
+                          />}
                         </div>
                       </div>
 
@@ -3179,12 +2254,8 @@ export default function Account({ onViewChange }) {
                       <div className="z-10 mt-3 border-t border-white/10 pt-1.5 flex justify-between items-center">
                         <div className="flex gap-3 text-[7px] text-slate-400 uppercase tracking-wider font-extrabold">
                           <div>
-                            <span>{isHindi ? "जारी तिथि" : "Issued Date"}:</span>{" "}
-                            <span className="text-slate-200">2026-06-19</span>
-                          </div>
-                          <div>
                             <span>{isHindi ? "वैधता" : "Status"}:</span>{" "}
-                            <span className="text-green-400">{isHindi ? "लाइफटाइम" : "Lifetime Access"}</span>
+                            <span className="text-green-400">{isHindi ? "सक्रिय" : "Active"}</span>
                           </div>
                         </div>
                         <span className="text-[7.5px] font-mono text-zinc-400 tracking-tight">swastiksupermarket.com</span>
@@ -3344,18 +2415,6 @@ export default function Account({ onViewChange }) {
                           <span>{isHindi ? "कार्ड प्रिंट करें" : "Print Pass Card"}</span>
                         </button>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (confirm(isHindi ? "क्या आप वास्तव में प्राइम सदस्यता रद्द करना चाहते हैं?" : "Are you sure you want to revert Prime Access Status for simulation?")) {
-                              setProfile(prev => ({ ...prev, isPrimeActive: false }));
-                            }
-                          }}
-                          className="px-3 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 text-xs rounded-xl transition-all active:scale-95 flex items-center justify-center cursor-pointer"
-                          title="Reset for Demo"
-                        >
-                          ✕
-                        </button>
                       </div>
                     </div>
                   </div>

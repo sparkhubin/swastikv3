@@ -88,7 +88,7 @@ export default function PasswordTab({
       <div className="mt-8 pt-5 border-t border-slate-200 flex items-center gap-3 text-slate-600 text-xs">
         <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
         <p className="font-medium">
-          {isHindi ? "आपका पासवर्ड 256-बिट एन्क्रिप्शन से सुरक्षित है। आप हमेशा अपने रजिस्टर्ड मोबाइल नंबर पर OTP प्राप्त करके लॉगिन कर सकते हैं।" : "Your credentials are stored using secure encryption hashes. You can always sign in using fast 4-digit OTP directly on your phone."}
+          {isHindi ? "आपका पासवर्ड सुरक्षित हैश के रूप में संग्रहीत है। आप अपने पंजीकृत मोबाइल नंबर पर 6-अंकीय OTP प्राप्त करके लॉगिन कर सकते हैं।" : "Your credentials are stored using secure password hashing. You can also sign in using a 6-digit OTP sent to your registered phone."}
         </p>
       </div>
     </div>

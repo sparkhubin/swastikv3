@@ -7,7 +7,7 @@ import { execFileSync } from "child_process";
 dotenv.config();
 
 const ROOT = process.cwd();
-const DB_PATH = path.join(ROOT, "swastik_local.db");
+const DB_PATH = process.env.DATABASE_PATH || path.join(ROOT, "swastik_local_final.db");
 const EXPORT_PATH = path.join(ROOT, "scripts", "r2-image-names.txt");
 
 const ACCOUNT_ID = process.env.CLOUDFLARE_R2_ACCOUNT_ID;

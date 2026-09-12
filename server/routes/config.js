@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import crypto from "node:crypto";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { db } from "../../database/db.js";
 import { 
@@ -16,19 +17,21 @@ router.get("/config", async (req, res) => {
   try {
     const publicUrlBase = process.env.CLOUDFLARE_R2_PUBLIC_URL ||
       (process.env.CLOUDFLARE_R2_BUCKET_NAME ? `https://${process.env.CLOUDFLARE_R2_BUCKET_NAME}.r2.dev` : "");
-    const rows = await db.query(`SELECT enabled, razorpay_enabled, razorpay_key_id, environment, active_gateway
-                                   FROM payment_settings WHERE id = 1`);
+    const rows = await db.query(`SELECT gateway, enabled, key_id, app_id, environment
+                                   FROM payment_settings WHERE enabled = 1 ORDER BY gateway`);
     if (rows.length > 0) {
-      const isOnlineEnabled = Boolean(rows[0].enabled) || Boolean(rows[0].razorpay_enabled);
+      const razorpay = rows.find(row => row.gateway === "RAZORPAY");
+      const cashfree = rows.find(row => row.gateway === "CASHFREE");
       res.json({ 
         r2PublicUrl: publicUrlBase,
-        paymentEnabled: isOnlineEnabled,
+        paymentEnabled: true,
         paymentEnvironment: rows[0].environment,
-        enabled: Boolean(rows[0].enabled),
-        razorpayEnabled: Boolean(rows[0].razorpay_enabled),
-        razorpayKeyId: rows[0].razorpay_key_id || "",
+        enabled: true,
+        razorpayEnabled: Boolean(razorpay),
+        cashfreeEnabled: Boolean(cashfree),
+        razorpayKeyId: razorpay?.key_id || "",
         environment: rows[0].environment,
-        activeGateway: rows[0].active_gateway || ""
+        activeGateway: rows[0].gateway
       });
     } else {
       res.json({ 
@@ -43,7 +46,8 @@ router.get("/config", async (req, res) => {
       });
     }
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Public configuration read failed:", err.message);
+    res.status(500).json({ error: "Unable to load public configuration." });
   }
 });
 
@@ -72,7 +76,16 @@ router.post("/upload", requireStaffAuth, requirePermission("products"), upload.s
     return res.status(400).json({ error: "Product code contains no valid filename characters." });
   }
 
-  const uniqueId = Math.floor(100000 + Math.random() * 900000);
+  const signatures = {
+    "image/jpeg": buffer => buffer[0] === 0xff && buffer[1] === 0xd8,
+    "image/png": buffer => buffer.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])),
+    "image/gif": buffer => ["GIF87a", "GIF89a"].includes(buffer.subarray(0, 6).toString("ascii")),
+    "image/webp": buffer => buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP"
+  };
+  if (!signatures[file.mimetype]?.(file.buffer)) {
+    return res.status(415).json({ error: "Uploaded file content does not match its image type." });
+  }
+  const uniqueId = crypto.randomBytes(8).toString("hex");
   
   const fileName = productCode
     ? `${productCode}${fileExt}`

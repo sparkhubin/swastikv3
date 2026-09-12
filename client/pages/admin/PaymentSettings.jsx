@@ -40,14 +40,6 @@ export default function PaymentSettings({ isAdminDark }) {
   const [showRzpSecret, setShowRzpSecret] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState('');
   
-  // Simulation panel states
-  const [simGateway, setSimGateway] = useState('razorpay');
-  const [simOrderId, setSimOrderId] = useState(`MOCK-RZP-${Math.floor(100000 + Math.random() * 900000)}`);
-  const [simAmount, setSimAmount] = useState("1500");
-  const [simStatus, setSimStatus] = useState("SUCCESS");
-  const [simResponse, setSimResponse] = useState(null);
-  const [isSimulating, setIsSimulating] = useState(false);
-
   const fetchSettings = async () => {
     setIsLoading(true);
     try {
@@ -107,57 +99,6 @@ export default function PaymentSettings({ isAdminDark }) {
     navigator.clipboard.writeText(url);
     setCopiedUrl(type);
     setTimeout(() => setCopiedUrl(''), 2000);
-  };
-
-  const handleSimulateWebhook = async (e) => {
-    e.preventDefault();
-    setIsSimulating(true);
-    setSimResponse(null);
-    try {
-      const endpoint = simGateway === 'razorpay' ? '/api/razorpay/webhook' : '/api/cashfree/webhook';
-      const payload = simGateway === 'razorpay' ? {
-        event: simStatus === 'SUCCESS' ? 'order.paid' : 'payment.failed',
-        payload: {
-          payment: {
-            entity: {
-              id: `pay_sim_${Date.now()}`,
-              amount: Number(simAmount) * 100,
-              status: simStatus === 'SUCCESS' ? 'captured' : 'failed',
-              receipt: simOrderId,
-              notes: { receipt: simOrderId }
-            }
-          }
-        },
-        orderId: simOrderId
-      } : {
-        orderId: simOrderId,
-        paymentStatus: simStatus,
-        transactionId: `TXN_MOCK_${Math.floor(100000000 + Math.random() * 900000000)}`
-      };
-
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setSimResponse(data);
-        alert(isHindi 
-          ? `✓ सिमुलेशन वेबहुक सफल! ऑर्डर ID ${simOrderId} का स्टेटस अपडेट हुआ।`
-          : `✓ Simulation webhook processed! Order ID ${simOrderId} state updated.`
-        );
-        setSimOrderId(`MOCK-${simGateway.toUpperCase()}-${Math.floor(100000 + Math.random() * 900000)}`);
-      } else {
-        setSimResponse({ error: "HTTP Error Dispatching Payload" });
-      }
-    } catch (err) {
-      console.error(err);
-      setSimResponse({ error: err.message });
-    } finally {
-      setIsSimulating(false);
-    }
   };
 
   const bgPanelClass = isAdminDark 
@@ -477,13 +418,13 @@ export default function PaymentSettings({ isAdminDark }) {
                       Razorpay Checkout API
                     </span>
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded font-black uppercase bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
-                      {settings.razorpayKeyId ? "LIVE READY" : "SIMULATION MODE"}
+                      {settings.razorpayConfigured ? "CONFIGURED" : "NOT CONFIGURED"}
                     </span>
                   </div>
                   <p className="text-[10px] text-slate-400 leading-relaxed font-semibold">
                     {settings.razorpayKeyId 
                       ? "Key ID properly configured. Store accepts UPI, Cards, NetBanking, Wallets." 
-                      : "No Key ID set. Sandbox simulator will generate test sessions automatically."}
+                      : "Add the database-backed gateway credentials before enabling Razorpay."}
                   </p>
                 </div>
 
@@ -494,89 +435,11 @@ export default function PaymentSettings({ isAdminDark }) {
                       Cashfree Payment Engine
                     </span>
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded font-black uppercase bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
-                      {settings.appId ? "CONFIGURED" : "SIMULATION"}
+                      {settings.cashfreeConfigured ? "CONFIGURED" : "NOT CONFIGURED"}
                     </span>
                   </div>
                 </div>
               </div>
-            </div>
-
-            {/* Webhook & Payment Test Simulator */}
-            <div className={`${bgPanelClass} p-5 rounded-[24px] space-y-4`}>
-              <h4 className="text-xs font-black uppercase text-amber-300 flex items-center gap-2 border-b border-white/10 pb-3">
-                <Terminal className="h-4 w-4 text-amber-400" />
-                <span>{isHindi ? "वेबहुक लाइव सिमुलेटर" : "Live Background Webhook Simulator"}</span>
-              </h4>
-
-              <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">
-                {isHindi ? "सर्वर ऑटो-अपडेट जांचने हेतु कृत्रिम वेबहुक इवेंट भेजें:" : "Dispatch test webhook events to test background database payment state updates:"}
-              </p>
-
-              <form onSubmit={handleSimulateWebhook} className="space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className={labelClass}>Target PG</label>
-                    <select
-                      value={simGateway}
-                      onChange={(e) => setSimGateway(e.target.value)}
-                      className="w-full bg-slate-950 border border-white/10 px-2.5 py-2 rounded-xl text-xs text-white outline-none font-black"
-                    >
-                      <option value="razorpay">Razorpay</option>
-                      <option value="cashfree">Cashfree</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className={labelClass}>Order ID</label>
-                    <input
-                      type="text"
-                      value={simOrderId}
-                      onChange={(e) => setSimOrderId(e.target.value)}
-                      className="w-full bg-slate-950 border border-white/10 px-2.5 py-2 rounded-xl text-xs text-white outline-none font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className={labelClass}>Simulated State</label>
-                    <select
-                      value={simStatus}
-                      onChange={(e) => setSimStatus(e.target.value)}
-                      className="w-full bg-slate-950 border border-white/10 px-2.5 py-2 rounded-xl text-xs text-white outline-none font-mono"
-                    >
-                      <option value="SUCCESS">SUCCESS (PAID)</option>
-                      <option value="FAILED">FAILED</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className={labelClass}>Amount (₹)</label>
-                    <input
-                      type="number"
-                      value={simAmount}
-                      onChange={(e) => setSimAmount(e.target.value)}
-                      className="w-full bg-slate-950 border border-white/10 px-2.5 py-2 rounded-xl text-xs text-white outline-none font-mono"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isSimulating}
-                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
-                >
-                  <RefreshCw className={`h-3.5 w-3.5 ${isSimulating ? 'animate-spin' : ''}`} />
-                  <span>{isSimulating ? "Dispatching..." : "Dispatch Webhook Test"}</span>
-                </button>
-              </form>
-
-              {simResponse && (
-                <div className="bg-slate-950 border border-cyan-500/30 p-3 rounded-xl space-y-1 font-mono text-[10px]">
-                  <span className="text-cyan-300 font-bold block">Response Log:</span>
-                  <pre className="text-slate-300 overflow-x-auto whitespace-pre-wrap">
-                    {JSON.stringify(simResponse, null, 2)}
-                  </pre>
-                </div>
-              )}
             </div>
 
           </div>

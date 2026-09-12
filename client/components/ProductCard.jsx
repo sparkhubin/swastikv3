@@ -52,7 +52,7 @@ export default function ProductCard({ product }) {
     return '';
   })();
 
-  const stockCount = product.stockCount !== undefined ? product.stockCount : 100;
+  const stockCount = product.stockCount !== undefined ? product.stockCount : 0;
   const isOutOfStock = stockCount <= 0;
   const isLowStock = stockCount > 0 && stockCount <= 10;
 

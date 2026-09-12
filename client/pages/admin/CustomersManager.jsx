@@ -22,9 +22,7 @@ import {
   X,
   Edit3,
   UserPlus,
-  Copy,
   FileText,
-  Globe,
   Crown,
   Printer,
   Gift
@@ -32,177 +30,6 @@ import {
 import R2ImageUploader from './R2ImageUploader';
 import QuickTemplateSender from './QuickTemplateSender';
 import DataDeletionRequestsManager from './DataDeletionRequestsManager';
-
-const metaApprovalTemplates = [
-  {
-    id: 'reference_no',
-    name: 'OTP Login Reference Code',
-    category: 'AUTHENTICATION',
-    categoryColor: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-    description: 'High-speed authentication code template for phone number verification & login.',
-    languages: {
-      en_US: {
-        header: 'None',
-        body: 'Hello\nNote {{1}} is Your Reference',
-        samples: ['1234'],
-        buttons: ['Copy Code']
-      },
-      hi_IN: {
-        header: 'None',
-        body: 'नमस्ते\nनोट {{1}} आपका संदर्भ नंबर है',
-        samples: ['1234'],
-        buttons: ['कोड कॉपी करें']
-      }
-    }
-  },
-  {
-    id: 'order_dispatch_alert',
-    name: 'Order Dispatch & Delivery Alert',
-    category: 'UTILITY',
-    categoryColor: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
-    description: 'Automated notification dispatched immediately when order leaves the warehouse with our delivery partner.',
-    languages: {
-      en_US: {
-        header: 'None',
-        body: 'Hello {{1}}, your Swastik order {{2}} has been handed over to our delivery partner! Total bill amount is {{3}}. You can track or contact your rider directly from the Swastik app.',
-        samples: ['Balram', '1234', '1200'],
-        buttons: ['Track Order', 'Contact Rider']
-      },
-      hi_IN: {
-        header: 'None',
-        body: 'नमस्ते {{1}}, आपका स्वस्तिक ऑर्डर {{2}} हमारे डिलीवरी पार्टनर को सौंप दिया गया है! कुल बिल राशि {{3}} है। आप सीधे स्वस्तिक ऐप से राइडर को कॉल या ट्रैक कर सकते हैं।',
-        samples: ['बलराम', '1234', '1200'],
-        buttons: ['ऑर्डर ट्रैक करें', 'राइडर को कॉल करें']
-      }
-    }
-  },
-  {
-    id: 'thank_you_template',
-    name: 'Order Confirmation & Thank You',
-    category: 'UTILITY',
-    categoryColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-    description: 'Sent automatically to customer upon successfully placing a new order at Swastik Supermarket.',
-    languages: {
-      en_US: {
-        header: 'None',
-        body: 'Thank you for shopping at Swastik Supermarket 😊\n\nWe appreciate your visit.',
-        samples: [],
-        buttons: ['View Orders']
-      },
-      hi_IN: {
-        header: 'None',
-        body: 'स्वस्तिक सुपरमार्केट में खरीदारी के लिए धन्यवाद 😊\n\nआपकी यात्रा की हम सराहना करते हैं।',
-        samples: [],
-        buttons: ['ऑर्डर देखें']
-      }
-    }
-  },
-  {
-    id: 'welcome_onboard_v1',
-    name: 'Welcome Onboard Greetings',
-    category: 'MARKETING',
-    categoryColor: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-    description: 'Dispatched to newly registered users of the Swastik App with welcome reward points.',
-    languages: {
-      en_US: {
-        header: 'None',
-        body: 'Namaste {{1}}, welcome to Swastik Supermarket! Your flat ₹{{2}} promo points are active. Valid for {{3}}. Start shopping for fresh fruits, dairy, and grocery staples now!',
-        samples: ['Balram', '150', '30 days'],
-        buttons: ['Shop Now', 'Check Balance']
-      },
-      hi_IN: {
-        header: 'None',
-        body: 'नमस्ते {{1}}, स्वस्तिक सुपरमार्केट में आपका स्वागत है! आपके खाते में ₹{{2}} प्रोमो पॉइंट्स एक्टिव कर दिए गए हैं। ये {{3}} तक वैध हैं। ताजी उपज, डेयरी और राशन के सामान के लिए अभी इस्तेमाल करें!',
-        samples: ['बलराम', '150', '30 दिन'],
-        buttons: ['अभी खरीदें', 'बैलेंस जांचें']
-      }
-    }
-  },
-  {
-    id: 'flash_sale_campaign',
-    name: 'Hot Kirana Flash Sale Promo',
-    category: 'MARKETING',
-    categoryColor: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-    description: 'Used for broad marketing broadcasts to announce high-value single day discount codes.',
-    languages: {
-      en_US: {
-        header: 'None',
-        body: 'Hurrah {{1}}! A dynamic flash discount of flat {{2}}% is running on all premium grocery essentials today only! Use coupon code {{3}} to order now.',
-        samples: ['Balram', '20', 'FLASH20'],
-        buttons: ['Order on Web']
-      },
-      hi_IN: {
-        header: 'None',
-        body: 'खुशखबरी {{1}}! हमारे सभी प्रीमियम किराना और राशन के सामान पर आज ही के लिए {{2}}% की भारी छूट दी जा रही है। कूपन कोड {{3}} का उपयोग करें। अभी ऑर्डर करें!',
-        samples: ['बलराम', '20', 'FLASH20'],
-        buttons: ['वेब पर ऑर्डर करें']
-      }
-    }
-  },
-  {
-    id: 'inactive_we_miss_you',
-    name: 'We Miss You Customer Nudge',
-    category: 'MARKETING',
-    categoryColor: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-    description: 'Automated smart re-engagement campaign triggering for customers idle for over 14 days.',
-    languages: {
-      en_US: {
-        header: 'None',
-        body: 'Dear {{1}}, we missed your smile in our aisles! Get flat ₹{{2}} cashback discount on your next grocery order. Validity: {{3}}. Claim it today!',
-        samples: ['Balram', '100', 'June 15'],
-        buttons: ['Open App', 'Unsubscribe']
-      },
-      hi_IN: {
-        header: 'None',
-        body: 'प्रिय {{1}}, हम अपने स्टोर में आपकी कमी महसूस कर रहे हैं! अपने अगले ऑर्डर पर पाएं फ्लैट ₹{{2}} की छूट। वैधता: {{3}}। आज ही अपना ऑफर क्लेम करें!',
-        samples: ['बलराम', '100', '15 जून'],
-        buttons: ['ऐप खोलें', 'अनसब्सक्राइब करें']
-      }
-    }
-  },
-  {
-    id: 'swastik_thermal_invoice_v2',
-    name: 'Order Invoice PDF Bill Attachment',
-    category: 'UTILITY',
-    categoryColor: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
-    description: 'Dispatched along with order completion to send a signed, verified thermal PDF bill invoice to the WhatsApp thread.',
-    languages: {
-      en_US: {
-        header: 'DOCUMENT (Invoice receipt PDF)',
-        body: 'Hello {{1}}, thank you for shopping at Swastik Supermarket! Your official thermal invoice for order ID {{2}} of amount {{3}} is attached above as a PDF. Have a glorious day!',
-        samples: ['Balram', 'SW-1082', '₹530'],
-        buttons: ['Download Invoice']
-      },
-      hi_IN: {
-        header: 'DOCUMENT (इनवॉइस रसीद PDF)',
-        body: 'नमस्ते {{1}}, स्वस्तिक सुपरमार्केट में खरीदारी के लिए धन्यवाद! आपके ऑर्डर ID {{2}} का बिल {{3}} इस मैसेज के साथ पीडीएफ के रूप में संलग्न है। आपका दिन मंगलमय हो!',
-        samples: ['बलराम', 'SW-1082', '₹530'],
-        buttons: ['इनवॉइस डाउनलोड करें']
-      }
-    }
-  },
-  {
-    id: 'swastik_staff_security_code',
-    name: 'Staff Authentication Security OTP',
-    category: 'AUTHENTICATION',
-    categoryColor: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-    description: 'High-security OTP triggered for administrator login verification and database recovery events.',
-    languages: {
-      en_US: {
-        header: 'None',
-        body: 'Your Swastik staff security authentication code is {{1}}. Valid for 5 minutes. Do NOT share this security passcode with anyone.',
-        samples: ['481023'],
-        buttons: ['Copy 481023']
-      },
-      hi_IN: {
-        header: 'None',
-        body: 'आपका स्वस्तिक स्टाफ सुरक्षा प्रमाणीकरण कोड {{1}} है। यह 5 मिनट के लिए वैध है। कृपया यह गोपनीय पासवर्ड किसी के साथ साझा न करें।',
-        samples: ['481023'],
-        buttons: ['कोड कॉपी करें']
-      }
-    }
-  }
-];
 
 export default function CustomersManager() {
   const { isHindi } = useLanguage();
@@ -213,39 +40,74 @@ export default function CustomersManager() {
   }, [fetchCustomers]);
 
   // Navigation sub-tabs
-  const [activeSubTab, setActiveSubTab] = useState('directory'); // directory | groups | broadcast | meta_templates
-
-  // Meta templates tab state management
-  const [copiedTextId, setCopiedTextId] = useState(null);
-  const [templateLangs, setTemplateLangs] = useState({
-    welcome_onboard_v1: 'en_US',
-    order_dispatch_alert: 'en_US',
-    flash_sale_campaign: 'en_US',
-    inactive_we_miss_you: 'en_US',
-    swastik_thermal_invoice_v2: 'en_US',
-    swastik_staff_security_code: 'en_US',
-  });
-
-  const handleCopyToClipboard = (text, id) => {
-    navigator.clipboard.writeText(text);
-    setCopiedTextId(id);
-    setTimeout(() => {
-      setCopiedTextId(null);
-    }, 2000);
-  };
+  const [activeSubTab, setActiveSubTab] = useState('directory');
 
   const [cardGenModalCust, setCardGenModalCust] = useState(null);
   const [cardGenNum, setCardGenNum] = useState('');
+  const [membershipPlans, setMembershipPlans] = useState([]);
+  const [selectedMembershipPlanId, setSelectedMembershipPlanId] = useState('');
+  const [membershipSaving, setMembershipSaving] = useState(false);
 
-  const openCardGenModal = (customer) => {
+  const openCardGenModal = async (customer) => {
     setCardGenModalCust(customer);
-    const existingOrAuto = customer.primeMembershipNo || `SP-VIP-${customer.id || Math.floor(100 + Math.random() * 900)}-${(customer.phone || '9999').replace(/\s/g, '').slice(-4)}`;
-    setCardGenNum(existingOrAuto);
+    setCardGenNum(customer.membershipNumber || '');
+    const response = await fetch('/api/membership/plans');
+    const plans = response.ok ? await response.json() : [];
+    setMembershipPlans(Array.isArray(plans) ? plans : []);
+    setSelectedMembershipPlanId(plans[0]?.id ? String(plans[0].id) : '');
+  };
+
+  const activateMembership = async (printAfter = false) => {
+    const plan = membershipPlans.find(item => String(item.id) === String(selectedMembershipPlanId));
+    if (!plan || !cardGenNum.trim()) {
+      setToastMessage('Select an active plan and enter a membership number.');
+      return;
+    }
+    setMembershipSaving(true);
+    try {
+      const response = await fetch(`/api/customers/${cardGenModalCust.id}/memberships`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planId: plan.id, membershipNumber: cardGenNum.trim().toUpperCase(), amountPaid: Number(plan.price) })
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Membership activation failed.');
+      await fetchCustomers();
+      if (printAfter) handlePrintCard({ ...cardGenModalCust, membershipNumber: cardGenNum.trim().toUpperCase(), membershipStatus: 'Active' });
+      setToastMessage('Membership activated and recorded in customer membership history.');
+      setCardGenModalCust(null);
+    } catch (error) {
+      setToastMessage(error.message);
+    } finally {
+      setMembershipSaving(false);
+      setTimeout(() => setToastMessage(''), 3500);
+    }
+  };
+
+  const cancelActiveMembership = async () => {
+    if (!window.confirm(`Cancel the active membership for ${cardGenModalCust.name}?`)) return;
+    setMembershipSaving(true);
+    try {
+      const response = await fetch(`/api/customers/${cardGenModalCust.id}/memberships/cancel-active`, { method: 'POST' });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Membership cancellation failed.');
+      await fetchCustomers();
+      setToastMessage('Membership cancelled and retained in history.');
+      setCardGenModalCust(null);
+    } catch (error) {
+      setToastMessage(error.message);
+    } finally {
+      setMembershipSaving(false);
+      setTimeout(() => setToastMessage(''), 3500);
+    }
   };
 
   const handlePrintCard = (customer) => {
+    if (!customer.membershipNumber) {
+      setToastMessage('A recorded membership number is required before printing.');
+      return;
+    }
     const printWindow = window.open('', '_blank');
-    const memberNo = customer.primeMembershipNo || ('SWASTIK-VIP-' + customer.id + '-' + (customer.phone || '9999').replace(/\s/g, '').slice(-4));
+    const memberNo = customer.membershipNumber;
     const qrText = encodeURIComponent('https://swastiksupermarket.com/verify?id=' + customer.id + '&card=' + encodeURIComponent(memberNo));
     const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + qrText;
     
@@ -424,48 +286,15 @@ export default function CustomersManager() {
   const [directWaSending, setDirectWaSending] = useState(false);
   const [directWaSuccess, setDirectWaSuccess] = useState('');
 
-  const openDirectWa = (cust, templateType = 'welcome') => {
+  const openDirectWa = (cust) => {
     if (!cust) return;
     setDirectWaCust(cust);
-    const cleanPh = (cust.phone || '').replace(/[^0-9]/g, '');
-    const pointsBal = cust.points !== undefined ? cust.points : 100;
-    const custName = cust.name || 'Valued Customer';
-    const bName = contactSettings?.brandName || 'Supermarket';
-    const bSite = contactSettings?.website || 'https://example.com';
-    const bPhone = contactSettings?.phone || '';
-
-    let msg = '';
-    if (templateType === 'welcome') {
-      msg = `*Namaste ${custName}!* 🙏\n\nWelcome to *${bName}*! ✨\nYour account has been activated with *${pointsBal} Welcome Points* (Worth ₹${pointsBal}).\n\n🛒 Enjoy fresh groceries, daily staples, and supermarket deals delivered right to your doorstep.\n\n🌐 Order Online: ${bSite}${bPhone ? `\n📞 Helpline: ${bPhone}` : ''}`;
-    } else if (templateType === 'points') {
-      msg = `*${bName} Loyalty Rewards Update* ⭐\n\nDear *${custName}*,\nYou have *${pointsBal} Rewards Points* available in your wallet!\n\n💡 You can redeem these points for instant discounts on your next order.\n\n🛍️ Shop Now: ${bSite}`;
-    } else if (templateType === 'prime') {
-      msg = `*${bName} Prime VIP Invitation* 👑\n\nDear *${custName}*,\nUpgrade to *${bName} Prime Membership* today and enjoy:\n✅ Unlimited Free Fast Delivery\n✅ Extra VIP Points & Discounts\n✅ Dedicated Support\n\n🌟 Claim Your VIP Pass: ${bSite}`;
-    } else if (templateType === 'order_care') {
-      msg = `*Order Assistance & Care - ${bName}* 🛍️\n\nHello *${custName}*,\nThank you for shopping with us! If you need any assistance regarding your order or grocery deliveries, please feel free to reply directly to this message.\n\nHave a wonderful day!`;
-    } else if (templateType === 'birthday') {
-      msg = `*Happy Birthday ${custName}!* 🎂🎉\n\nWishing you a joyful day filled with happiness from all of us at *${bName}*!\n🎁 We have added special bonus celebration points to your account for your birthday shopping.\n\nCelebrate with us: ${bSite}`;
-    } else {
-      msg = `*Namaste ${custName}!* 🙏\n\nGreetings from *${bName}*.\nHow may we help you with your grocery shopping today?\n\n🌐 Visit: ${bSite}`;
-    }
-
-    setDirectWaMsg(msg);
+    setDirectWaMsg('');
     setDirectWaSuccess('');
   };
 
-  const handleSendDirectWa = async (method = 'api') => {
+  const handleSendDirectWa = async () => {
     if (!directWaCust || !directWaMsg.trim()) return;
-    const cleanDigits = (directWaCust.phone || '').replace(/[^0-9]/g, '');
-    const phoneWith91 = cleanDigits.startsWith('91') && cleanDigits.length === 12 ? cleanDigits : `91${cleanDigits.slice(-10)}`;
-
-    if (method === 'web') {
-      const waUrl = `https://wa.me/${phoneWith91}?text=${encodeURIComponent(directWaMsg)}`;
-      window.open(waUrl, '_blank');
-      setDirectWaSuccess('WhatsApp Web / App chat launched in new tab!');
-      setTimeout(() => setDirectWaSuccess(''), 4000);
-      return;
-    }
-
     setDirectWaSending(true);
     setDirectWaSuccess('');
     try {
@@ -474,12 +303,14 @@ export default function CustomersManager() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           to: directWaCust.phone,
+          customerId: directWaCust.id,
           customerPhone: directWaCust.phone,
           customerName: directWaCust.name,
           message: directWaMsg,
           type: 'direct_marketing'
         })
       });
+      const result = await res.json().catch(() => ({}));
       if (res.ok) {
         setDirectWaSuccess('✓ WhatsApp message dispatched successfully via Meta API!');
         setTimeout(() => {
@@ -487,24 +318,11 @@ export default function CustomersManager() {
           setDirectWaSuccess('');
         }, 2200);
       } else {
-        // Fallback to web link if API configuration is missing
-        const waUrl = `https://wa.me/${phoneWith91}?text=${encodeURIComponent(directWaMsg)}`;
-        window.open(waUrl, '_blank');
-        setDirectWaSuccess('Message opened in WhatsApp Web / App!');
-        setTimeout(() => {
-          setDirectWaCust(null);
-          setDirectWaSuccess('');
-        }, 2500);
+        setDirectWaSuccess(result.error || 'WhatsApp provider rejected the send attempt.');
       }
     } catch (e) {
-      console.warn("Direct WA error, falling back to Web:", e);
-      const waUrl = `https://wa.me/${phoneWith91}?text=${encodeURIComponent(directWaMsg)}`;
-      window.open(waUrl, '_blank');
-      setDirectWaSuccess('Message opened in WhatsApp Web / App!');
-      setTimeout(() => {
-        setDirectWaCust(null);
-        setDirectWaSuccess('');
-      }, 2500);
+      console.error("Direct WhatsApp send failed:", e);
+      setDirectWaSuccess('WhatsApp send failed. Review the provider attempt log.');
     } finally {
       setDirectWaSending(false);
     }
@@ -523,8 +341,6 @@ export default function CustomersManager() {
     phone: '',
     email: '',
     address: '',
-    points: 100,
-    isPrimeActive: false,
     dob: '',
     anniversary: ''
   });
@@ -545,10 +361,8 @@ export default function CustomersManager() {
       await addCustomer({
         name: newCustomerForm.name.trim(),
         phone: formattedPhone,
-        email: newCustomerForm.email.trim() || `${newCustomerForm.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@customer.com`,
+        email: newCustomerForm.email.trim(),
         address: newCustomerForm.address.trim(),
-        points: Number(newCustomerForm.points) || 100,
-        isPrimeActive: Boolean(newCustomerForm.isPrimeActive),
         dob: newCustomerForm.dob || '',
         anniversary: newCustomerForm.anniversary || '',
         status: 'Active',
@@ -561,8 +375,6 @@ export default function CustomersManager() {
         phone: '',
         email: '',
         address: '',
-        points: 100,
-        isPrimeActive: false,
         dob: '',
         anniversary: ''
       });
@@ -580,8 +392,6 @@ export default function CustomersManager() {
         email: selectedDetailCust.email || '',
         phone: selectedDetailCust.phone || '',
         points: selectedDetailCust.points || 0,
-        isPrimeActive: !!selectedDetailCust.isPrimeActive,
-        primeMembershipNo: selectedDetailCust.primeMembershipNo || '',
         image: selectedDetailCust.image || '',
         password: selectedDetailCust.password || '',
         address: selectedDetailCust.address || '',
@@ -892,34 +702,7 @@ export default function CustomersManager() {
     return String(ph).replace(/[^0-9]/g, "");
   };
 
-  // Unified list of all registered, signed up, and order customers
-  const allCustomersList = useMemo(() => {
-    const list = [...(customers || [])];
-    (orders || []).forEach(o => {
-      const oPhoneDigits = cleanPhone(o.customerPhone || o.customerMobile);
-      if (oPhoneDigits && oPhoneDigits.length >= 5) {
-        const found = list.find(c => cleanPhone(c.phone).endsWith(oPhoneDigits.slice(-10)));
-        if (!found) {
-          const newId = list.length > 0 ? Math.max(...list.map(c => Number(c.id) || 0)) + 1 : 101;
-          const regDate = o.orderDate ? String(o.orderDate).split('T')[0] : new Date().toISOString().split('T')[0];
-          list.push({
-            id: newId,
-            name: o.customerName || `Customer ${oPhoneDigits.slice(-4)}`,
-            phone: o.customerPhone || (oPhoneDigits.length === 10 ? `+91 ${oPhoneDigits}` : oPhoneDigits),
-            email: o.customerEmail || `${(o.customerName || 'customer').toLowerCase().replace(/\s+/g, '')}@swastik.com`,
-            address: o.shippingAddress || "",
-            status: 'Active',
-            registeredAt: regDate,
-            points: 100,
-            isPrimeActive: false,
-            dob: "",
-            anniversary: ""
-          });
-        }
-      }
-    });
-    return list;
-  }, [customers, orders]);
+  const allCustomersList = useMemo(() => customers || [], [customers]);
 
   // Searching customer directory list
   const filteredCustomers = allCustomersList.filter(c => 
@@ -1056,20 +839,6 @@ export default function CustomersManager() {
           </button>
           <button 
             type="button"
-            onClick={() => setActiveSubTab('meta_templates')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap ${activeSubTab === 'meta_templates' ? 'bg-indigo-500 text-slate-950 font-black' : 'text-slate-400 hover:text-white'}`}
-          >
-            📋 Meta Templates Hub
-          </button>
-          <button 
-            type="button"
-            onClick={() => setActiveSubTab('auto_campaigns')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap ${activeSubTab === 'auto_campaigns' ? 'bg-amber-500 text-slate-950 font-black' : 'text-slate-400 hover:text-white'}`}
-          >
-            🎂 Autopilot Greetings
-          </button>
-          <button 
-            type="button"
             onClick={() => setActiveSubTab('data_deletion')}
             className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap flex items-center gap-1.5 ${
               activeSubTab === 'data_deletion' 
@@ -1178,12 +947,7 @@ export default function CustomersManager() {
                           ₹{stats.totalSpent}
                         </td>
                         <td className="p-4 font-mono font-bold text-amber-300">
-                          {(() => {
-                            const savedProfile = localStorage.getItem('swastik_profile');
-                            const activeProfile = savedProfile ? JSON.parse(savedProfile) : null;
-                            const isThisActiveUser = activeProfile && (activeProfile.phone === cust.phone || activeProfile.email === cust.email);
-                            return isThisActiveUser ? (activeProfile.points || 0) : (cust.points || 0);
-                          })()}{' '}
+                          {cust.points || 0}{' '}
                           PTS
                         </td>
                         <td className="p-4 font-mono text-[10px] text-slate-400 font-semibold">
@@ -1194,7 +958,7 @@ export default function CustomersManager() {
                             <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-extrabold text-[9px] px-2 py-0.5 rounded-full uppercase font-mono">
                               Verified
                             </span>
-                            {cust.isPrimeActive ? (
+                            {cust.membershipStatus === 'Active' ? (
                               <span className="bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-500/40 text-amber-300 font-black text-[8px] px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
                                 <Crown className="h-3 w-3 text-amber-400 fill-amber-400/20 animate-pulse" />
                                 <span>VIP Member</span>
@@ -1229,7 +993,7 @@ export default function CustomersManager() {
                             </button>
 
                             {/* Activate / Deactivate / Generate VIP Card Section */}
-                            {cust.isPrimeActive ? (
+                            {cust.membershipStatus === 'Active' ? (
                               <div className="flex gap-1 justify-center w-full max-w-[130px]">
                                 <button
                                   type="button"
@@ -1238,7 +1002,7 @@ export default function CustomersManager() {
                                   className="p-1 px-2 bg-amber-500/10 hover:bg-amber-500/20 active:scale-95 border border-amber-500/30 text-amber-300 rounded-lg text-[8px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-all"
                                 >
                                   <Crown className="h-2.5 w-2.5 text-amber-400" />
-                                  <span>Card #{cust.primeMembershipNo ? 'Assigned' : 'Gen'}</span>
+                                  <span>{cust.membershipNumber ? `Card #${cust.membershipNumber}` : 'Activate membership'}</span>
                                 </button>
                               </div>
                             ) : (
@@ -1803,334 +1567,6 @@ export default function CustomersManager() {
         </div>
       )}
 
-      {activeSubTab === 'meta_templates' && (
-        <div className="space-y-6 animate-fade-in pb-12">
-          {/* Header Description Info banner */}
-          <div className="bg-slate-900 border border-indigo-500/20 p-6 rounded-3xl space-y-4 shadow-xl">
-            <div className="flex items-start gap-4">
-              <div className="p-3 bg-[#6366f1]/10 border border-indigo-500/20 rounded-2xl text-indigo-400 shrink-0">
-                <FileText className="h-6 w-6" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
-                  <Globe className="h-4 w-4 text-indigo-400 animate-spin" />
-                  <span>Meta WhatsApp Business Portal - Template Directory</span>
-                </h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Meta (WhatsApp Business Platform) requires matching pre-approved structural message templates before sending notifications to customers. 
-                  Below are the <strong>6 production-ready, highly optimised bilingual templates</strong> aligned with Swastik Supermarket's operations. Select your target language, review values, and submit them in your Facebook Developer Console for instant 2-minute approvals.
-                </p>
-              </div>
-            </div>
-
-            {/* Steps list */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-white/5 text-xs">
-              <div className="bg-slate-950/60 p-3.5 rounded-2xl border border-white/5 space-y-1.5 shadow-inner">
-                <span className="font-black text-indigo-400 uppercase tracking-widest text-[9px] block">Step 1: Open Meta Dashboard</span>
-                <p className="text-slate-400 font-medium">Navigate to your Meta Business Suite, click on <strong>WhatsApp Manager</strong> and select <strong>Message Templates</strong> under Account Tools.</p>
-              </div>
-              <div className="bg-slate-950/60 p-3.5 rounded-2xl border border-white/5 space-y-1.5 shadow-inner">
-                <span className="font-black text-indigo-400 uppercase tracking-widest text-[9px] block">Step 2: Copy & Submit</span>
-                <p className="text-slate-400 font-medium">Select type (Utility / Marketing), fill the unique lowercase ID name, then copy the <strong>exact body copy</strong> & add placeholder samples.</p>
-              </div>
-              <div className="bg-slate-950/60 p-3.5 rounded-2xl border border-white/5 space-y-1.5 shadow-inner">
-                <span className="font-black text-indigo-400 uppercase tracking-widest text-[9px] block">Step 3: Auto Approval</span>
-                <p className="text-slate-400 font-medium">Meta verified triggers will analyze formatting. With our safe transactional copies, your templates will gain auto-approval status within minutes.</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Templates Grid */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            {metaApprovalTemplates.map((tpl) => {
-              const activeLang = templateLangs[tpl.id] || 'en_US';
-              const langObj = tpl.languages[activeLang];
-              const isCopied = copiedTextId === tpl.id;
-              const isCopiedJson = copiedTextId === `${tpl.id}_json`;
-
-              // Generate Meta Business API standard creation JSON payload
-              const metaPayloadJson = {
-                name: tpl.id,
-                category: tpl.category,
-                allow_category_change: true,
-                language: activeLang,
-                components: [
-                  ...(langObj.header !== 'None' ? [{
-                    type: "HEADER",
-                    format: tpl.id.includes('invoice') ? "DOCUMENT" : "TEXT"
-                  }] : []),
-                  {
-                    type: "BODY",
-                    text: langObj.body,
-                    example: {
-                      body_text: [langObj.samples]
-                    }
-                  }
-                ]
-              };
-
-              return (
-                <div key={tpl.id} className="bg-slate-900 border border-white/10 rounded-3xl p-5 flex flex-col justify-between space-y-4 hover:border-indigo-500/20 transition-all duration-300 shadow-xl">
-                  <div className="space-y-3.5">
-                    {/* Top Row with Category Badge & Selectors */}
-                    <div className="flex items-start justify-between gap-2 flex-wrap sm:flex-nowrap font-sans">
-                      <div>
-                        <span className={`text-[8.5px] font-black uppercase px-2 py-0.5 rounded-md border tracking-wider font-mono ${tpl.categoryColor}`}>
-                          {tpl.category}
-                        </span>
-                        <h4 className="text-sm font-black text-white mt-1.5">{tpl.name}</h4>
-                        <code className="text-[10px] text-slate-500 font-bold block mt-0.5 font-mono">{tpl.id}</code>
-                      </div>
-
-                      {/* Language tabs */}
-                      <div className="flex bg-slate-950 border border-white/5 p-0.5 rounded-lg shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => setTemplateLangs({ ...templateLangs, [tpl.id]: 'en_US' })}
-                          className={`px-2.5 py-1 text-[9px] font-bold uppercase rounded-md transition ${activeLang === 'en_US' ? 'bg-indigo-500 text-slate-950 font-black' : 'text-slate-400 hover:text-white'}`}
-                        >
-                          EN (US)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setTemplateLangs({ ...templateLangs, [tpl.id]: 'hi_IN' })}
-                          className={`px-2.5 py-1 text-[9px] font-bold uppercase rounded-md transition ${activeLang === 'hi_IN' ? 'bg-indigo-500 text-slate-950 font-black' : 'text-slate-400 hover:text-white'}`}
-                        >
-                          HI (IN)
-                        </button>
-                      </div>
-                    </div>
-
-                    <p className="text-xs text-slate-400 leading-normal font-medium font-sans">{tpl.description}</p>
-
-                    {/* WhatsApp Simulator Frame (Requirement alignment) */}
-                    <div className="bg-[#0b141a] border border-[#202c33] rounded-2xl p-4 relative overflow-hidden flex flex-col justify-between min-h-[140px] shadow-inner">
-                      {/* WhatsApp header look */}
-                      <div className="absolute top-0 left-0 right-0 h-1 bg-[#00a884]"></div>
-                      
-                      <div className="space-y-2 mt-1">
-                        {/* Attached PDF document visualization for utility receipt */}
-                        {langObj.header !== 'None' && (
-                          <div className="bg-[#202c33] border border-[#00a884]/30 rounded-xl px-3 py-2 flex items-center gap-2.5 max-w-[85%] text-white">
-                            <FileText className="h-5 w-5 text-[#00a884]" />
-                            <div className="text-[10px] font-bold leading-tight font-mono">
-                              <span className="block text-slate-200">Swastik-Bill-1082.pdf</span>
-                              <span className="text-slate-500 text-[9px]">Adobe PDF • 142 KB</span>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Customer text bubble container */}
-                        <div className="bg-[#111b21] border border-[#202c33] text-[11px] font-medium leading-relaxed rounded-tl-none rounded-2xl text-[#e9edef] p-3 max-w-[90%] space-y-2 relative shadow">
-                          <p className="whitespace-pre-wrap text-left leading-normal">{langObj.body}</p>
-                          <span className="text-[8px] text-slate-500 block text-right font-mono mt-1">12:00 PM ✓✓</span>
-                        </div>
-
-                        {/* Buttons Quick Replies layout mockup */}
-                        <div className="flex flex-col gap-1.5 max-w-[90%] pl-1">
-                          {langObj.buttons.map((btn, btidx) => (
-                            <div key={btidx} className="bg-[#202c33] hover:bg-[#2a3942] border border-[#222e35] py-2 px-3 text-[10px] font-black text-[#00a884] text-center rounded-xl font-sans cursor-pointer transition flex items-center justify-center gap-1.5">
-                              <MessageSquare className="h-3 w-3" />
-                              <span>{btn}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Template Parameter checklist */}
-                    <div className="bg-slate-950 p-3 rounded-2xl border border-white/5 space-y-2">
-                      <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest block font-mono">Sample Meta Parameters (Required for Quick Approval)</span>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        {langObj.samples.map((sm, smIdx) => (
-                          <div key={smIdx} className="bg-slate-900 border border-white/10 px-2.5 py-1.5 rounded-xl flex items-center gap-1">
-                            <span className="text-[10px] font-black text-slate-500 font-mono">{"{{"}{smIdx + 1}{"}}"}</span>
-                            <span className="text-[10px] text-white font-bold truncate font-sans">{sm}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Operational Copy and API trigger Actions */}
-                  <div className="grid grid-cols-2 gap-3.5 pt-3 border-t border-white/15">
-                    <button
-                      type="button"
-                      onClick={() => handleCopyToClipboard(langObj.body, tpl.id)}
-                      className={`py-2.5 px-3.5 rounded-xl border font-bold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
-                        isCopied 
-                          ? 'bg-emerald-500 border-emerald-400 text-slate-950 font-black animate-pulse' 
-                          : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300'
-                      }`}
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                      <span>{isCopied ? 'Copied body!' : 'Copy Template Body'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleCopyToClipboard(JSON.stringify(metaPayloadJson, null, 2), `${tpl.id}_json`)}
-                      className={`py-2.5 px-3.5 rounded-xl border font-bold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
-                        isCopiedJson 
-                          ? 'bg-emerald-500 border-emerald-400 text-slate-950 font-black animate-pulse' 
-                          : 'bg-indigo-500/20 hover:bg-indigo-500/30 border-indigo-500/30 text-indigo-300'
-                      }`}
-                    >
-                      <Layers className="h-3.5 w-3.5" />
-                      <span>{isCopiedJson ? 'Copied JSON!' : 'Copy Meta API JSON'}</span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {activeSubTab === 'auto_campaigns' && (
-        <div className="space-y-6 animate-fade-in pb-12 text-xs">
-          
-          {/* Autopilot Overview Header card */}
-          <div className="bg-slate-900 border border-amber-500/20 p-6 rounded-3xl space-y-4 shadow-xl">
-            <div className="flex items-start gap-4">
-              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-amber-400 shrink-0">
-                <Gift className="h-6 w-6 text-amber-400" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
-                  <Smartphone className="h-4 w-4 text-amber-400 animate-pulse" />
-                  <span>Autopilot Birthday & Marriage Anniversary Greetings Dispatcher</span>
-                </h3>
-                <p className="text-slate-400 leading-relaxed font-medium">
-                  Swastik Supermarket's automatic cron scheduler scans the customer database daily at <strong>08:00 AM IST</strong>. 
-                  If today is a customer's Birthday or Marriage Anniversary, a personalized greeting with an exclusive high-value discount coupon is automatically generated and fired directly to their WhatsApp.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-white/5 text-[11px] font-bold">
-              <div className="bg-slate-950/60 p-4 rounded-2xl border border-white/5 space-y-1">
-                <span className="text-[9px] text-amber-400 font-black uppercase tracking-wider block">Autopilot Status</span>
-                <span className="text-emerald-400 flex items-center gap-1.5 uppercase font-black text-xs">
-                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping inline-block"></span>
-                  Disabled (scheduler not configured)
-                </span>
-              </div>
-              <div className="bg-slate-950/60 p-4 rounded-2xl border border-white/5 space-y-1">
-                <span className="text-[9px] text-amber-400 font-black uppercase tracking-wider block">Today's Date</span>
-                <span className="text-white font-mono font-black text-xs">
-                  {new Date().toLocaleDateString()}
-                </span>
-              </div>
-              <div className="bg-slate-950/60 p-4 rounded-2xl border border-white/5 space-y-1">
-                <span className="text-[9px] text-amber-400 font-black uppercase tracking-wider block">Automatic Triggers Today</span>
-                <span className="text-cyan-400 font-mono font-black text-xs">
-                  {autoGreetings.length} Greetings Dispatched
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            
-            {/* Today's Celebrated Customers list */}
-            <div className="lg:col-span-6 bg-slate-900 border border-white/10 p-5 rounded-3xl space-y-4">
-              <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                <div>
-                  <h4 className="text-sm font-black text-white uppercase tracking-wider">Today's Celebrations</h4>
-                  <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mt-0.5">Automatic dispatch is not configured</p>
-                </div>
-                <span className="text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded font-black tracking-widest font-mono uppercase">
-                  Daily Scan
-                </span>
-              </div>
-
-              {autoGreetings.length === 0 ? (
-                <div className="text-center py-12 text-slate-500 italic space-y-1">
-                  <p>No customer birthdays or wedding anniversaries fall on today's date.</p>
-                  <p className="text-[10px] text-slate-600 font-sans">Automatic dispatch remains disabled until a server-side scheduler is configured.</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-white/5 space-y-3">
-                  {autoGreetings.map((ag, index) => (
-                    <div key={index} className="pt-3 first:pt-0 flex items-start justify-between gap-3">
-                      <div className="space-y-1.5 grow">
-                        <div className="flex items-center gap-2">
-                          <span className="font-extrabold text-white text-xs">{ag.customer.name}</span>
-                          <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
-                            ag.type === 'Birthday' ? 'bg-pink-500/20 text-pink-300 border border-pink-500/30' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                          }`}>
-                            {ag.type === 'Birthday' ? '🎂 Birthday' : '💍 Anniversary'}
-                          </span>
-                        </div>
-                        <p className="text-slate-400 font-medium">Phone: <span className="text-white font-mono">{ag.customer.phone}</span></p>
-                        <p className="text-slate-400 font-medium">
-                          {ag.type === 'Birthday' 
-                            ? `DOB: ${ag.customer.dob}` 
-                            : `Marriage Anniversary: ${ag.customer.anniversary}`
-                          }
-                        </p>
-                        <div className="p-2 bg-slate-950 border border-slate-800 rounded-xl text-[10px] font-mono text-amber-300 italic leading-relaxed">
-                          "{ag.type === 'Birthday' 
-                            ? `Hi ${ag.customer.name}! 🎉 Swastik Supermarket wishes you a Happy Birthday! Enjoy 20% OFF with code: PRIMEBDAY20 🎂`
-                            : `Hi ${ag.customer.name}! 💍 Swastik Supermarket wishes you a blissful Marriage Anniversary! Enjoy ₹150 off with code: LOVEANNIVERSARY 💕`}"
-                        </div>
-                      </div>
-
-                      <div className="text-right shrink-0">
-                        <span className="px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-black uppercase tracking-wider text-[8px] rounded-lg block">
-                          🔥 AUTO-FIRED
-                        </span>
-                        <span className="text-[9px] text-slate-500 font-mono font-bold block mt-1.5">{ag.firedAt}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Simulated Live Meta API Deliveries Log */}
-            <div className="lg:col-span-6 bg-slate-900 border border-white/10 p-5 rounded-3xl flex flex-col justify-between" style={{ minHeight: '450px' }}>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
-                  <span className="text-[10px] font-black uppercase text-amber-400 font-mono flex items-center gap-1">
-                    <Terminal className="h-4 w-4" />
-                    <span>Autopilot Delivery Logs</span>
-                  </span>
-                  <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded font-black tracking-widest font-mono uppercase animate-pulse">
-                    Live Socket
-                  </span>
-                </div>
-
-                {autoCampaignLogs.length === 0 ? (
-                  <div className="text-slate-600 text-xs italic font-semibold font-mono py-16 text-center space-y-2">
-                    <HelpCircle className="h-8 w-8 text-slate-700 mx-auto" />
-                    <p>No active delivery payloads registered in today's sweep.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4 max-h-[350px] overflow-y-auto pr-1">
-                    {autoCampaignLogs.map((log, idx) => (
-                      <div key={idx} className="bg-slate-950 border border-white/5 rounded-xl p-3.5 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-black text-amber-300 uppercase tracking-wider">{log.simulated_delivery.destination}</span>
-                          <span className="text-[9px] font-black font-mono text-emerald-400">{log.simulated_delivery.status}</span>
-                        </div>
-                        
-                        <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800 font-mono text-[10px] text-pink-300 leading-relaxed overflow-x-auto shadow-inner">
-                          <span className="text-amber-400 font-bold block text-[9px] uppercase font-sans mb-1">Meta API payload json:</span>
-                          {JSON.stringify(log, null, 2)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-          </div>
-        </div>
-      )}
-
       {activeSubTab === 'data_deletion' && (
         <DataDeletionRequestsManager />
       )}
@@ -2274,49 +1710,6 @@ export default function CustomersManager() {
                       </div>
                     </div>
 
-                    <div className="space-y-1">
-                      <label className="text-[9px] uppercase tracking-widest text-slate-400 block font-black">Reset Login Password PIN</label>
-                      <input 
-                        type="text"
-                        value={editForm.password}
-                        onChange={(e) => setEditForm(prev => ({ ...prev, password: e.target.value }))}
-                        className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-white font-mono outline-none focus:border-cyan-400"
-                        placeholder="Set user password pin (e.g. 1234)"
-                      />
-                    </div>
-
-                    {/* Prime Membership Card Number field */}
-                    <div className="space-y-1 bg-amber-950/20 border border-amber-500/30 p-2.5 rounded-xl">
-                      <label className="text-[9px] uppercase tracking-widest text-amber-400 block font-black flex items-center gap-1">
-                        <Crown className="h-3 w-3 text-amber-400" />
-                        <span>Prime VIP Membership Card Number</span>
-                      </label>
-                      <input 
-                        type="text"
-                        value={editForm.primeMembershipNo || ''}
-                        onChange={(e) => setEditForm(prev => ({ ...prev, primeMembershipNo: e.target.value }))}
-                        className="w-full bg-slate-950 border border-amber-500/30 rounded-xl px-3 py-1.5 text-amber-300 font-mono text-xs outline-none focus:border-amber-400 uppercase font-black"
-                        placeholder="e.g. SP-VIP-8899"
-                      />
-                    </div>
-
-                    {/* VIP Gold toggle */}
-                    <div className="flex items-center justify-between p-2 bg-slate-950/60 border border-white/5 rounded-xl mt-3">
-                      <div className="flex items-center gap-2">
-                        <Crown className={`h-4 w-4 ${editForm.isPrimeActive ? 'text-amber-400 fill-amber-400/20' : 'text-slate-500'}`} />
-                        <div>
-                          <span className="text-[10px] font-black uppercase text-slate-300 block">Gold VIP Prime Status</span>
-                          <span className="text-[8px] text-slate-500 font-bold uppercase">Activate free fast home delivery</span>
-                        </div>
-                      </div>
-                      <button 
-                        type="button"
-                        onClick={() => setEditForm(prev => ({ ...prev, isPrimeActive: !prev.isPrimeActive }))}
-                        className={`w-12 h-6 rounded-full p-0.5 transition-all relative cursor-pointer ${editForm.isPrimeActive ? 'bg-cyan-500' : 'bg-slate-800'}`}
-                      >
-                        <div className={`w-5 h-5 rounded-full bg-white transition-all absolute top-0.5 ${editForm.isPrimeActive ? 'left-[26px]' : 'left-0.5'}`} />
-                      </button>
-                    </div>
                   </div>
 
                   <div className="pt-3 border-t border-white/5 flex gap-2">
@@ -2326,50 +1719,11 @@ export default function CustomersManager() {
                         updateCustomer(editForm.id, {
                           name: editForm.name,
                           email: editForm.email,
-                          phone: editForm.phone,
-                          points: editForm.points,
-                          isPrimeActive: editForm.isPrimeActive,
-                          primeMembershipNo: editForm.primeMembershipNo ? editForm.primeMembershipNo.toUpperCase() : '',
-                          image: editForm.image,
-                          password: editForm.password,
                           address: editForm.address,
+                          status: editForm.status,
                           dob: editForm.dob,
                           anniversary: editForm.anniversary
                         });
-                        // Sync current user profile if needed
-                        const stored = localStorage.getItem('swastik_profile');
-                        if (stored) {
-                          try {
-                            const prof = JSON.parse(stored);
-                            const cleanP = (p) => String(p || '').replace(/\D/g, '').slice(-10);
-                            const profP = cleanP(prof.phone || prof.mobile);
-                            const custP = cleanP(selectedDetailCust.phone || selectedDetailCust.mobile);
-                            const isMatch = (prof.id && Number(prof.id) === Number(selectedDetailCust.id)) ||
-                              (profP && custP && profP === custP) ||
-                              (prof.email && selectedDetailCust.email && prof.email.toLowerCase() === selectedDetailCust.email.toLowerCase());
-                            if (isMatch) {
-                              const nextProf = {
-                                ...prof,
-                                id: selectedDetailCust.id,
-                                fullName: editForm.name,
-                                name: editForm.name,
-                                email: editForm.email,
-                                phone: editForm.phone,
-                                points: editForm.points,
-                                isPrimeActive: editForm.isPrimeActive,
-                                primeMembershipNo: editForm.primeMembershipNo ? editForm.primeMembershipNo.toUpperCase() : '',
-                                image: editForm.image,
-                                password: editForm.password,
-                                address: editForm.address,
-                                dob: editForm.dob,
-                                anniversary: editForm.anniversary
-                              };
-                              localStorage.setItem('swastik_profile', JSON.stringify(nextProf));
-                              window.dispatchEvent(new Event('storage'));
-                              window.dispatchEvent(new CustomEvent('swastik_auth_change'));
-                            }
-                          } catch (e) {}
-                        }
                         setToastMessage('Customer profile saved successfully!');
                         setSelectedDetailCust(null);
                         setTimeout(() => setToastMessage(''), 3000);
@@ -2379,23 +1733,6 @@ export default function CustomersManager() {
                       Save Profile Updates
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (window.confirm(isHindi 
-                          ? `क्या आप वाकई ग्राहक "${editForm.name}" (${editForm.phone}) को स्थायी रूप से हटाना चाहते हैं?` 
-                          : `Are you sure you want to permanently delete customer "${editForm.name}" (${editForm.phone})? This action cannot be undone.`)) {
-                          deleteCustomer(editForm.id);
-                          setSelectedDetailCust(null);
-                          setToastMessage('Customer permanently deleted.');
-                          setTimeout(() => setToastMessage(''), 3000);
-                        }
-                      }}
-                      className="w-full bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 hover:text-rose-300 font-bold uppercase text-[10px] tracking-wider py-2 rounded-xl cursor-pointer active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      <span>{isHindi ? "ग्राहक खाता हटाएं" : "Delete Customer Profile"}</span>
-                    </button>
                   </div>
                 </div>
               </div>
@@ -2544,14 +1881,23 @@ export default function CustomersManager() {
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-400 font-bold uppercase text-[9px]">{isHindi ? "वर्तमान स्थिति:" : "VIP Status:"}</span>
-                <span className={`font-black text-[9px] px-2 py-0.5 rounded-full uppercase ${cardGenModalCust.isPrimeActive ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-slate-800 text-slate-400'}`}>
-                  {cardGenModalCust.isPrimeActive ? 'Active VIP' : 'Regular Customer'}
+                <span className={`font-black text-[9px] px-2 py-0.5 rounded-full uppercase ${cardGenModalCust.membershipStatus === 'Active' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-slate-800 text-slate-400'}`}>
+                  {cardGenModalCust.membershipStatus === 'Active' ? 'Active VIP' : 'Regular Customer'}
                 </span>
               </div>
             </div>
 
             {/* Manual Membership Number Assignment Input */}
             <div className="space-y-2 bg-gradient-to-br from-amber-950/20 to-indigo-950/20 p-4 rounded-2xl border border-amber-500/25">
+              <label className="text-[10px] font-black uppercase tracking-wider text-amber-300">Membership plan</label>
+              <select
+                value={selectedMembershipPlanId}
+                onChange={(event) => setSelectedMembershipPlanId(event.target.value)}
+                className="w-full bg-slate-950 border border-amber-400/40 rounded-xl px-3.5 py-2.5 text-sm text-white"
+              >
+                {membershipPlans.length === 0 && <option value="">No active plans configured</option>}
+                {membershipPlans.map(plan => <option key={plan.id} value={plan.id}>{plan.name} — ₹{plan.price} / {plan.durationDays} days</option>)}
+              </select>
               <div className="flex items-center justify-between">
                 <label className="text-[10px] font-black uppercase tracking-wider text-amber-300 flex items-center gap-1">
                   <span>💳</span>
@@ -2605,128 +1951,18 @@ export default function CustomersManager() {
               </div>
             </div>
 
-            {/* Action Buttons */}
             <div className="space-y-2 pt-2">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!cardGenNum.trim()) {
-                      alert("Please enter a valid membership card number!");
-                      return;
-                    }
-                    const num = cardGenNum.trim().toUpperCase();
-                    updateCustomer(cardGenModalCust.id, {
-                      ...cardGenModalCust,
-                      isPrimeActive: true,
-                      primeMembershipNo: num
-                    });
-                    // Sync profile if current
-                    const stored = localStorage.getItem('swastik_profile');
-                    if (stored) {
-                      try {
-                        const prof = JSON.parse(stored);
-                        const cleanP = (p) => String(p || '').replace(/\D/g, '').slice(-10);
-                        const profP = cleanP(prof.phone || prof.mobile);
-                        const custP = cleanP(cardGenModalCust.phone || cardGenModalCust.mobile);
-                        const isMatch = (prof.id && Number(prof.id) === Number(cardGenModalCust.id)) ||
-                          (profP && custP && profP === custP) ||
-                          (prof.email && cardGenModalCust.email && prof.email.toLowerCase() === cardGenModalCust.email.toLowerCase());
-                        if (isMatch) {
-                          prof.isPrimeActive = true;
-                          prof.primeMembershipNo = num;
-                          prof.fullName = cardGenModalCust.name || prof.fullName;
-                          prof.name = cardGenModalCust.name || prof.name;
-                          localStorage.setItem('swastik_profile', JSON.stringify(prof));
-                          window.dispatchEvent(new Event('storage'));
-                          window.dispatchEvent(new CustomEvent('swastik_auth_change'));
-                        }
-                      } catch (e) {}
-                    }
-                    setToastMessage(`Prime VIP Card ${num} assigned and activated!`);
-                    setCardGenModalCust(null);
-                    setTimeout(() => setToastMessage(''), 3500);
-                  }}
-                  className="w-full bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-slate-950 font-black text-xs uppercase tracking-wider py-2.5 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <Crown className="h-4 w-4" />
-                  <span>{isHindi ? "सहेजें और वीआईपी सक्रिय करें" : "Save & Activate VIP Card"}</span>
+                <button type="button" disabled={membershipSaving} onClick={() => activateMembership(false)} className="w-full bg-gradient-to-r from-amber-500 to-yellow-500 disabled:opacity-50 text-slate-950 font-black text-xs uppercase tracking-wider py-2.5 rounded-xl">
+                  Save & Activate Membership
                 </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!cardGenNum.trim()) {
-                      alert("Please enter a valid membership card number!");
-                      return;
-                    }
-                    const num = cardGenNum.trim().toUpperCase();
-                    const updatedObj = {
-                      ...cardGenModalCust,
-                      isPrimeActive: true,
-                      primeMembershipNo: num
-                    };
-                    updateCustomer(cardGenModalCust.id, updatedObj);
-                    // Sync profile if current
-                    const stored = localStorage.getItem('swastik_profile');
-                    if (stored) {
-                      try {
-                        const prof = JSON.parse(stored);
-                        const cleanP = (p) => String(p || '').replace(/\D/g, '').slice(-10);
-                        const profP = cleanP(prof.phone || prof.mobile);
-                        const custP = cleanP(cardGenModalCust.phone || cardGenModalCust.mobile);
-                        const isMatch = (prof.id && Number(prof.id) === Number(cardGenModalCust.id)) ||
-                          (profP && custP && profP === custP) ||
-                          (prof.email && cardGenModalCust.email && prof.email.toLowerCase() === cardGenModalCust.email.toLowerCase());
-                        if (isMatch) {
-                          prof.isPrimeActive = true;
-                          prof.primeMembershipNo = num;
-                          prof.fullName = cardGenModalCust.name || prof.fullName;
-                          prof.name = cardGenModalCust.name || prof.name;
-                          localStorage.setItem('swastik_profile', JSON.stringify(prof));
-                          window.dispatchEvent(new Event('storage'));
-                          window.dispatchEvent(new CustomEvent('swastik_auth_change'));
-                        }
-                      } catch (e) {}
-                    }
-                    handlePrintCard(updatedObj);
-                    setToastMessage(`Card ${num} activated & opening print dialog...`);
-                    setCardGenModalCust(null);
-                    setTimeout(() => setToastMessage(''), 3500);
-                  }}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-wider py-2.5 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 border border-indigo-400/30"
-                >
-                  <Printer className="h-4 w-4" />
-                  <span>{isHindi ? "सहेजें और कार्ड प्रिंट करें" : "Save & Print Card"}</span>
+                <button type="button" disabled={membershipSaving} onClick={() => activateMembership(true)} className="w-full bg-indigo-600 disabled:opacity-50 text-white font-black text-xs uppercase tracking-wider py-2.5 rounded-xl">
+                  Save & Print Card
                 </button>
               </div>
-
-              {cardGenModalCust.isPrimeActive && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (confirm(`Deactivate Prime membership for ${cardGenModalCust.name}?`)) {
-                      updateCustomer(cardGenModalCust.id, {
-                        ...cardGenModalCust,
-                        isPrimeActive: false
-                      });
-                      const stored = localStorage.getItem('swastik_profile');
-                      if (stored) {
-                        const prof = JSON.parse(stored);
-                        if (prof.phone === cardGenModalCust.phone || prof.email === cardGenModalCust.email) {
-                          prof.isPrimeActive = false;
-                          localStorage.setItem('swastik_profile', JSON.stringify(prof));
-                          window.dispatchEvent(new Event('storage'));
-                        }
-                      }
-                      setToastMessage(`Prime status deactivated for ${cardGenModalCust.name}`);
-                      setCardGenModalCust(null);
-                      setTimeout(() => setToastMessage(''), 3000);
-                    }
-                  }}
-                  className="w-full bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-500/30 font-bold text-[10px] uppercase py-2 rounded-xl transition-all cursor-pointer"
-                >
-                  {isHindi ? "प्राइम वीआईपी स्थिति निष्क्रिय करें" : "Disable Prime VIP Status"}
+              {cardGenModalCust.membershipStatus === 'Active' && (
+                <button type="button" disabled={membershipSaving} onClick={cancelActiveMembership} className="w-full bg-rose-950/40 text-rose-300 border border-rose-500/30 font-bold text-[10px] uppercase py-2 rounded-xl">
+                  Cancel Active Membership
                 </button>
               )}
             </div>
@@ -2790,7 +2026,7 @@ export default function CustomersManager() {
                     className="p-2 bg-slate-950 hover:bg-slate-800 border border-white/10 hover:border-amber-500/30 rounded-xl text-left transition-all cursor-pointer"
                   >
                     <span className="text-[10px] font-black text-amber-300 block">⭐ Points Balance</span>
-                    <span className="text-[8px] text-slate-400 font-bold block">{directWaCust.points || 100} PTS in Wallet</span>
+                    <span className="text-[8px] text-slate-400 font-bold block">{directWaCust.points || 0} PTS in Wallet</span>
                   </button>
                   <button
                     type="button"
@@ -2855,26 +2091,17 @@ export default function CustomersManager() {
               )}
 
               {/* Action Buttons */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <div className="pt-2">
                 <button
                   type="button"
                   disabled={directWaSending || !directWaMsg.trim()}
-                  onClick={() => handleSendDirectWa('api')}
+                  onClick={handleSendDirectWa}
                   className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 font-black text-xs uppercase tracking-wider py-3 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer flex items-center justify-center gap-2"
                 >
                   <Send className="h-4 w-4" />
                   <span>{directWaSending ? "Dispatched..." : "Send via Meta API"}</span>
                 </button>
 
-                <button
-                  type="button"
-                  disabled={!directWaMsg.trim()}
-                  onClick={() => handleSendDirectWa('web')}
-                  className="w-full bg-slate-800 hover:bg-slate-700 text-emerald-300 font-black text-xs uppercase tracking-wider py-3 rounded-xl transition-all border border-emerald-500/30 active:scale-95 cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <MessageSquare className="h-4 w-4 text-emerald-400" />
-                  <span>Open WhatsApp Web</span>
-                </button>
               </div>
 
             </div>
@@ -2943,19 +2170,6 @@ export default function CustomersManager() {
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[9.5px] font-black text-slate-400 uppercase tracking-widest block">
-                    {isHindi ? "प्रारंभिक रिवॉर्ड पॉइंट्स" : "Initial Loyalty Points"}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={newCustomerForm.points}
-                    onChange={(e) => setNewCustomerForm({ ...newCustomerForm, points: parseInt(e.target.value) || 0 })}
-                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-amber-300 outline-none focus:border-amber-400/40 font-mono font-bold"
-                  />
-                </div>
-
                 <div className="sm:col-span-2 space-y-1">
                   <label className="text-[9.5px] font-black text-slate-400 uppercase tracking-widest block">
                     {isHindi ? "ईमेल पता (वैकल्पिक)" : "Email Address (Optional)"}
@@ -3006,22 +2220,6 @@ export default function CustomersManager() {
                   />
                 </div>
 
-                <div className="sm:col-span-2 p-3 bg-slate-950 border border-amber-500/20 rounded-xl flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-black text-amber-300 block">
-                      👑 {isHindi ? "वीआईपी प्राइम सदस्यता सक्रिय करें" : "VIP Prime Membership"}
-                    </span>
-                    <span className="text-[9.5px] text-slate-400 block">
-                      {isHindi ? "अतिरिक्त छूट और प्राथमिकता डिलीवरी विशेषाधिकार" : "Qualifies for VIP exclusive perks and free express deliveries"}
-                    </span>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={newCustomerForm.isPrimeActive}
-                    onChange={(e) => setNewCustomerForm({ ...newCustomerForm, isPrimeActive: e.target.checked })}
-                    className="w-4 h-4 accent-amber-400 cursor-pointer"
-                  />
-                </div>
               </div>
 
               {/* Action Buttons */}

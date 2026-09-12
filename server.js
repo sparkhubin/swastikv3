@@ -3,7 +3,7 @@ dotenv.config();
 import { createServer } from "./server/app.js";
 import { db } from "./database/db.js";
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
 
 async function bootstrap() {
   const app = await createServer();
@@ -11,21 +11,19 @@ async function bootstrap() {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
 
+  let shuttingDown = false;
   const shutdown = async (signal) => {
-    console.log(`\n🛑 Received ${signal}, safely flushing persistent snapshot...`);
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`\nReceived ${signal}; closing server and database...`);
     try {
-      if (db.savePersistentSnapshot) {
-        await db.savePersistentSnapshot();
-      }
+      await new Promise((resolve) => server.close(resolve));
+      await db.close();
     } catch (e) {
-      console.warn("Notice saving persistent snapshot on shutdown:", e.message);
+      console.warn("Database close failed:", e.message);
     }
-    server.close(() => {
-      console.log("✓ Server closed cleanly.");
-      process.exit(0);
-    });
-    // Force close if lingering handles after 3s
-    setTimeout(() => process.exit(0), 3000);
+    console.log("Server closed cleanly.");
+    process.exit(0);
   };
 
   process.on("SIGTERM", () => shutdown("SIGTERM"));

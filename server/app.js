@@ -1,6 +1,5 @@
 import express from "express";
 import path from "path";
-import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { db } from "../database/db.js";
 import cors from "cors";
@@ -24,16 +23,30 @@ import staffRouter from "./routes/staff.js";
 
 export async function createServer() {
   const app = express();
-  const PORT = 3000;
-
-  app.use(cors({
-    origin: true,
+  app.disable("x-powered-by");
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)");
+    next();
+  });
+  if (process.env.TRUST_PROXY === "true") app.set("trust proxy", 1);
+  const configuredOrigins = String(process.env.CORS_ORIGINS || process.env.PUBLIC_APP_URL || "")
+    .split(",").map(value => value.trim()).filter(Boolean);
+  if (process.env.NODE_ENV !== "production") configuredOrigins.push("http://localhost:3000", "http://127.0.0.1:3000");
+  const corsOptions = {
+    origin(origin, callback) {
+      if (!origin || configuredOrigins.includes(origin)) return callback(null, true);
+      callback(new Error("Origin is not allowed by CORS policy"));
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Customer-Token", "X-Requested-With", "X-Marg-Token", "X-Razorpay-Signature", "X-Webhook-Signature", "X-Webhook-Timestamp"],
     credentials: true,
-  }));
+  };
+  app.use(cors(corsOptions));
   
-  app.options("*", cors());
+  app.options("*", cors(corsOptions));
   // Serve uploaded assets statically with long-term browser cache (30 days)
   app.use("/uploads", express.static(uploadsDir, {
     maxAge: "30d",
@@ -51,34 +64,34 @@ export async function createServer() {
     }
   }));
 
+  const rateBuckets = new Map();
+  const rateLimit = (limit, windowMs) => (req, res, next) => {
+    const key = `${req.ip}:${req.path}`;
+    const now = Date.now();
+    const bucket = rateBuckets.get(key);
+    if (!bucket || bucket.resetAt <= now) {
+      rateBuckets.set(key, { count: 1, resetAt: now + windowMs });
+      return next();
+    }
+    bucket.count += 1;
+    if (bucket.count > limit) return res.status(429).json({ error: "Too many requests. Please try again later." });
+    next();
+  };
+  app.use(["/api/auth/staff/login", "/api/auth/customer/login", "/api/auth/otp/send", "/api/auth/otp/verify"], rateLimit(10, 15 * 60_000));
+
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  // Client error logger to help debug local/preview environment issues
-  app.post("/api/log-error", (req, res) => {
-    try {
-      const errorLog = {
-        timestamp: new Date().toISOString(),
-        userAgent: req.headers["user-agent"],
-        ...req.body
-      };
-      const logStr = JSON.stringify(errorLog, null, 2) + "\n---\n";
-      fs.appendFileSync(path.join(process.cwd(), "client_errors.log"), logStr, "utf-8");
-      console.error("🔴 [CLIENT ERROR DETECTED ON BROWSER]:", JSON.stringify(req.body, null, 2));
-    } catch (e) {
-      console.error("Failed to write client error log:", e);
-    }
-    res.json({ status: "ok" });
+  app.post("/api/log-error", rateLimit(5, 60_000), (req, res) => {
+    const message = String(req.body?.message || "Client error").slice(0, 500);
+    console.error("Client error report:", message);
+    res.status(204).end();
   });
 
   // --- Initialize SQL Database ---
-  try {
-    await db.init();
-    console.log("🚀 SQL Database system fully initialized!");
-  } catch (err) {
-    console.error("❌ SQL Database Initialization Failed:", err.message);
-  }
+  await db.init();
+  console.log(`SQL database initialized: ${db.engine}`);
 
   // --- API Routes ---
   app.use("/api", productsRouter);
@@ -95,6 +108,12 @@ export async function createServer() {
   app.use("/api", backupRouter);
   app.use("/api", notificationsRouter);
   app.use("/api", staffRouter);
+  app.use("/api", (_req, res) => res.status(404).json({ error: "API route not found." }));
+
+  app.use((error, _req, res, _next) => {
+    console.error("Unhandled request error:", error.message);
+    if (!res.headersSent) res.status(500).json({ error: "Internal server error." });
+  });
 
   // --- Vite Dev or Production Static Hosting ---
   if (process.env.NODE_ENV !== "production") {

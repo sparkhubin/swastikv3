@@ -160,19 +160,6 @@ export default function Header({ onMenuClick, onSearchClick, currentView, onView
               }
               return 'customer';
             })()} 
-            phone={(() => {
-              if (staffSession && staffSession.mobile) {
-                return staffSession.mobile;
-              }
-              try {
-                const profileStr = localStorage.getItem('swastik_profile');
-                if (profileStr) {
-                  const p = JSON.parse(profileStr);
-                  if (p.phone || p.mobile) return p.phone || p.mobile;
-                }
-              } catch(e) {}
-              return '';
-            })()} 
           />
 
           {/* Language Selector Toggle - Commented out as requested, default is English */}

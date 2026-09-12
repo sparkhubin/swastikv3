@@ -195,7 +195,7 @@ export default function PrivacyDataTab({ profile, myOrders = [], isHindi }) {
               <span>{isHindi ? 'सदस्यता स्थिति' : 'Membership Status'}</span>
             </div>
             <p className="text-sm font-black text-slate-800">
-              {profile?.isPrimeActive ? 'Swastik Prime VIP' : 'Standard Customer'}
+              {profile?.membershipStatus === 'Active' ? 'Swastik Prime VIP' : 'Standard Customer'}
             </p>
           </div>
 

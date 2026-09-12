@@ -1180,8 +1180,12 @@ export default function OrdersManager({ userRole }) {
     setWaConsoleLogs([]);
 
     const orderId = targetOrder.id;
-    // Default fallback phone values if not provided
-    const phoneNum = getCustPhone(targetOrder) !== 'N/A' ? getCustPhone(targetOrder) : "+91 98450 12099";
+    const phoneNum = getCustPhone(targetOrder);
+    if (!phoneNum || phoneNum === 'N/A') {
+      setWaConsoleLogs(['This order has no customer phone number.']);
+      setIsSendingBill(false);
+      return;
+    }
     const clientName = getCustName(targetOrder);
 
     const subtotal = targetOrder.items && targetOrder.items.length > 0 
@@ -1196,11 +1200,11 @@ export default function OrdersManager({ userRole }) {
     const calcTotal = subtotal + gst + deliveryFee - referralDiscount - couponDiscount - celebrationDiscount;
     const rawTotal = Number(targetOrder.total || targetOrder.grand_total || 0);
 
-    const grandTotal = rawTotal > 0 ? rawTotal : (calcTotal > 0 ? Math.round(calcTotal) : (subtotal > 0 ? Math.round(subtotal) : 350));
+    const grandTotal = rawTotal > 0 ? rawTotal : (calcTotal > 0 ? Math.round(calcTotal) : Math.round(subtotal));
 
     const itemsLabel = targetOrder.items && targetOrder.items.length > 0 
       ? targetOrder.items.map(it => `${it.qty}x ${it.nameEn || it.nameHi || it.name}`).join(', ') 
-      : 'Organic dairy & fresh farm essentials';
+      : 'the recorded order items';
 
     const bodyMsg = `Hi ${clientName}, your Swastik order ${orderId} has been marked as DELIVERED successfully! Please find your official invoice PDF containing your summary of ${itemsLabel} for a total of ₹${grandTotal} attached. Track bills: ${window.location.origin}/account`;
 
@@ -1267,10 +1271,8 @@ export default function OrdersManager({ userRole }) {
         throw new Error('API request failed');
       }
     } catch (err) {
-      console.warn("Falling back to local simulation:", err);
-      const log3 = `[Meta-WA-Gateway] Simulated fallback payload rendered successfully:
-[Message preview]: "${bodyMsg}"`;
-      setWaConsoleLogs(prev => [...prev, log3]);
+      console.error("WhatsApp invoice send failed:", err);
+      setWaConsoleLogs(prev => [...prev, `Send failed: ${err.message || 'Provider request failed'}`]);
     } finally {
       setIsSendingBill(false);
     }
@@ -2338,7 +2340,7 @@ export default function OrdersManager({ userRole }) {
 
                 <div className="bg-slate-950 border border-white/10 p-2.5 rounded-xl text-[9px] font-mono text-emerald-400/90 leading-tight space-y-1.5 max-h-[140px] overflow-y-auto">
                   {waConsoleLogs.length === 0 ? (
-                    <span className="text-slate-600 italic block font-sans">Click "WhatsApp Bill Invoice API" above to simulate Meta verified sandbox invoice outbox streams...</span>
+                    <span className="text-slate-600 italic block font-sans">No WhatsApp send attempts in this view.</span>
                   ) : (
                     waConsoleLogs.map((log, lidx) => (
                       <span key={lidx} className="block whitespace-pre-wrap">{log}</span>
@@ -2577,7 +2579,7 @@ export default function OrdersManager({ userRole }) {
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      placeholder="Type Code (e.g. SWASTIK50, FREESHIP)"
+                      placeholder="Type coupon code"
                       value={newOrderCouponCode}
                       onChange={(e) => {
                         const val = e.target.value.toUpperCase();

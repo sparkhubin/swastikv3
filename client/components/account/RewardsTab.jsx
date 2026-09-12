@@ -1,14 +1,11 @@
 import React from 'react';
-import { Gift, Copy, Check, Share2, ArrowRight, History, Users } from 'lucide-react';
+import { Gift, Copy, Check, Share2, History, Users } from 'lucide-react';
 
 export default function RewardsTab({
   profile,
   userReferralCode,
   handleCopyCode,
   copied,
-  inputReferralCode,
-  setInputReferralCode,
-  handleClaimReferral,
   handleWhatsAppShare,
   referralSettings,
   myReferredCustomers = [],
@@ -73,31 +70,6 @@ export default function RewardsTab({
             {isHindi ? `आपका मित्र इस कोड से साइन अप करेगा तो आपको ${referralSettings?.referralPointsEarned || 50} अंक मिलेंगे!` : `Give friends your code. You get ${referralSettings?.referralPointsEarned || 50} bonus points when they complete their first purchase!`}
           </p>
         </div>
-      </div>
-
-      {/* Claim Friend's Code */}
-      <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl">
-        <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider mb-2">
-          🎁 {isHindi ? "मित्र का रेफ़रल कोड लागू करें" : "Redeem a Friend's Referral Code"}
-        </h4>
-        <form onSubmit={handleClaimReferral} className="flex flex-col sm:flex-row gap-3">
-          <input
-            type="text"
-            placeholder={isHindi ? "रेफ़रल कोड दर्ज करें (उदा. ABHI1234)" : "Enter referral code (e.g. SWASTIK50)"}
-            value={inputReferralCode}
-            onChange={e => setInputReferralCode(e.target.value)}
-            disabled={!!profile.referredBy}
-            className="flex-1 px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-emerald-500 transition-all font-mono uppercase font-bold"
-          />
-          <button
-            type="submit"
-            disabled={!!profile.referredBy}
-            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition-all shadow-xs active:scale-95 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1"
-          >
-            <span>{profile.referredBy ? (isHindi ? "दावा किया गया" : "Already Claimed") : (isHindi ? "पॉइंट्स प्राप्त करें" : "Redeem Points")}</span>
-            {!profile.referredBy && <ArrowRight className="w-4 h-4" />}
-          </button>
-        </form>
       </div>
 
       {/* My Referred Customers Section */}

@@ -583,7 +583,7 @@ export default function OffersManager({ userRole }) {
                 <input 
                   type="text"
                   required
-                  placeholder="e.g. SWASTIK50"
+                  placeholder="Coupon code"
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                   className="w-full bg-slate-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white uppercase font-mono"

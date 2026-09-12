@@ -400,7 +400,7 @@ export default function DataDeletionRequestsManager() {
 
                       <h3 className="text-base sm:text-lg font-black text-white mt-1 flex items-center gap-2">
                         <span>{req.name && req.name !== 'Customer' && req.name !== 'Guest User' && req.name !== 'Not provided' ? req.name : (stats.customer?.name || req.name || 'Customer')}</span>
-                        {stats.customer?.isPrimeActive && (
+                        {stats.customer?.membershipStatus === 'Active' && (
                           <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[10px] rounded font-mono font-bold">
                             PRIME VIP
                           </span>
