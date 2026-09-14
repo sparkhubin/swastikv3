@@ -3,7 +3,7 @@ import {createRoot} from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
 import { initGlobalInputValidation } from './utils/inputValidator';
-import { initCapacitorBridge } from './utils/capacitorHelper';
+import { getBackendBaseUrl, initCapacitorBridge } from './utils/capacitorHelper';
 
 initGlobalInputValidation();
 initCapacitorBridge();
@@ -102,10 +102,7 @@ class ErrorBoundary extends Component {
 }
 
 // Route API calls to the configured backend and attach the active staff session.
-const rawApiUrl = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_API_URL : undefined;
-const apiUrl = rawApiUrl && (rawApiUrl.startsWith('http://') || rawApiUrl.startsWith('https://'))
-  ? rawApiUrl.replace(/\/$/, '')
-  : '';
+const apiUrl = getBackendBaseUrl();
 const originalFetch = window.fetch.bind(window);
 const customFetch = async function (input, init = {}) {
   let url = input;
@@ -131,7 +128,9 @@ const customFetch = async function (input, init = {}) {
     : url instanceof URL
       ? url.pathname
       : new URL(url.url, window.location.origin).pathname;
-  if (isApiRequest && (response.status === 401 || response.status === 403) && !requestPath.includes('/auth/staff/session') && !requestPath.includes('/auth/customer/session')) {
+  // A 403 is an authorization result for a still-valid identity. Only a 401 can
+  // mean the browser session needs to be revalidated.
+  if (isApiRequest && response.status === 401 && !requestPath.includes('/auth/staff/session') && !requestPath.includes('/auth/customer/session') && requestPath !== '/api/auth/session') {
     window.dispatchEvent(new Event('swastik:auth-refresh'));
   }
   return response;

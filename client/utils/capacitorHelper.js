@@ -28,7 +28,22 @@ export function getBackendBaseUrl() {
   const envUrl = 
     (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL)) || '';
   if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
-    return envUrl.trim().replace(/\/+$/, '');
+    try {
+      const configuredUrl = new URL(envUrl.trim());
+      if (!['http:', 'https:'].includes(configuredUrl.protocol)) return '';
+
+      // 0.0.0.0/:: are server bind addresses, not stable browser origins. Using one
+      // here makes an otherwise local request cross-site and the browser can reject
+      // or omit the HttpOnly session cookie.
+      if (['0.0.0.0', '[::]', '::'].includes(configuredUrl.hostname)) {
+        configuredUrl.hostname = window.location.hostname || '127.0.0.1';
+      }
+
+      if (configuredUrl.origin === window.location.origin && configuredUrl.pathname === '/') return '';
+      return configuredUrl.toString().replace(/\/+$/, '');
+    } catch {
+      return '';
+    }
   }
 
   // Backend routing is build-time configuration; browser storage must never redirect credentials.

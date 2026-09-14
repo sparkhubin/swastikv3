@@ -4,7 +4,7 @@ import { db } from "../../database/db.js";
 import { sendWhatsAppEvent } from "../services/whatsapp.js";
 import {
   CUSTOMER_COOKIE, STAFF_COOKIE, clearSessionCookie, hashPassword, issueCustomerSession,
-  customerSessionToken, loginStaff, normalizeMobile, requireCustomerAuth, requireStaffAuth,
+  customerSessionToken, loginStaff, normalizeMobile, optionalIdentity, requireCustomerAuth, requireStaffAuth,
   revokeSession, sessionCookie, staffSessionToken, verifyPassword
 } from "../auth.js";
 
@@ -40,6 +40,13 @@ router.post("/auth/staff/logout", async (req, res) => {
   await revokeSession(staffSessionToken(req));
   res.setHeader("Set-Cookie", clearSessionCookie(STAFF_COOKIE, req));
   res.json({ success: true });
+});
+
+router.get("/auth/session", optionalIdentity, async (req, res) => {
+  res.json({
+    user: req.staff || null,
+    customer: req.customer ? await customerProfile(req.customer.id) : null
+  });
 });
 
 router.get("/auth/staff/session", requireStaffAuth, (req, res) => res.json({ user: req.staff }));

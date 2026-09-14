@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 const AuthContext = createContext(null);
 
@@ -14,14 +14,18 @@ export function AuthProvider({ children }) {
   const [customer, setCustomer] = useState(null);
   const [staffStatus, setStaffStatus] = useState('checking');
   const [customerStatus, setCustomerStatus] = useState('checking');
+  const authRevision = useRef(0);
 
   const refreshStaff = useCallback(async () => {
+    const revision = ++authRevision.current;
     try {
       const data = await jsonRequest('/api/auth/staff/session');
+      if (revision !== authRevision.current) return data.user || null;
       setStaff(data.user || null);
       setStaffStatus(data.user ? 'authenticated' : 'unauthenticated');
       return data.user || null;
     } catch {
+      if (revision !== authRevision.current) return null;
       setStaff(null);
       setStaffStatus('unauthenticated');
       return null;
@@ -29,19 +33,40 @@ export function AuthProvider({ children }) {
   }, []);
 
   const refreshCustomer = useCallback(async () => {
+    const revision = ++authRevision.current;
     try {
       const data = await jsonRequest('/api/auth/customer/session');
+      if (revision !== authRevision.current) return data.customer || null;
       setCustomer(data.customer || null);
       setCustomerStatus(data.customer ? 'authenticated' : 'unauthenticated');
       return data.customer || null;
     } catch {
+      if (revision !== authRevision.current) return null;
       setCustomer(null);
       setCustomerStatus('unauthenticated');
       return null;
     }
   }, []);
 
-  const refresh = useCallback(() => Promise.all([refreshStaff(), refreshCustomer()]), [refreshCustomer, refreshStaff]);
+  const refresh = useCallback(async () => {
+    const revision = ++authRevision.current;
+    try {
+      const data = await jsonRequest('/api/auth/session');
+      if (revision !== authRevision.current) return { staff: data.user || null, customer: data.customer || null };
+      setStaff(data.user || null);
+      setCustomer(data.customer || null);
+      setStaffStatus(data.user ? 'authenticated' : 'unauthenticated');
+      setCustomerStatus(data.customer ? 'authenticated' : 'unauthenticated');
+      return { staff: data.user || null, customer: data.customer || null };
+    } catch {
+      if (revision !== authRevision.current) return { staff: null, customer: null };
+      setStaff(null);
+      setCustomer(null);
+      setStaffStatus('unauthenticated');
+      setCustomerStatus('unauthenticated');
+      return { staff: null, customer: null };
+    }
+  }, []);
 
   useEffect(() => {
     refresh();
@@ -72,6 +97,8 @@ export function AuthProvider({ children }) {
 
   const loginStaff = useCallback(async (mobile, password) => {
     const data = await jsonRequest('/api/auth/staff/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mobile, password }) });
+    if (!data.user) throw new Error('The server did not return an authenticated staff identity.');
+    authRevision.current += 1;
     setStaff(data.user);
     setStaffStatus('authenticated');
     setCustomer(null);
@@ -82,6 +109,8 @@ export function AuthProvider({ children }) {
 
   const loginCustomer = useCallback(async (phoneNumber, password) => {
     const data = await jsonRequest('/api/auth/customer/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phoneNumber, password }) });
+    if (!data.customer) throw new Error('The server did not return an authenticated customer identity.');
+    authRevision.current += 1;
     setCustomer(data.customer);
     setCustomerStatus('authenticated');
     setStaff(null);
@@ -91,6 +120,7 @@ export function AuthProvider({ children }) {
   }, [broadcast]);
 
   const acceptCustomerSession = useCallback(customerIdentity => {
+    authRevision.current += 1;
     setCustomer(customerIdentity || null);
     setCustomerStatus(customerIdentity ? 'authenticated' : 'unauthenticated');
     if (customerIdentity) { setStaff(null); setStaffStatus('unauthenticated'); }
@@ -99,6 +129,7 @@ export function AuthProvider({ children }) {
 
   const logoutStaff = useCallback(async () => {
     try { await jsonRequest('/api/auth/staff/logout', { method: 'POST' }); } finally {
+      authRevision.current += 1;
       setStaff(null);
       setStaffStatus('unauthenticated');
       broadcast();
@@ -107,6 +138,7 @@ export function AuthProvider({ children }) {
 
   const logoutCustomer = useCallback(async () => {
     try { await jsonRequest('/api/auth/customer/logout', { method: 'POST' }); } finally {
+      authRevision.current += 1;
       setCustomer(null);
       setCustomerStatus('unauthenticated');
       broadcast();
