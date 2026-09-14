@@ -37,13 +37,16 @@ test("final-schema authentication, isolation, stock, order, delivery, points, me
 
   const products=await request("/products");assert.equal(products.response.status,200);assert.equal(products.body.length,3731);assert.equal(products.body[0].stockCount,products.body[0].stockQty-products.body[0].reservedQty);
   assert.equal((await request("/orders")).response.status,401);assert.equal((await request("/customers")).response.status,401);
+  const anonymousSession=await request("/auth/session");assert.equal(anonymousSession.response.status,200);assert.deepEqual(anonymousSession.body,{user:null,customer:null});
   const admin=await request("/auth/staff/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({mobile:"9000000010",password:adminPassword})});assert.equal(admin.response.status,200);assert.ok(admin.cookie.includes("swastik_staff_session="));assert.equal("token" in admin.body,false);assert.equal("password_hash" in admin.body.user,false);
+  const restoredAdmin=await request("/auth/session",{cookie:admin.cookie});assert.equal(restoredAdmin.response.status,200);assert.equal(restoredAdmin.body.user.id,admin.body.user.id);assert.equal(restoredAdmin.body.customer,null);
   const rider=await request("/auth/staff/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({mobile:"9000000011",password:riderPassword})});assert.equal(rider.response.status,200);
   assert.equal((await request("/staff",{cookie:rider.cookie})).response.status,403);
   assert.equal((await request("/auth/staff/session",{cookie:admin.cookie})).body.user.isMasterAdmin,true);
   assert.equal((await request("/auth/staff/session",{cookie:"swastik_staff_session=%E0%A4%A"})).response.status,401);
   assert.equal((await request("/staff",{headers:{authorization:"Bearer forged-session"}})).response.status,401);
   const loginA=await request("/auth/customer/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({phoneNumber:"9000000001",password:customerPassword})});assert.equal(loginA.response.status,200);assert.ok(loginA.cookie);
+  const restoredCustomer=await request("/auth/session",{cookie:loginA.cookie});assert.equal(restoredCustomer.response.status,200);assert.equal(restoredCustomer.body.customer.id,customerA);assert.equal(restoredCustomer.body.user,null);
   const loginB=await request("/auth/customer/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({phoneNumber:"9000000002",password:customerPassword})});assert.equal(loginB.response.status,200);
   assert.equal("token" in loginA.body,false);
   const staffCookie=admin.cookie.split("; ").find(value=>value.startsWith("swastik_staff_session=")&&value!=="swastik_staff_session=");const customerCookie=loginA.cookie.split("; ").find(value=>value.startsWith("swastik_customer_session=")&&value!=="swastik_customer_session=");assert.equal((await request("/orders",{cookie:`${staffCookie}; ${customerCookie}`})).response.status,400);
