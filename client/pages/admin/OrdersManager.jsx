@@ -94,17 +94,9 @@ export default function OrdersManager({ userRole, loggedInStaff }) {
     return "Store Pickup / Counter Sale";
   }, [customers]);
 
-  // Real delivery riders filter (strictly delivery personnel: role_id 4 or rider role, excluding admins & managers)
+  // Delivery identities come from the normalized delivery_staff relationship returned by the server.
   const deliveryStaffList = React.useMemo(() => {
-    return (staff || []).filter(s => {
-      if (s.id === 1 || s.isMasterAdmin) return false;
-      const rName = String(s.role || '').toLowerCase();
-      const rCode = String(s.role_code || '').toLowerCase();
-      if (rName.includes('admin') || rCode === 'admin') return false;
-      if (rName.includes('manager') || rCode === 'manager') return false;
-      if (rName.includes('support') || rCode === 'support') return false;
-      return s.role_id === 4 || rCode === 'rider' || rName.includes('rider') || rName.includes('delivery');
-    });
+    return (staff || []).filter(s => !s.isMasterAdmin && s.deliveryStaffId && String(s.deliveryStatus || '').toUpperCase() === 'ACTIVE');
   }, [staff]);
 
   const activeStaff = loggedInStaff;
@@ -409,6 +401,19 @@ export default function OrdersManager({ userRole, loggedInStaff }) {
   // Modal State for selected order details popup
   const [selectedOrder, setSelectedOrder] = useState(null);
 
+  React.useEffect(() => {
+    const restoreOrder = () => {
+      const parts = window.location.pathname.split('/');
+      if (parts[1] !== 'admin' || parts[2] !== 'orders' || !parts[3]) { setSelectedOrder(null); return; }
+      const routeId = decodeURIComponent(parts.slice(3).join('/'));
+      const match = (orders || []).find(order => String(order.id) === routeId);
+      if (match && String(selectedOrder?.id) !== routeId) setSelectedOrder(match);
+    };
+    restoreOrder();
+    window.addEventListener('popstate', restoreOrder);
+    return () => window.removeEventListener('popstate', restoreOrder);
+  }, [orders, selectedOrder?.id]);
+
   // Dedicated in-app Modal State for Order Cancellation (No window.confirm)
   const [orderToCancel, setOrderToCancel] = useState(null);
 
@@ -480,7 +485,7 @@ export default function OrdersManager({ userRole, loggedInStaff }) {
   const filterDeliveryStaffList = useMemo(() => {
     const namesSet = new Set();
     (staff || []).forEach(s => {
-      if (s.permissions?.includes('delivery') || s.name?.toLowerCase().includes('delivery') || s.name?.toLowerCase().includes('rider') || s.name?.toLowerCase().includes('pilot')) {
+      if (s.deliveryStaffId && String(s.deliveryStatus || '').toUpperCase() === 'ACTIVE') {
         namesSet.add(s.name.trim());
       }
     });
@@ -710,11 +715,13 @@ export default function OrdersManager({ userRole, loggedInStaff }) {
 
   const handleOpenDetailModal = (order) => {
     setSelectedOrder(order);
+    window.history.pushState(null, '', `/admin/orders/${encodeURIComponent(order.id)}`);
     setWaConsoleLogs([]); // Wipes prior logs for clean view
   };
 
   const handleCloseModal = () => {
     setSelectedOrder(null);
+    if (window.location.pathname.startsWith('/admin/orders/')) window.history.pushState(null, '', '/admin/orders');
     setIsEditingOrder(false);
     setEditOrderItems([]);
     setEditOrderName('');

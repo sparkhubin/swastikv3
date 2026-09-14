@@ -20,6 +20,7 @@ import customersRouter from "./routes/customers.js";
 import backupRouter from "./routes/backup.js";
 import notificationsRouter from "./routes/notifications.js";
 import staffRouter from "./routes/staff.js";
+import cartRouter from "./routes/cart.js";
 
 export async function createServer() {
   const app = express();
@@ -36,17 +37,22 @@ export async function createServer() {
     .split(",").map(value => value.trim()).filter(Boolean);
   if (process.env.NODE_ENV !== "production") configuredOrigins.push("http://localhost:3000", "http://127.0.0.1:3000");
   const corsOptions = {
-    origin(origin, callback) {
-      if (!origin || configuredOrigins.includes(origin)) return callback(null, true);
-      callback(new Error("Origin is not allowed by CORS policy"));
-    },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Customer-Token", "X-Requested-With", "X-Marg-Token", "X-Razorpay-Signature", "X-Webhook-Signature", "X-Webhook-Timestamp"],
     credentials: true,
   };
-  app.use(cors(corsOptions));
-  
-  app.options("*", cors(corsOptions));
+  const corsMiddleware = (req, res, next) => cors({
+    ...corsOptions,
+    origin(origin, callback) {
+      const requestOrigin = `${req.protocol}://${req.get("host")}`;
+      if (!origin || origin === requestOrigin || configuredOrigins.includes(origin)) return callback(null, true);
+      const error = new Error("Origin is not allowed by CORS policy");
+      error.status = 403;
+      callback(error);
+    }
+  })(req, res, next);
+  app.use(corsMiddleware);
+  app.options("*", corsMiddleware);
   // Serve uploaded assets statically with long-term browser cache (30 days)
   app.use("/uploads", express.static(uploadsDir, {
     maxAge: "30d",
@@ -108,11 +114,12 @@ export async function createServer() {
   app.use("/api", backupRouter);
   app.use("/api", notificationsRouter);
   app.use("/api", staffRouter);
+  app.use("/api", cartRouter);
   app.use("/api", (_req, res) => res.status(404).json({ error: "API route not found." }));
 
   app.use((error, _req, res, _next) => {
-    console.error("Unhandled request error:", error.message);
-    if (!res.headersSent) res.status(500).json({ error: "Internal server error." });
+    if (error.status !== 403) console.error("Unhandled request error:", error.message);
+    if (!res.headersSent) res.status(error.status || 500).json({ error: error.status === 403 ? "Origin is not allowed." : "Internal server error." });
   });
 
   // --- Vite Dev or Production Static Hosting ---

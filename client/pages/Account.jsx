@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useData } from '../context/DataContext';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
 import { 
   User, 
   Lock, 
@@ -57,8 +58,9 @@ import PrivacyDataTab from '../components/account/PrivacyDataTab';
 
 export default function Account({ onViewChange }) {
   const { language, setLanguage, t } = useLanguage();
+  const { customer: authenticatedCustomer, customerStatus, staff: activeStaffSession, loginCustomer, acceptCustomerSession, logoutCustomer, logoutStaff } = useAuth();
   const isHindi = language === 'hi';
-  const { products = [], orders, referralSettings, customers, primeSettings, updateCustomer, addCustomer, upsertCustomer, addOrder, deleteOrder, paymentEnabled, paymentEnvironment, contactSettings, staff, setUserRole, fetchOrders, fetchCustomers, fetchProducts, fetchDataDeletionRequests } = useData();
+  const { products = [], orders, referralSettings, customers, primeSettings, updateCustomer, addCustomer, upsertCustomer, addOrder, deleteOrder, paymentEnabled, paymentEnvironment, contactSettings, staff, fetchOrders, fetchProducts, fetchDataDeletionRequests } = useData();
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [activeMembershipPlan, setActiveMembershipPlan] = useState(null);
   const activeMembershipBenefits = useMemo(() => {
@@ -457,37 +459,11 @@ export default function Account({ onViewChange }) {
     }
   };
   // Customer and staff identity are resolved from server-side sessions.
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const isLoggedIn = customerStatus === 'authenticated';
   const [authMode, setAuthMode] = useState('login'); // login | signup | forgot_password
   const [authType, setAuthType] = useState('password'); // password | otp
 
-  // Staff Session State & Sync Listener
-  const [activeStaffSession, setActiveStaffSession] = useState(null);
-
-  useEffect(() => {
-    let active = true;
-    const handleSync = async () => {
-      try {
-        const response = await fetch('/api/auth/staff/session');
-        const data = await response.json().catch(() => ({}));
-        if (active) setActiveStaffSession(response.ok ? data.user || null : null);
-      } catch {
-        if (active) setActiveStaffSession(null);
-      }
-    };
-    handleSync();
-    window.addEventListener('staff_session_change', handleSync);
-    return () => {
-      active = false;
-      window.removeEventListener('staff_session_change', handleSync);
-    };
-  }, []);
-
-  const handleExitStaffSession = () => {
-    fetch('/api/auth/staff/logout', { method: 'POST' }).catch(() => {});
-    setActiveStaffSession(null);
-    window.dispatchEvent(new Event('staff_session_change'));
-  };
+  const handleExitStaffSession = () => logoutStaff().catch(() => {});
 
   // --- AUTH FORM STATES ---
   const [mobileNumber, setMobileNumber] = useState('');
@@ -561,28 +537,37 @@ export default function Account({ onViewChange }) {
   const [profile, setProfile] = useState({ fullName: "", email: "", phone: "", address: "", points: 0, dob: "", anniversary: "", membershipStatus: null, membershipNumber: null });
 
   useEffect(() => {
-    let active = true;
-    fetch('/api/auth/customer/me').then(async response => {
-      if (!response.ok) throw new Error('No active customer session');
-      return response.json();
-    }).then(({ customer }) => {
-      if (!active || !customer) return;
-      setProfile({ id: customer.id, fullName: customer.name, phone: customer.phone, email: customer.email || '', address: customer.address || '', points: Number(customer.points || 0), dob: customer.dob || '', anniversary: customer.anniversary || '', membershipStatus: customer.membershipStatus, membershipNumber: customer.membershipNumber || null, referralCode: customer.referralCode || '' });
-      setIsLoggedIn(true);
-    }).catch(() => { if (active) setIsLoggedIn(false); });
-    return () => { active = false; };
-  }, []);
+    if (!authenticatedCustomer) return;
+    const customer = authenticatedCustomer;
+    setProfile({ id: customer.id, fullName: customer.name, phone: customer.phone, email: customer.email || '', address: customer.address || '', points: Number(customer.points || 0), dob: customer.dob || '', anniversary: customer.anniversary || '', membershipStatus: customer.membershipStatus, membershipNumber: customer.membershipNumber || null, referralCode: customer.referralCode || '' });
+  }, [authenticatedCustomer]);
 
   const [copied, setCopied] = useState(false);
 
-  const [activeTab, setActiveTab] = useState('profile'); // profile | orders | password | membership | rewards | cart | preferences
+  const [activeTab, setActiveTab] = useState(() => {
+    const tab = window.location.pathname.split('/')[2];
+    return ['profile', 'orders', 'password', 'membership', 'rewards', 'cart', 'preferences', 'privacy'].includes(tab) ? tab : 'profile';
+  });
+  const selectAccountTab = (tab) => {
+    setActiveTab(tab);
+    const path = tab === 'profile' ? '/account' : `/account/${tab}`;
+    if (window.location.pathname !== path) window.history.pushState(null, '', path);
+  };
+  useEffect(() => {
+    const restoreTab = () => {
+      const tab = window.location.pathname.split('/')[2];
+      setActiveTab(['profile', 'orders', 'password', 'membership', 'rewards', 'cart', 'preferences', 'privacy'].includes(tab) ? tab : 'profile');
+    };
+    window.addEventListener('popstate', restoreTab);
+    return () => window.removeEventListener('popstate', restoreTab);
+  }, []);
   // --- CUSTOMER POINTS LEDGER HISTORY ---
   const [pointsHistory, setPointsHistory] = useState([]);
 
   useEffect(() => {
     const customerId = profile?.id;
     if (!customerId || activeTab !== 'rewards') return;
-    fetch(`/api/customers/${customerId}/points`)
+    fetch('/api/customers/me/points')
       .then(r => r.ok ? r.json() : { history: [] })
       .then(payload => setPointsHistory(Array.isArray(payload.history) ? payload.history : []))
       .catch(() => setPointsHistory([]));
@@ -623,7 +608,7 @@ export default function Account({ onViewChange }) {
   useEffect(() => {
     const customerId = profile?.id;
     if (!customerId || activeTab !== 'rewards') return;
-    fetch(`/api/customers/${customerId}/referrals`)
+    fetch('/api/customers/me/referrals')
       .then(r => r.ok ? r.json() : [])
       .then(rows => setReferralsHistory(Array.isArray(rows) ? rows : []))
       .catch(() => setReferralsHistory([]));
@@ -653,14 +638,12 @@ export default function Account({ onViewChange }) {
   useEffect(() => {
     if (activeTab === 'orders') {
       fetchOrders();
-    } else if (activeTab === 'membership' || activeTab === 'rewards') {
-      fetchCustomers();
     } else if (activeTab === 'cart') {
       fetchProducts();
     } else if (activeTab === 'privacy') {
       fetchDataDeletionRequests();
     }
-  }, [activeTab, fetchOrders, fetchCustomers, fetchProducts, fetchDataDeletionRequests]);
+  }, [activeTab, fetchOrders, fetchProducts, fetchDataDeletionRequests]);
 
   const [isEditing, setIsEditing] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -676,6 +659,26 @@ export default function Account({ onViewChange }) {
 
   // --- 2. ORDER HISTORY DATABASE WITH DETAILS ---
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const openOrder = order => {
+    setSelectedOrder(order);
+    window.history.pushState(null, '', `/account/orders/${encodeURIComponent(order.id)}`);
+  };
+  const closeOrder = () => {
+    setSelectedOrder(null);
+    if (window.location.pathname.startsWith('/account/orders/')) window.history.pushState(null, '', '/account/orders');
+  };
+  useEffect(() => {
+    const restoreOrder = () => {
+      const parts = window.location.pathname.split('/');
+      if (parts[1] !== 'account' || parts[2] !== 'orders' || !parts[3]) { setSelectedOrder(null); return; }
+      const routeId = decodeURIComponent(parts.slice(3).join('/'));
+      const match = (orders || []).find(order => String(order.id) === routeId);
+      if (match && String(selectedOrder?.id) !== routeId) setSelectedOrder(match);
+    };
+    restoreOrder();
+    window.addEventListener('popstate', restoreOrder);
+    return () => window.removeEventListener('popstate', restoreOrder);
+  }, [orders, selectedOrder?.id]);
   const [orderStatusFilter, setOrderStatusFilter] = useState('all'); // all | active | completed
   const [orderSearchText, setOrderSearchText] = useState('');
   // --- 3. AUTH LOGICS ---
@@ -773,7 +776,8 @@ export default function Account({ onViewChange }) {
       if (otpResult.customer) {
         const customer = otpResult.customer;
         setProfile({ id: customer.id, fullName: customer.name, phone: customer.phone, email: customer.email || '', address: customer.address || '', points: Number(customer.points || 0), dob: customer.dob || '', anniversary: customer.anniversary || '', membershipStatus: customer.membershipStatus, membershipNumber: customer.membershipNumber || null, referralCode: customer.referralCode || '' });
-        setIsLoggedIn(true);
+        acceptCustomerSession(customer);
+        await fetchOrders(true);
         setAuthSuccess(isHindi ? "लॉगिन सफल।" : "Login successful.");
         return;
       }
@@ -796,7 +800,8 @@ export default function Account({ onViewChange }) {
       if (!response.ok || !result.customer) throw new Error(result.error || 'Customer registration failed.');
       const customer = result.customer;
       setProfile({ id: customer.id, fullName: customer.name, phone: customer.phone, email: customer.email || '', address: customer.address || '', points: Number(customer.points || 0), dob: customer.dob || '', anniversary: customer.anniversary || '', membershipStatus: customer.membershipStatus, membershipNumber: customer.membershipNumber || null, referralCode: customer.referralCode || '' });
-      setIsLoggedIn(true);
+      acceptCustomerSession(customer);
+      await fetchOrders(true);
       setAuthSuccess(isHindi ? 'खाता सफलतापूर्वक बनाया गया।' : 'Account created successfully.');
       return;
   
@@ -829,36 +834,10 @@ export default function Account({ onViewChange }) {
       return;
     }
 
-    // Staff credentials are always verified by the server.
     try {
-      const staffResponse = await fetch('/api/auth/staff/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mobile: mobileNumber, password })
-      });
-      if (staffResponse.ok) {
-        const session = await staffResponse.json();
-        const perms = session.user.permissions || [];
-        const isSuper = session.user.isMasterAdmin || session.user.role_code === 'admin';
-        const isDeliveryOnly = perms.length === 1 && perms[0] === 'delivery';
-        if (setUserRole) setUserRole(isDeliveryOnly ? 'delivery' : (isSuper ? 'admin' : 'manager'));
-        setActiveStaffSession(session.user);
-        window.dispatchEvent(new Event('staff_session_change'));
-        setAuthSuccess(isHindi ? `लॉगिन सफल (${session.user.name})!` : `Staff login successful (${session.user.name}).`);
-        setTimeout(() => onViewChange?.('admin'), 500);
-        return;
-      }
-    } catch (error) {
-      console.error('Staff authentication request failed:', error);
-    }
-
-    try {
-      const response = await fetch('/api/auth/customer/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phoneNumber: mobileNumber, password }) });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.customer) throw new Error(data.error || 'Invalid customer credentials.');
-      const customer = data.customer;
+      const customer = await loginCustomer(mobileNumber, password);
       setProfile({ id: customer.id, fullName: customer.name, phone: customer.phone, email: customer.email || '', address: customer.address || '', points: Number(customer.points || 0), dob: customer.dob || '', anniversary: customer.anniversary || '', membershipStatus: customer.membershipStatus, membershipNumber: customer.membershipNumber || null, referralCode: customer.referralCode || '' });
-      setIsLoggedIn(true);
+      await fetchOrders(true);
       setAuthSuccess(isHindi ? "लॉगिन सफल।" : "Login successful.");
       setAuthError('');
     } catch (error) {
@@ -931,6 +910,7 @@ export default function Account({ onViewChange }) {
       if (!response.ok) { setProfileMessage(result.error || 'Profile update failed.'); return; }
       const customer = result.customer;
       setProfile({ id: customer.id, fullName: customer.name, phone: customer.phone, email: customer.email || '', address: customer.address || '', points: Number(customer.points || 0), dob: customer.dob || '', anniversary: customer.anniversary || '', membershipStatus: customer.membershipStatus, membershipNumber: customer.membershipNumber || null, referralCode: customer.referralCode || '' });
+      acceptCustomerSession(customer);
       setProfileMessage(isHindi ? 'प्रोफ़ाइल अपडेट हो गई!' : 'Profile updated successfully!');
       setTimeout(() => setProfileMessage(''), 2000);
     }
@@ -949,6 +929,10 @@ export default function Account({ onViewChange }) {
 
   const isDobLocked = !!profile.dob || !!(dbCustForLock && dbCustForLock.dob);
   const isAnniversaryLocked = !!profile.anniversary || !!(dbCustForLock && dbCustForLock.anniversary);
+
+  if (customerStatus === 'checking') {
+    return <div className="min-h-[50vh] flex items-center justify-center text-sm font-bold text-slate-500">Restoring your secure session…</div>;
+  }
 
   return (
     <div className="flex flex-col gap-6 pb-20 justify-center items-center w-full" id="account-view">
@@ -1102,8 +1086,8 @@ export default function Account({ onViewChange }) {
                     <ShieldAlert className="h-4 w-4 text-cyan-400 shrink-0 animate-pulse" />
                     <span>
                       {isHindi 
-                        ? 'कर्मचारी / डिलीवरी बॉय? अपने रजिस्टर्ड मोबाइल और पासवर्ड से यहाँ लॉगिन करें।' 
-                        : 'Staff or Delivery Boy? Log in here with your mobile & staff password.'}
+                        ? 'कर्मचारी / डिलीवरी उपयोगकर्ता सुरक्षित स्टाफ पैनल से लॉगिन करें।'
+                        : 'Staff and delivery users sign in through the secure staff panel.'}
                     </span>
                   </div>
                 </div>
@@ -1188,7 +1172,7 @@ export default function Account({ onViewChange }) {
 
                 <div>
                   <div className="flex justify-between items-center mb-1">
-                    <label className="block text-[10px] font-extrabold text-slate-600 uppercase tracking-widest">{isHindi ? "सुरक्षित सत्यापन ओटीपी *" : "Simulated OTP Confirm *"}</label>
+                    <label className="block text-[10px] font-extrabold text-slate-600 uppercase tracking-widest">{isHindi ? "सुरक्षित सत्यापन ओटीपी *" : "Secure OTP verification *"}</label>
                     <button
                       type="button"
                       onClick={triggerOtpSend}
@@ -1299,9 +1283,9 @@ export default function Account({ onViewChange }) {
                     <span>{isHindi ? "ओटीपी प्राप्त नहीं हुआ या कोई समस्या?" : "Facing OTP Issues or Failure?"}</span>
                   </p>
                   <p className="text-[11px] text-slate-700 leading-relaxed font-medium">
-                    {isHindi
-                      ? "यदि ओटीपी प्राप्त करने में समस्या आ रही है, तो पासवर्ड रीसेट के लिए स्टोर एडमिन से व्हाट्सएप/कॉल पर संपर्क करें (+91 98765 43210)। एडमिन मैन्युअली आपका पासवर्ड बदल देंगे।"
-                      : "If you face any issue receiving OTP, please contact Store Admin at +91 98765 43210 for manual password reset."}
+                    {contactSettings?.phone
+                      ? (isHindi ? `यदि ओटीपी प्राप्त नहीं होता है, तो स्टोर से ${contactSettings.phone} पर संपर्क करें।` : `If the OTP does not arrive, contact the store at ${contactSettings.phone}.`)
+                      : (isHindi ? 'यदि ओटीपी प्राप्त नहीं होता है, तो स्टोर सहायता से संपर्क करें।' : 'If the OTP does not arrive, contact store support.')}
                   </p>
                 </div>
 
@@ -1337,9 +1321,8 @@ export default function Account({ onViewChange }) {
               <p className="text-xs text-slate-500 font-medium mt-0.5">{t('accountDesc')}</p>
             </div>
             <button 
-              onClick={() => {
-                fetch('/api/auth/customer/logout', { method: 'POST' }).catch(() => {});
-                setIsLoggedIn(false);
+              onClick={async () => {
+                await logoutCustomer().catch(() => {});
                 setProfile({ fullName: "", email: "", phone: "", address: "", points: 0, dob: "", anniversary: "", membershipStatus: null, membershipNumber: null });
                 setAuthError('');
                 setMobileNumber('');
@@ -1415,7 +1398,7 @@ export default function Account({ onViewChange }) {
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => selectAccountTab(tab.id)}
                   className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs transition-all whitespace-nowrap cursor-pointer shrink-0 ${
                     isActive
                       ? 'bg-emerald-600 text-white font-extrabold shadow-xs'
@@ -1464,7 +1447,7 @@ export default function Account({ onViewChange }) {
                 setOrderSearchText={setOrderSearchText}
                 orderStatusFilter={orderStatusFilter}
                 setOrderStatusFilter={setOrderStatusFilter}
-                setSelectedOrder={setSelectedOrder}
+                setSelectedOrder={openOrder}
                 isHindi={isHindi}
                 t={t}
               />
@@ -2430,7 +2413,7 @@ export default function Account({ onViewChange }) {
             
             {/* Close Cross */}
             <button 
-              onClick={() => setSelectedOrder(null)}
+              onClick={closeOrder}
               className="absolute top-5 right-5 rounded-full p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 transition-all duration-150 cursor-pointer"
               type="button"
             >
@@ -2661,7 +2644,7 @@ export default function Account({ onViewChange }) {
               </button>
               <button
                 type="button"
-                onClick={() => setSelectedOrder(null)}
+                onClick={closeOrder}
                 className="py-3 px-6 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl font-bold text-xs uppercase tracking-wider text-center transition-all text-slate-700 hover:text-slate-900 active:scale-95 cursor-pointer"
               >
                 {isHindi ? "बंद करें" : "Close"}

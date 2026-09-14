@@ -60,8 +60,8 @@ export default function ProductCard({ product }) {
     return product.price;
   };
 
-  const handleAdd = () => {
-    const ok = addToCart(product, selectedUnit);
+  const handleAdd = async () => {
+    const ok = await addToCart(product, selectedUnit);
     if (ok !== false) {
       setIsAdded(true);
       setTimeout(() => {

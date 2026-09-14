@@ -15,9 +15,10 @@ async function settings() {
 }
 
 async function recordAttempt(input, provider, status = "PENDING") {
+  const authenticationMessage = /OTP|VERIFICATION|PASSWORD/i.test(String(input.eventType || input.template?.purpose || ""));
   const result = await db.execute(`INSERT INTO whatsapp_log
     (recipient_phone, customer_id, template_id, event_type, reference_type, reference_id, provider, status, request_payload)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [input.to, input.customerId || null, input.template?.id || null, input.eventType || "MANUAL", input.referenceType || "", input.referenceId || "", provider, status, safeJson({ template: input.template?.name, variables: input.variables, hasText: Boolean(input.text) })]);
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [input.to, input.customerId || null, input.template?.id || null, input.eventType || "MANUAL", input.referenceType || "", input.referenceId || "", provider, status, safeJson({ template: input.template?.name, variables: authenticationMessage ? [] : input.variables, hasText: Boolean(input.text), sensitiveVariablesRedacted: authenticationMessage })]);
   return result.lastID;
 }
 

@@ -107,7 +107,7 @@ const apiUrl = rawApiUrl && (rawApiUrl.startsWith('http://') || rawApiUrl.starts
   ? rawApiUrl.replace(/\/$/, '')
   : '';
 const originalFetch = window.fetch.bind(window);
-const customFetch = function (input, init = {}) {
+const customFetch = async function (input, init = {}) {
   let url = input;
   let isApiRequest = false;
 
@@ -125,7 +125,16 @@ const customFetch = function (input, init = {}) {
   }
 
   const headers = new Headers(init.headers || (url instanceof Request ? url.headers : undefined));
-  return originalFetch(url, { ...init, headers, credentials: isApiRequest ? 'include' : init.credentials });
+  const response = await originalFetch(url, { ...init, headers, credentials: isApiRequest ? 'include' : init.credentials });
+  const requestPath = typeof url === 'string'
+    ? new URL(url, window.location.origin).pathname
+    : url instanceof URL
+      ? url.pathname
+      : new URL(url.url, window.location.origin).pathname;
+  if (isApiRequest && (response.status === 401 || response.status === 403) && !requestPath.includes('/auth/staff/session') && !requestPath.includes('/auth/customer/session')) {
+    window.dispatchEvent(new Event('swastik:auth-refresh'));
+  }
+  return response;
 };
 
 try {
@@ -138,15 +147,10 @@ try {
   console.warn("Could not install the authenticated API fetch wrapper:", e);
 }
 
-console.log("🚀 [Client main.jsx]: Top-level file execution started. If you see this, the Javascript bundle is downloading and parsing successfully!");
-
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ErrorBoundary>
-      {(() => {
-        console.log("✨ [Client main.jsx]: React tree is rendering inside StrictMode and ErrorBoundary");
-        return <App />;
-      })()}
+      <App />
     </ErrorBoundary>
   </StrictMode>,
 );

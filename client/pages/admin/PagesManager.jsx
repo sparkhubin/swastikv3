@@ -215,15 +215,15 @@ export default function PagesManager({ userRole }) {
   };
 
   // Reply submit handler
-  const handleReplySubmit = (msgId) => {
+  const handleReplySubmit = async (msgId) => {
     const text = replyText[msgId];
     if (!text) return;
-    updateContactMessage(msgId, { answer: text });
-    setReplyText({ ...replyText, [msgId]: '' });
-    if (activeMessageDetail && activeMessageDetail.id === msgId) {
-      setActiveMessageDetail(prev => ({ ...prev, answer: text }));
-    }
-    alert(isHindi ? "प्रतिक्रिया भेजी गई!" : "Owner reply logged!");
+    try {
+      const updated = await updateContactMessage(msgId, { answer: text });
+      setReplyText({ ...replyText, [msgId]: '' });
+      if (activeMessageDetail && activeMessageDetail.id === msgId) setActiveMessageDetail(updated);
+      alert(isHindi ? "प्रतिक्रिया भेजी गई!" : "Owner reply logged!");
+    } catch (error) { alert(error.message); }
   };
 
   return (
@@ -333,10 +333,10 @@ export default function PagesManager({ userRole }) {
                       <span className="text-[9px] text-slate-500 font-mono">ID: #{activeMessageDetail.id}</span>
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
                           if (window.confirm("Are you sure you want to permanently delete this inquiry message?")) {
-                            deleteContactMessage(activeMessageDetail.id);
-                            setActiveMessageDetail(null);
+                            try { await deleteContactMessage(activeMessageDetail.id); setActiveMessageDetail(null); }
+                            catch (error) { alert(error.message); }
                           }
                         }}
                         className="px-2 py-1 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg border border-rose-500/20 text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
