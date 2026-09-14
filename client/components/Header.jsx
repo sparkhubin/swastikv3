@@ -4,34 +4,15 @@ import { useLanguage } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
 import { useData } from '../context/DataContext';
 import NotificationCenter from './NotificationCenter';
+import { useAuth } from '../context/AuthContext';
 
 export default function Header({ onMenuClick, onSearchClick, currentView, onViewChange }) {
   const { language, setLanguage, t } = useLanguage();
   const { cartItems } = useCart();
   const { contactSettings } = useData();
+  const { staff: staffSession } = useAuth();
 
   const totalItems = cartItems.reduce((acc, item) => acc + item.quantity, 0);
-
-  const [staffSession, setStaffSession] = React.useState(null);
-
-  React.useEffect(() => {
-    let active = true;
-    const refreshSession = async () => {
-      try {
-        const response = await fetch('/api/auth/staff/session');
-        const data = await response.json().catch(() => ({}));
-        if (active) setStaffSession(response.ok ? data.user || null : null);
-      } catch {
-        if (active) setStaffSession(null);
-      }
-    };
-    refreshSession();
-    window.addEventListener('staff_session_change', refreshSession);
-    return () => {
-      active = false;
-      window.removeEventListener('staff_session_change', refreshSession);
-    };
-  }, []);
 
   const toggleLanguage = () => {
     setLanguage(language === 'en' ? 'hi' : 'en');

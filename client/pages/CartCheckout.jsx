@@ -3,6 +3,7 @@ import Account from './Account';
 import { useLanguage } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
 import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
 import { resolveProductImage, getNextCandidateImage, markImageFailed, DEFAULT_PRODUCT_FALLBACK } from '../utils/imageHelper';
 import { getCurrentGpsPosition } from '../utils/capacitorHelper';
 import { 
@@ -127,12 +128,12 @@ const CartItemImage = ({ product, r2PublicUrl, className }) => {
 
 export default function CartCheckout({ onViewChange }) {
   const { t, language, isHindi } = useLanguage();
+  const { customer: authenticatedCustomer, loginCustomer, acceptCustomerSession, logoutCustomer } = useAuth();
   const { orders, addOrder, offers, contactSettings, products, setProducts, referralSettings, locationGroups, celebrationSettings, customers, addCustomer, upsertCustomer, updateCustomer, r2PublicUrl, paymentEnabled, paymentEnvironment, fetchProducts, fetchOrders, fetchCustomers } = useData();
 
   useEffect(() => {
     fetchProducts();
-    if (fetchCustomers) fetchCustomers();
-  }, [fetchProducts, fetchCustomers]);
+  }, [fetchProducts]);
 
   const {
     cartItems,
@@ -253,26 +254,17 @@ export default function CartCheckout({ onViewChange }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [profile, setProfile] = useState(null);
 
-  // Sync authentication status and user profile across storage events
+  // Customer identity is restored centrally from the validated server session.
   useEffect(() => {
-    const syncAuth = () => {
-      fetch('/api/auth/customer/me').then(async response => {
-        if (!response.ok) throw new Error('No active customer session');
-        return response.json();
-      }).then(({ customer }) => {
-        const next = { id: customer.id, fullName: customer.name, phone: customer.phone, email: customer.email || '', address: customer.address || '', points: Number(customer.points || 0), dob: customer.dob || '', anniversary: customer.anniversary || '', membershipStatus: customer.membershipStatus };
-        setProfile(next);
-        setIsLoggedIn(true);
-      }).catch(() => { setProfile(null); setIsLoggedIn(false); });
-    };
-    syncAuth();
-    window.addEventListener('storage', syncAuth);
-    window.addEventListener('swastik_auth_change', syncAuth);
-    return () => {
-      window.removeEventListener('storage', syncAuth);
-      window.removeEventListener('swastik_auth_change', syncAuth);
-    };
-  }, []);
+    if (!authenticatedCustomer) {
+      setProfile(null);
+      setIsLoggedIn(false);
+      return;
+    }
+    const customer = authenticatedCustomer;
+    setProfile({ id: customer.id, fullName: customer.name, phone: customer.phone, email: customer.email || '', address: customer.address || '', points: Number(customer.points || 0), dob: customer.dob || '', anniversary: customer.anniversary || '', membershipStatus: customer.membershipStatus });
+    setIsLoggedIn(true);
+  }, [authenticatedCustomer]);
 
   // --- FREE LIVE GPS GEOLOCATION & FREE OPENSTREETMAP REVERSE GEOCODING ---
   const [isDetectingGps, setIsDetectingGps] = useState(false);
@@ -443,10 +435,7 @@ export default function CartCheckout({ onViewChange }) {
     }
 
     try {
-      const response = await fetch('/api/auth/customer/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phoneNumber: authMobile, password: authPassword }) });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.customer) throw new Error(data.error || 'Invalid customer credentials.');
-      const customer = data.customer;
+      const customer = await loginCustomer(authMobile, authPassword);
       const loggedInProfile = { id: customer.id, fullName: customer.name, email: customer.email || '', phone: customer.phone, address: customer.address || '', points: Number(customer.points || 0), dob: customer.dob || '', anniversary: customer.anniversary || '', membershipStatus: customer.membershipStatus };
       setIsLoggedIn(true); setProfile(loggedInProfile);
       setShippingInfo({ fullName: loggedInProfile.fullName, phoneNumber: loggedInProfile.phone, address: loggedInProfile.address });
@@ -486,6 +475,7 @@ export default function CartCheckout({ onViewChange }) {
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.customer) throw new Error(data.error || 'Account creation failed.');
       const customer = data.customer;
+      acceptCustomerSession(customer);
       const newProfile = { id: customer.id, fullName: customer.name, phone: customer.phone, email: customer.email || '', address: customer.address || '', points: Number(customer.points || 0), dob: customer.dob || '', anniversary: customer.anniversary || '', membershipStatus: customer.membershipStatus };
       setIsLoggedIn(true); setProfile(newProfile); setShippingInfo({ fullName: newProfile.fullName, phoneNumber: newProfile.phone, address: newProfile.address }); setCustomerEmail(newProfile.email);
       setAuthGateSuccess(language === 'hi' ? 'खाता सफलतापूर्वक तैयार हुआ।' : 'Account created successfully.');
@@ -1281,7 +1271,7 @@ export default function CartCheckout({ onViewChange }) {
               <button
                 type="button"
                 onClick={() => {
-                  fetch('/api/auth/customer/logout', { method: 'POST' }).finally(() => {
+                  logoutCustomer().finally(() => {
                     setProfile(null);
                     setIsLoggedIn(false);
                   });

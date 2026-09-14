@@ -2,8 +2,8 @@ import express from "express";
 import crypto from "node:crypto";
 import { db } from "../../database/db.js";
 import {
-  CUSTOMER_COOKIE, audit, hashPassword, issueCustomerSession, optionalIdentity,
-  requireCustomerAuth, requirePermission, requireStaffAuth, sessionCookie, normalizeMobile
+  CUSTOMER_COOKIE, STAFF_COOKIE, audit, clearSessionCookie, hashPassword, issueCustomerSession, optionalIdentity,
+  requireCustomerAuth, requirePermission, requireStaffAuth, revokeSession, sessionCookie, staffSessionToken, normalizeMobile
 } from "../auth.js";
 
 const router = express.Router();
@@ -56,19 +56,18 @@ router.get("/customers", requireStaffAuth, requirePermission("customers"), async
 
 router.post("/customers", optionalIdentity, async (req, res) => {
   try {
-    if (req.staff && !req.staff.isMasterAdmin && !req.staff.permissions.includes("customers")) return res.status(403).json({ error: "Insufficient permission." });
     const phone = normalizeMobile(req.body?.phone);
     const name = String(req.body?.name || "").trim();
     const email = String(req.body?.email || "").trim().slice(0, 255);
     const address = String(req.body?.address || "").trim().slice(0, 4000);
     if (phone.length !== 10 || name.length < 2 || name.length > 255) return res.status(400).json({ error: "A valid name and phone number are required." });
     if (req.body?.password && (String(req.body.password).length < 10 || String(req.body.password).length > 128)) return res.status(400).json({ error: "Password must be between 10 and 128 characters." });
-    const existing = await db.get("SELECT id FROM customer WHERE phone LIKE ? LIMIT 1", [`%${phone}`]);
+    const existing = await db.get("SELECT id FROM customer WHERE phone=? LIMIT 1", [phone]);
     if (existing) return res.status(409).json({ error: "A customer with this phone number already exists." });
-    if (!req.staff) {
-      const proof = await db.get("SELECT id FROM customer_otp WHERE phone=? AND purpose='LOGIN' AND consumed_at > datetime('now','-10 minutes') AND customer_id IS NULL ORDER BY id DESC LIMIT 1", [phone]);
-      if (!proof) return res.status(401).json({ error: "Verify this phone number before registration." });
-    }
+    const proof = await db.get("SELECT id FROM customer_otp WHERE phone=? AND purpose='LOGIN' AND consumed_at > datetime('now','-10 minutes') AND customer_id IS NULL ORDER BY id DESC LIMIT 1", [phone]);
+    const staffCreation = Boolean(req.staff) && !proof;
+    if (staffCreation && !req.staff.isMasterAdmin && !req.staff.permissions.includes("customers")) return res.status(403).json({ error: "Insufficient permission." });
+    if (!staffCreation && !proof) return res.status(401).json({ error: "Verify this phone number before registration." });
     const created = await db.transaction(async tx => {
       const result = await tx.execute(`INSERT INTO customer (name, phone, email, password_hash, address, status, referral_code)
         VALUES (?, ?, ?, ?, ?, 'Active', ?)`, [name, phone, email, req.body?.password ? await hashPassword(req.body.password) : "", address, crypto.randomBytes(6).toString("hex").toUpperCase()]);
@@ -91,12 +90,15 @@ router.post("/customers", optionalIdentity, async (req, res) => {
           await tx.execute("INSERT INTO customer_points (customer_id,points,type,reference_id,description,referrer_customer_id) VALUES (?,?,'REFERRED',?,'Referral welcome reward',?)", [customerId, referredPoints, `REFERRED:${customerId}`, referrer.id]);
         }
       }
-      const session = req.staff ? null : await issueCustomerSession(customerId, { ip: req.ip, userAgent: req.get("user-agent") }, tx);
+      const session = staffCreation ? null : await issueCustomerSession(customerId, { ip: req.ip, userAgent: req.get("user-agent") }, tx);
       return { customerId, session };
     });
-    if (created.session) res.setHeader("Set-Cookie", sessionCookie(CUSTOMER_COOKIE, created.session.token));
+    if (created.session) {
+      await revokeSession(staffSessionToken(req));
+      res.setHeader("Set-Cookie", [sessionCookie(CUSTOMER_COOKIE, created.session.token, req), clearSessionCookie(STAFF_COOKIE, req)]);
+    }
     const row = await db.get(`${CUSTOMER_SELECT} WHERE c.id=?`, [created.customerId]);
-    res.status(201).json({ customer: mapCustomer(row), token: created.session?.token, expiresAt: created.session?.expiresAt });
+    res.status(201).json({ customer: mapCustomer(row), expiresAt: created.session?.expiresAt });
   } catch (error) {
     console.error("Customer registration failed:", error.message);
     res.status(500).json({ error: "Unable to register customer." });
@@ -137,12 +139,18 @@ router.put("/customers/:id", requireStaffAuth, requirePermission("customers"), a
 
 async function authorizeCustomerResource(req, res, next) {
   return optionalIdentity(req, res, () => {
+    if (!req.customer && !req.staff) return res.status(401).json({ error: "Authentication is required." });
     const own = req.customer && Number(req.customer.id) === Number(req.params.id);
     const staffAllowed = req.staff && (req.staff.isMasterAdmin || req.staff.permissions.includes("customers"));
     if (!own && !staffAllowed) return res.status(403).json({ error: "Access denied." });
     next();
   });
 }
+
+router.get("/customers/me/points", requireCustomerAuth, async (req, res) => {
+  const history = await db.query("SELECT id,points,type,reference_id AS referenceId,description,created_at AS createdAt FROM customer_points WHERE customer_id=? ORDER BY created_at DESC,id DESC", [req.customer.id]);
+  res.json({ customerId: Number(req.customer.id), balance: history.reduce((sum, item) => sum + Number(item.points), 0), history });
+});
 
 router.get("/customers/:id/points", authorizeCustomerResource, async (req, res) => {
   const history = await db.query("SELECT id,points,type,reference_id AS referenceId,description,created_at AS createdAt FROM customer_points WHERE customer_id=? ORDER BY created_at DESC,id DESC", [req.params.id]);
@@ -163,8 +171,13 @@ router.post("/customers/:id/points", requireStaffAuth, requirePermission("custom
       await tx.execute("INSERT INTO customer_points (customer_id,points,type,reference_id,description) VALUES (?,?,'ADJUSTMENT',?,?)", [req.params.id, points, referenceId, String(req.body?.description || "Staff adjustment").slice(0, 500)]);
     });
     await audit("USER", req.staff.id, "ADJUST_POINTS", "customer", req.params.id, { points, referenceId }, req);
-    res.status(201).json({ success: true });
+    const history = await db.query("SELECT id,points,type,reference_id AS referenceId,description,created_at AS createdAt FROM customer_points WHERE customer_id=? ORDER BY created_at DESC,id DESC", [req.params.id]);
+    res.status(201).json({ customerId: Number(req.params.id), balance: history.reduce((sum, item) => sum + Number(item.points), 0), history });
   } catch (error) { res.status(error.status || 500).json({ error: error.status ? error.message : "Unable to adjust points." }); }
+});
+
+router.get("/customers/me/referrals", requireCustomerAuth, async (req, res) => {
+  res.json(await db.query("SELECT points,type,reference_id AS referenceId,referrer_customer_id AS referrerCustomerId,referred_customer_id AS referredCustomerId,created_at AS createdAt FROM customer_points WHERE customer_id=? AND type IN ('REFERRAL','REFERRED') ORDER BY created_at DESC", [req.customer.id]));
 });
 
 router.get("/customers/:id/referrals", authorizeCustomerResource, async (req, res) => {
@@ -182,6 +195,7 @@ router.post("/membership/plans", requireStaffAuth, requirePermission("settings")
 
 router.put("/membership/plans/:id", requireStaffAuth, requirePermission("settings"), async (req,res)=>{const current=await db.get("SELECT * FROM membership_plan WHERE id=?",[req.params.id]);if(!current)return res.status(404).json({error:"Plan not found."});const next={name:req.body.name??current.name,description:req.body.description??current.description,duration:Number(req.body.durationDays??current.duration_days),price:Number(req.body.price??current.price),discount:Number(req.body.discountPercent??current.discount_percent),free:Number(req.body.freeDelivery===undefined?current.free_delivery:Boolean(req.body.freeDelivery)),multiplier:Number(req.body.extraPointsMultiplier??current.extra_points_multiplier),benefits:req.body.benefits===undefined?current.benefits_json:JSON.stringify(req.body.benefits),active:Number(req.body.isActive===undefined?current.is_active:Boolean(req.body.isActive))};if(!next.name||!Number.isInteger(next.duration)||next.duration<=0||next.price<0||next.discount<0||next.discount>100||next.multiplier<=0)return res.status(400).json({error:"Membership plan values are invalid."});await db.execute("UPDATE membership_plan SET name=?,description=?,duration_days=?,price=?,discount_percent=?,free_delivery=?,extra_points_multiplier=?,benefits_json=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",[...Object.values(next),req.params.id]);await audit("USER",req.staff.id,"UPDATE_MEMBERSHIP_PLAN","membership_plan",req.params.id,{},req);res.json({success:true});});
 
+router.get("/customers/me/memberships", requireCustomerAuth, async (req, res) => res.json(await db.query(`SELECT cm.*,mp.name AS plan_name,mp.description AS plan_description FROM customer_membership cm JOIN membership_plan mp ON mp.id=cm.membership_plan_id WHERE cm.customer_id=? ORDER BY cm.created_at DESC`, [req.customer.id])));
 router.get("/customers/:id/memberships", authorizeCustomerResource, async (req, res) => res.json(await db.query(`SELECT cm.*,mp.name AS plan_name,mp.description AS plan_description FROM customer_membership cm JOIN membership_plan mp ON mp.id=cm.membership_plan_id WHERE cm.customer_id=? ORDER BY cm.created_at DESC`, [req.params.id])));
 
 router.post("/customers/:id/memberships", requireStaffAuth, requirePermission("customers"), async (req, res) => {
@@ -202,7 +216,7 @@ router.post("/customers/:id/memberships", requireStaffAuth, requirePermission("c
       return result.lastID;
     });
     await audit("USER", req.staff.id, "ACTIVATE_MEMBERSHIP", "customer_membership", membershipId, { customerId, planId }, req);
-    res.status(201).json({ success: true, id: membershipId });
+    res.status(201).json({ membership: await db.get(`SELECT cm.*,mp.name AS plan_name,mp.description AS plan_description FROM customer_membership cm JOIN membership_plan mp ON mp.id=cm.membership_plan_id WHERE cm.id=?`, [membershipId]) });
   } catch (error) {
     const duplicate = error.code === "SQLITE_CONSTRAINT";
     res.status(error.status || (duplicate ? 409 : 500)).json({ error: error.status ? error.message : duplicate ? "Membership number already exists." : "Unable to activate membership." });
@@ -225,7 +239,7 @@ router.post("/customers/:id/memberships/cancel-active", requireStaffAuth, requir
   res.json({ success: true });
 });
 
-router.post("/customers/me/memberships/:id/cancel",requireCustomerAuth,async(req,res)=>{const result=await db.execute("UPDATE customer_membership SET status='Cancelled',updated_at=CURRENT_TIMESTAMP WHERE id=? AND customer_id=? AND status='Active'",[req.params.id,req.customer.id]);if(!result.changes)return res.status(404).json({error:"Active membership not found."});await audit("CUSTOMER",req.customer.id,"CANCEL_MEMBERSHIP","customer_membership",req.params.id,{},req);res.json({success:true});});
+router.post("/customers/me/memberships/:id/cancel",requireCustomerAuth,async(req,res)=>{const result=await db.execute("UPDATE customer_membership SET status='Cancelled',updated_at=CURRENT_TIMESTAMP WHERE id=? AND customer_id=? AND status='Active'",[req.params.id,req.customer.id]);if(!result.changes)return res.status(404).json({error:"Active membership not found."});await audit("CUSTOMER",req.customer.id,"CANCEL_MEMBERSHIP","customer_membership",req.params.id,{},req);res.json({membership:await db.get(`SELECT cm.*,mp.name AS plan_name,mp.description AS plan_description FROM customer_membership cm JOIN membership_plan mp ON mp.id=cm.membership_plan_id WHERE cm.id=? AND cm.customer_id=?`,[req.params.id,req.customer.id])});});
 
 router.delete("/customers/:id", requireStaffAuth, requirePermission("customers"), (_req, res) => res.status(405).json({ error: "Customer deletion is disabled to preserve order, points, and membership history." }));
 

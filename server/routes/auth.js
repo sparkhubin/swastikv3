@@ -4,8 +4,8 @@ import { db } from "../../database/db.js";
 import { sendWhatsAppEvent } from "../services/whatsapp.js";
 import {
   CUSTOMER_COOKIE, STAFF_COOKIE, clearSessionCookie, hashPassword, issueCustomerSession,
-  loginStaff, normalizeMobile, requireCustomerAuth, requireStaffAuth, revokeSession,
-  sessionCookie, verifyPassword
+  customerSessionToken, loginStaff, normalizeMobile, requireCustomerAuth, requireStaffAuth,
+  revokeSession, sessionCookie, staffSessionToken, verifyPassword
 } from "../auth.js";
 
 const router = express.Router();
@@ -27,17 +27,18 @@ router.post("/auth/staff/login", async (req, res) => {
   try {
     const session = await loginStaff(req.body?.mobile, req.body?.password, requestMetadata(req));
     if (!session) return res.status(401).json({ error: "Invalid credentials or inactive staff account." });
-    res.setHeader("Set-Cookie", sessionCookie(STAFF_COOKIE, session.token));
-    res.json(session);
+    await revokeSession(customerSessionToken(req), "customer_session");
+    res.setHeader("Set-Cookie", [sessionCookie(STAFF_COOKIE, session.token, req), clearSessionCookie(CUSTOMER_COOKIE, req)]);
+    res.json({ user: session.user, expiresAt: session.expiresAt });
   } catch (error) {
     console.error("Staff login failed:", error.message);
     res.status(500).json({ error: "Unable to authenticate staff." });
   }
 });
 
-router.post("/auth/staff/logout", requireStaffAuth, async (req, res) => {
-  await revokeSession(req.authToken);
-  res.setHeader("Set-Cookie", clearSessionCookie(STAFF_COOKIE));
+router.post("/auth/staff/logout", async (req, res) => {
+  await revokeSession(staffSessionToken(req));
+  res.setHeader("Set-Cookie", clearSessionCookie(STAFF_COOKIE, req));
   res.json({ success: true });
 });
 
@@ -48,14 +49,15 @@ router.post("/auth/customer/login", async (req, res) => {
     const phone = normalizeMobile(req.body?.phoneNumber || req.body?.phone);
     const password = req.body?.password;
     if (phone.length !== 10 || typeof password !== "string" || !password) return res.status(400).json({ error: "A valid phone number and password are required." });
-    const customer = (await db.query("SELECT * FROM customer WHERE phone LIKE ? LIMIT 1", [`%${phone}`]))[0];
+    const customer = await db.get("SELECT * FROM customer WHERE phone=? LIMIT 1", [phone]);
     if (!customer || !customer.password_hash || !await verifyPassword(password, customer.password_hash) || String(customer.status).toLowerCase() !== "active") {
       return res.status(401).json({ error: "Invalid customer credentials." });
     }
     await db.execute("UPDATE customer SET last_login_at=CURRENT_TIMESTAMP WHERE id=?", [customer.id]);
     const session = await issueCustomerSession(customer.id, requestMetadata(req));
-    res.setHeader("Set-Cookie", sessionCookie(CUSTOMER_COOKIE, session.token));
-    res.json({ ...session, customer: await customerProfile(customer.id) });
+    await revokeSession(staffSessionToken(req));
+    res.setHeader("Set-Cookie", [sessionCookie(CUSTOMER_COOKIE, session.token, req), clearSessionCookie(STAFF_COOKIE, req)]);
+    res.json({ expiresAt: session.expiresAt, customer: await customerProfile(customer.id) });
   } catch (error) {
     console.error("Customer login failed:", error.message);
     res.status(500).json({ error: "Unable to authenticate customer." });
@@ -63,10 +65,11 @@ router.post("/auth/customer/login", async (req, res) => {
 });
 
 router.get("/auth/customer/me", requireCustomerAuth, async (req, res) => res.json({ customer: await customerProfile(req.customer.id) }));
+router.get("/auth/customer/session", requireCustomerAuth, async (req, res) => res.json({ customer: await customerProfile(req.customer.id) }));
 
-router.post("/auth/customer/logout", requireCustomerAuth, async (req, res) => {
-  await revokeSession(req.customerToken, "customer_session");
-  res.setHeader("Set-Cookie", clearSessionCookie(CUSTOMER_COOKIE));
+router.post("/auth/customer/logout", async (req, res) => {
+  await revokeSession(customerSessionToken(req), "customer_session");
+  res.setHeader("Set-Cookie", clearSessionCookie(CUSTOMER_COOKIE, req));
   res.json({ success: true });
 });
 
@@ -76,15 +79,16 @@ router.post("/auth/customer/password", requireCustomerAuth, async (req, res) => 
   if (typeof newPassword !== "string" || newPassword.length < 10 || newPassword.length > 128) return res.status(400).json({ error: "New password must be between 10 and 128 characters." });
   try {
     const customer = await db.get("SELECT id,phone,password_hash FROM customer WHERE id=?", [req.customer.id]);
-    const recentOtp = await db.get("SELECT id FROM customer_otp WHERE customer_id=? AND phone LIKE ? AND consumed_at > datetime('now','-10 minutes') ORDER BY id DESC LIMIT 1", [customer.id, `%${normalizeMobile(customer.phone)}`]);
+    const recentOtp = await db.get("SELECT id FROM customer_otp WHERE customer_id=? AND phone=? AND consumed_at > datetime('now','-10 minutes') ORDER BY id DESC LIMIT 1", [customer.id, normalizeMobile(customer.phone)]);
     const currentValid = typeof currentPassword === "string" && await verifyPassword(currentPassword, customer.password_hash);
     if (!currentValid && !recentOtp) return res.status(401).json({ error: "Current password or a recently verified OTP is required." });
     const session = await db.transaction(async tx => {
       await tx.execute("UPDATE customer SET password_hash=?,updated_at=CURRENT_TIMESTAMP WHERE id=?", [await hashPassword(newPassword), customer.id]);
+      if (recentOtp) await tx.execute("DELETE FROM customer_otp WHERE id=?", [recentOtp.id]);
       await tx.execute("UPDATE customer_session SET revoked_at=CURRENT_TIMESTAMP WHERE customer_id=? AND revoked_at IS NULL", [customer.id]);
       return issueCustomerSession(customer.id, requestMetadata(req), tx);
     });
-    res.setHeader("Set-Cookie", sessionCookie(CUSTOMER_COOKIE, session.token));
+    res.setHeader("Set-Cookie", sessionCookie(CUSTOMER_COOKIE, session.token, req));
     res.json({ success: true, expiresAt: session.expiresAt });
   } catch (error) {
     console.error("Customer password update failed:", error.message);
@@ -99,10 +103,14 @@ router.post("/auth/otp/send", async (req, res) => {
     const recent = await db.get("SELECT created_at FROM customer_otp WHERE phone=? AND created_at > datetime('now','-60 seconds') ORDER BY id DESC LIMIT 1", [phone]);
     if (recent) return res.status(429).json({ success: false, error: "Please wait before requesting another OTP." });
     const code = crypto.randomInt(100000, 1000000).toString();
-    const customer = await db.get("SELECT id FROM customer WHERE phone LIKE ? LIMIT 1", [`%${phone}`]);
+    const customer = await db.get("SELECT id FROM customer WHERE phone=? LIMIT 1", [phone]);
+    const otpHash = await hashPassword(code);
+    const inserted = await db.execute(`INSERT INTO customer_otp (customer_id, phone, purpose, otp_hash, expires_at) VALUES (?, ?, 'LOGIN', ?, datetime('now','+5 minutes'))`, [customer?.id || null, phone, otpHash]);
     const delivery = await sendWhatsAppEvent({ purpose: "CUSTOMER_OTP", to: phone, customerId: customer?.id, variables: [code], text: `Your verification code is ${code}`, referenceType: "customer_otp" });
-    if (!delivery.success) return res.status(503).json({ success: false, error: "OTP delivery is not configured or failed." });
-    await db.execute(`INSERT INTO customer_otp (customer_id, phone, purpose, otp_hash, expires_at) VALUES (?, ?, 'LOGIN', ?, datetime('now','+5 minutes'))`, [customer?.id || null, phone, await hashPassword(code)]);
+    if (!delivery.success) {
+      await db.execute("DELETE FROM customer_otp WHERE id=?", [inserted.lastID]);
+      return res.status(503).json({ success: false, error: "OTP delivery is not configured or failed." });
+    }
     res.json({ success: true, status: "queued", destination: `${phone.slice(0, 2)}******${phone.slice(-2)}` });
   } catch (error) {
     console.error("OTP send failed:", error.message);
@@ -124,7 +132,7 @@ router.post("/auth/otp/verify", async (req, res) => {
         return { error: "Invalid OTP code.", status: 401 };
       }
       await tx.execute("UPDATE customer_otp SET consumed_at=CURRENT_TIMESTAMP, attempts=attempts+1 WHERE id=?", [otp.id]);
-      const customer = await tx.get("SELECT id FROM customer WHERE phone LIKE ? LIMIT 1", [`%${phone}`]);
+      const customer = await tx.get("SELECT id FROM customer WHERE phone=? LIMIT 1", [phone]);
       if (!customer) return { registrationRequired: true };
       await tx.execute("UPDATE customer SET last_login_at=CURRENT_TIMESTAMP WHERE id=?", [customer.id]);
       const session = await issueCustomerSession(customer.id, requestMetadata(req), tx);
@@ -132,8 +140,9 @@ router.post("/auth/otp/verify", async (req, res) => {
     });
     if (result.error) return res.status(result.status).json({ success: false, error: result.error });
     if (result.registrationRequired) return res.json({ success: true, status: "verified", registrationRequired: true });
-    res.setHeader("Set-Cookie", sessionCookie(CUSTOMER_COOKIE, result.token));
-    res.json({ success: true, status: "verified", token: result.token, expiresAt: result.expiresAt, customer: await customerProfile(result.customerId) });
+    await revokeSession(staffSessionToken(req));
+    res.setHeader("Set-Cookie", [sessionCookie(CUSTOMER_COOKIE, result.token, req), clearSessionCookie(STAFF_COOKIE, req)]);
+    res.json({ success: true, status: "verified", expiresAt: result.expiresAt, customer: await customerProfile(result.customerId) });
   } catch (error) {
     console.error("OTP verification failed:", error.message);
     res.status(500).json({ success: false, error: "Unable to verify OTP." });
@@ -150,7 +159,7 @@ router.post("/auth/change-password", requireStaffAuth, async (req, res) => {
       await tx.execute('UPDATE "user" SET password_hash=?, updated_at=CURRENT_TIMESTAMP WHERE id=?', [await hashPassword(newPassword), req.staff.id]);
       await tx.execute("UPDATE user_session SET revoked_at=CURRENT_TIMESTAMP WHERE user_id=? AND revoked_at IS NULL", [req.staff.id]);
     });
-    res.setHeader("Set-Cookie", clearSessionCookie(STAFF_COOKIE));
+    res.setHeader("Set-Cookie", clearSessionCookie(STAFF_COOKIE, req));
     res.json({ success: true, message: "Password changed. Please sign in again." });
   } catch (error) {
     console.error("Password change failed:", error.message);

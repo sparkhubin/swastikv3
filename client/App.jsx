@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { CartProvider } from './context/CartContext';
 import { DataProvider, useData } from './context/DataContext';
+import { AuthProvider } from './context/AuthContext';
 import Splash from './pages/Splash';
 import Home from './pages/Home';
 import Shop from './pages/Shop';
@@ -36,55 +37,55 @@ import {
   MessageCircle
 } from 'lucide-react';
 
+const VIEW_PATHS = {
+  home: '/home', shop: '/shop', cart: '/cart', account: '/account', partners: '/partners',
+  admin: '/admin', privacy: '/privacy', terms: '/terms', refund: '/refund', contact: '/contact', locator: '/store-locator'
+};
+
+function viewFromLocation() {
+  const path = window.location.pathname.replace(/\/+$/, '') || '/';
+  if (path === '/admin' || path.startsWith('/admin/')) return 'admin';
+  if (path === '/account' || path.startsWith('/account/')) return 'account';
+  const match = Object.entries(VIEW_PATHS).find(([, value]) => value === path);
+  if (match) return match[0];
+  if (window.location.hash === '#/admin') return 'admin';
+  return path === '/' ? 'splash' : 'home';
+}
+
 function AppContent() {
   const { t, language, setLanguage } = useLanguage();
   const { categories, contactSettings } = useData();
-  const [currentView, setCurrentView] = useState(() => {
-    const view = (window.location.pathname === '/admin' || window.location.hash === '#/admin') ? 'admin' : 'splash';
-    console.log("🛠️ [AppContent]: Initialized currentView state to:", view);
-    return view;
-  });
+  const [currentView, setCurrentView] = useState(viewFromLocation);
   const [activeCategory, setActiveCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  console.log("📱 [AppContent]: Rendering component. Current state details:", { currentView, activeCategory, isSidebarOpen });
+  const navigateView = React.useCallback((view, options = {}) => {
+    const path = VIEW_PATHS[view] || '/home';
+    const method = options.replace ? 'replaceState' : 'pushState';
+    if (window.location.pathname !== path) window.history[method](null, '', path);
+    setCurrentView(view);
+  }, []);
 
   // Sync URL changes and popstate with the in-memory route
   React.useEffect(() => {
     const handleLocationCheck = () => {
-      if (window.location.pathname === '/admin' || window.location.hash === '#/admin') {
-        setCurrentView('admin');
-      }
+      setCurrentView(viewFromLocation());
     };
     window.addEventListener('popstate', handleLocationCheck);
     return () => window.removeEventListener('popstate', handleLocationCheck);
   }, []);
 
-  // Update real address bar path on view changes
-  React.useEffect(() => {
-    if (currentView === 'splash') return;
-    if (currentView === 'admin') {
-      if (window.location.pathname !== '/admin') {
-        window.history.pushState(null, '', '/admin');
-      }
-    } else {
-      if (window.location.pathname === '/admin') {
-        window.history.pushState(null, '', '/');
-      }
-    }
-  }, [currentView]);
-
   // Quick navigation handlers from Flyout Menu
   const handleSidebarNav = (view, catId = 'all') => {
-    setCurrentView(view);
+    navigateView(view);
     setActiveCategory(catId);
     setSearchQuery('');
     setIsSidebarOpen(false);
   };
 
   const handleSearchClick = () => {
-    setCurrentView('shop');
+    navigateView('shop');
     setIsSidebarOpen(false);
     setTimeout(() => {
       const searchInput = document.getElementById('search-input-field');
@@ -99,11 +100,11 @@ function AppContent() {
     if (linkType === 'category') {
       setActiveCategory(linkValue || 'all');
       setSearchQuery('');
-      setCurrentView('shop');
+      navigateView('shop');
     } else if (linkType === 'product') {
       setActiveCategory('all');
       setSearchQuery(linkValue || '');
-      setCurrentView('shop');
+      navigateView('shop');
     }
   };
 
@@ -112,14 +113,14 @@ function AppContent() {
   };
 
   if (currentView === 'splash') {
-    return <Splash onComplete={() => setCurrentView('home')} />;
+    return <Splash onComplete={() => navigateView('home', { replace: true })} />;
   }
 
   // Separate Admin View of All Things: No headers, footers or customer menus
   if (currentView === 'admin') {
     return (
       <div className="min-h-screen bg-slate-950 text-white font-sans selection:bg-cyan-500 selection:text-slate-900 flex flex-col">
-        <Admin onViewChange={setCurrentView} />
+        <Admin onViewChange={navigateView} />
       </div>
     );
   }
@@ -131,7 +132,7 @@ function AppContent() {
         onMenuClick={() => setIsSidebarOpen(true)} 
         onSearchClick={handleSearchClick}
         currentView={currentView}
-        onViewChange={setCurrentView}
+        onViewChange={navigateView}
       />
 
       {/* 2. Side Flyout Navigation Drawer Panel */}
@@ -257,13 +258,7 @@ function AppContent() {
                   Categories
                 </span>
 
-                {(categories && categories.length > 0 ? categories : [
-                  { id: 'all', nameEn: 'All Essentials', nameHi: 'सभी आवश्यक वस्तुएं', icon: "✨" },
-                  { id: 'vegetables', nameEn: 'Fruits & Vegetables', nameHi: 'फल और सब्जियां', icon: "🥦" },
-                  { id: 'dairy', nameEn: 'Dairy & Eggs', nameHi: 'डेयरी और अंडे', icon: "🥛" },
-                  { id: 'beverages', nameEn: 'Beverages', nameHi: 'पेय पदार्थ', icon: "🧃" },
-                  { id: 'household', nameEn: 'Household Supplies', nameHi: 'घरेलू सामान', icon: "🧼" }
-                ]).map((cat) => (
+                {(categories || []).map((cat) => (
                   <button
                     key={cat.id}
                     onClick={() => handleSidebarNav('shop', cat.id)}
@@ -362,7 +357,7 @@ function AppContent() {
       <main className="flex-grow">
         {currentView === 'home' && (
           <Home 
-            onViewChange={setCurrentView} 
+            onViewChange={navigateView}
             onCategorySelect={setActiveCategory} 
             onSlideClick={handleSlideClick}
           />
@@ -376,10 +371,10 @@ function AppContent() {
           />
         )}
         {currentView === 'cart' && (
-          <CartCheckout onViewChange={setCurrentView} />
+          <CartCheckout onViewChange={navigateView} />
         )}
         {currentView === 'account' && (
-          <Account onViewChange={setCurrentView} />
+          <Account onViewChange={navigateView} />
         )}
         {currentView === 'partners' && (
           <Partners />
@@ -405,8 +400,8 @@ function AppContent() {
       </main>
 
       {/* 4. Desktop-Footer / Mobile Nav Bars */}
-      <Footer onViewChange={setCurrentView} />
-      <BottomNavigation currentView={currentView} onViewChange={setCurrentView} />
+      <Footer onViewChange={navigateView} />
+      <BottomNavigation currentView={currentView} onViewChange={navigateView} />
     </div>
   );
 }
@@ -414,11 +409,13 @@ function AppContent() {
 export default function App() {
   return (
     <LanguageProvider>
-      <DataProvider>
-        <CartProvider>
-          <AppContent />
-        </CartProvider>
-      </DataProvider>
+      <AuthProvider>
+        <DataProvider>
+          <CartProvider>
+            <AppContent />
+          </CartProvider>
+        </DataProvider>
+      </AuthProvider>
     </LanguageProvider>
   );
 }

@@ -3,11 +3,11 @@ import { db } from "../../database/db.js";
 import { audit, requirePermission, requireStaffAuth } from "../auth.js";
 
 const router = express.Router();
-const PRODUCT_SELECT = `SELECT p.*,c.name_en AS category_name,c.slug AS category_slug,b.name AS brand_name,
+export const PRODUCT_SELECT = `SELECT p.*,c.name_en AS category_name,c.slug AS category_slug,b.name AS brand_name,
   COALESCE(i.stock_qty,0) AS stock_qty,COALESCE(i.reserved_qty,0) AS reserved_qty,COALESCE(i.reorder_level,0) AS reorder_level
   FROM product p LEFT JOIN category c ON c.id=p.category_id LEFT JOIN brand b ON b.id=p.brand_id LEFT JOIN inventory i ON i.product_id=p.id`;
 
-function mapProduct(row) {
+export function mapProduct(row) {
   let unitPrices = {};
   try { unitPrices = JSON.parse(row.unit_prices || "{}"); } catch { unitPrices = {}; }
   const available = Math.max(0, Number(row.stock_qty) - Number(row.reserved_qty));

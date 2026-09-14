@@ -3,7 +3,11 @@ import { promisify } from "node:util";
 import { db } from "../database/db.js";
 
 const scrypt = promisify(crypto.scrypt);
-const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS || 8 * 60 * 60 * 1000);
+const configuredSessionTtl = Number(process.env.SESSION_TTL_MS);
+const SESSION_TTL_MS = Number.isFinite(configuredSessionTtl) && configuredSessionTtl > 0
+  ? configuredSessionTtl
+  : 8 * 60 * 60 * 1000;
+const BEARER_SESSIONS_ENABLED = process.env.ENABLE_BEARER_SESSIONS === "true";
 export const STAFF_COOKIE = "swastik_staff_session";
 export const CUSTOMER_COOKIE = "swastik_customer_session";
 
@@ -24,7 +28,11 @@ function tokenHash(token) {
 function parseCookies(req) {
   return String(req.get("cookie") || "").split(";").reduce((cookies, part) => {
     const index = part.indexOf("=");
-    if (index > 0) cookies[part.slice(0, index).trim()] = decodeURIComponent(part.slice(index + 1).trim());
+    if (index > 0) {
+      const name = part.slice(0, index).trim();
+      try { cookies[name] = decodeURIComponent(part.slice(index + 1).trim()); }
+      catch { cookies[name] = ""; }
+    }
     return cookies;
   }, {});
 }
@@ -34,13 +42,34 @@ function bearerToken(req) {
   return authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
 }
 
-export function sessionCookie(name, token, maxAge = SESSION_TTL_MS) {
-  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
-  return `${name}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(maxAge / 1000)}${secure}`;
+function presentedToken(req, cookieName, alternateHeader = "") {
+  const cookieToken = parseCookies(req)[cookieName] || "";
+  if (cookieToken) return cookieToken;
+  if (!BEARER_SESSIONS_ENABLED) return "";
+  return alternateHeader ? String(req.get(alternateHeader) || "") : bearerToken(req);
 }
 
-export function clearSessionCookie(name) {
-  return `${name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+function cookieAttributes(req, maxAge) {
+  const secure = Boolean(req?.secure);
+  const requestedSameSite = String(process.env.SESSION_COOKIE_SAME_SITE || "Lax").toLowerCase();
+  const sameSite = requestedSameSite === "strict" ? "Strict" : requestedSameSite === "none" && secure ? "None" : "Lax";
+  return `Path=/; HttpOnly; SameSite=${sameSite}; Max-Age=${Math.max(0, Math.floor(maxAge / 1000))}${secure ? "; Secure" : ""}`;
+}
+
+export function sessionCookie(name, token, req, maxAge = SESSION_TTL_MS) {
+  return `${name}=${encodeURIComponent(token)}; ${cookieAttributes(req, maxAge)}`;
+}
+
+export function clearSessionCookie(name, req) {
+  return `${name}=; ${cookieAttributes(req, 0)}`;
+}
+
+export function staffSessionToken(req) {
+  return presentedToken(req, STAFF_COOKIE);
+}
+
+export function customerSessionToken(req) {
+  return presentedToken(req, CUSTOMER_COOKIE, "x-customer-token");
 }
 
 export async function hashPassword(password) {
@@ -63,22 +92,22 @@ function parsePermissions(value) {
 }
 
 function isAdministrator(user) {
-  return Boolean(user?.isMasterAdmin || ["MASTER_ADMIN", "ADMIN"].includes(String(user?.role_code || "").toUpperCase()));
+  return Boolean(user?.isMasterAdmin);
 }
 
 export function toPublicStaff(row) {
-  const roleCode = String(row.role_name || row.role_code || "STAFF");
+  const roleCode = String(row.role_name || row.role_code || "");
   return {
     id: Number(row.id),
     name: row.full_name,
     mobile: row.phone_number,
     email: row.email || "",
     role: row.role_description || roleCode,
-    role_id: Number(row.role_id),
+    role_id: row.role_id == null ? null : Number(row.role_id),
     role_code: roleCode,
     permissions: parsePermissions(row.permission_codes),
     status: row.status,
-    isMasterAdmin: Boolean(row.is_master_admin) || roleCode.toUpperCase() === "MASTER_ADMIN"
+    isMasterAdmin: Boolean(row.is_master_admin)
   };
 }
 
@@ -116,6 +145,7 @@ async function loadStaffSession(token) {
   return (await db.query(`${STAFF_SELECT}
     JOIN user_session s ON s.user_id = u.id
    WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > CURRENT_TIMESTAMP
+     AND lower(u.status) IN ('active','enabled')
    GROUP BY u.id LIMIT 1`, [tokenHash(token)]))[0] || null;
 }
 
@@ -125,10 +155,10 @@ export async function revokeSession(token, table = "user_session") {
 }
 
 export async function requireStaffAuth(req, res, next) {
-  const token = bearerToken(req) || parseCookies(req)[STAFF_COOKIE];
+  const token = staffSessionToken(req);
   try {
     const row = await loadStaffSession(token);
-    if (!row || !["active", "enabled"].includes(String(row.status || "").toLowerCase())) {
+    if (!row) {
       return res.status(401).json({ error: "Staff authentication is required." });
     }
     req.authToken = token;
@@ -150,9 +180,28 @@ export function requirePermission(...permissions) {
   };
 }
 
+export const requireAnyPermission = requirePermission;
+
+export function requireAllPermissions(...permissions) {
+  return (req, res, next) => {
+    if (!req.staff) return res.status(401).json({ error: "Staff authentication is required." });
+    if (!isAdministrator(req.staff) && !permissions.every(permission => req.staff.permissions.includes(permission))) {
+      return res.status(403).json({ error: "Insufficient permission." });
+    }
+    next();
+  };
+}
+
+export function requireMasterAdmin(req, res, next) {
+  if (!req.staff) return res.status(401).json({ error: "Staff authentication is required." });
+  if (!isAdministrator(req.staff)) return res.status(403).json({ error: "Master administrator authority is required." });
+  next();
+}
+
 export async function issueCustomerSession(customerId, metadata = {}, transaction = db) {
   const token = crypto.randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
+  await transaction.execute("DELETE FROM customer_session WHERE expires_at <= CURRENT_TIMESTAMP OR revoked_at IS NOT NULL");
   await transaction.execute(
     "INSERT INTO customer_session (customer_id, token_hash, expires_at, ip_address, user_agent) VALUES (?, ?, ?, ?, ?)",
     [customerId, tokenHash(token), expiresAt, metadata.ip || "", String(metadata.userAgent || "").slice(0, 1000)]
@@ -161,8 +210,7 @@ export async function issueCustomerSession(customerId, metadata = {}, transactio
 }
 
 export async function requireCustomerAuth(req, res, next) {
-  const cookies = parseCookies(req);
-  const token = String(req.get("x-customer-token") || "") || cookies[CUSTOMER_COOKIE];
+  const token = customerSessionToken(req);
   if (!token) return res.status(401).json({ error: "Customer authentication is required." });
   try {
     const row = (await db.query(`
@@ -181,17 +229,17 @@ export async function requireCustomerAuth(req, res, next) {
   }
 }
 
-export async function optionalIdentity(req, _res, next) {
-  const cookies = parseCookies(req);
+export async function optionalIdentity(req, res, next) {
   try {
-    const staffToken = bearerToken(req) || cookies[STAFF_COOKIE];
-    const customerToken = String(req.get("x-customer-token") || "") || cookies[CUSTOMER_COOKIE];
+    const staffToken = staffSessionToken(req);
+    const customerToken = customerSessionToken(req);
     const staff = await loadStaffSession(staffToken);
     if (staff) req.staff = toPublicStaff(staff);
     if (customerToken) {
-      const customer = (await db.query(`SELECT c.* FROM customer_session s JOIN customer c ON c.id=s.customer_id WHERE s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at > CURRENT_TIMESTAMP LIMIT 1`, [tokenHash(customerToken)]))[0];
+      const customer = (await db.query(`SELECT c.* FROM customer_session s JOIN customer c ON c.id=s.customer_id WHERE s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at > CURRENT_TIMESTAMP AND lower(c.status)='active' LIMIT 1`, [tokenHash(customerToken)]))[0];
       if (customer) req.customer = customer;
     }
+    if (req.staff && req.customer) return res.status(400).json({ error: "Use either a staff session or a customer session, not both." });
     next();
   } catch (error) { next(error); }
 }

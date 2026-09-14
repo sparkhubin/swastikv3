@@ -1,22 +1,29 @@
 import React, { createContext, useState, useContext, useEffect, useRef, useCallback } from 'react';
 import { isOrder1HourLocked } from '../utils/orderLock';
+import { useAuth } from './AuthContext';
 
 const DataContext = createContext();
 
 
 export function DataProvider({ children }) {
+  const { staff: authenticatedStaff, customer: authenticatedCustomer } = useAuth();
   const settingsLoaded = useRef(false);
+  const reconcileSettings = useRef(() => {});
 
   const saveSettingToDb = async (key, value) => {
     if (!settingsLoaded.current) return;
     try {
-      await fetch('/api/settings', {
+      const response = await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key, value })
       });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || `Unable to save ${key}.`);
+      return result.value;
     } catch (err) {
       console.warn(`Failed to save setting ${key} to DB:`, err);
+      reconcileSettings.current();
     }
   };
 
@@ -88,10 +95,6 @@ export function DataProvider({ children }) {
     saveSettingToDb('swastik_offers', offers);
   }, [offers]);
 
-  useEffect(() => {
-    saveSettingToDb('swastik_contact_messages', contactMessages);
-  }, [contactMessages]);
-
 
   useEffect(() => {
     saveSettingToDb('swastik_about_settings', aboutSettings);
@@ -115,6 +118,22 @@ export function DataProvider({ children }) {
   });
 
   const inFlightMap = useRef({});
+  const previousPrincipal = useRef('');
+
+  useEffect(() => {
+    const principal = authenticatedStaff
+      ? `staff:${authenticatedStaff.id}:${Boolean(authenticatedStaff.isMasterAdmin)}:${[...(authenticatedStaff.permissions || [])].sort().join(',')}`
+      : authenticatedCustomer ? `customer:${authenticatedCustomer.id}` : 'public';
+    if (previousPrincipal.current && previousPrincipal.current !== principal) {
+      setOrders([]);
+      setCustomers([]);
+      setStaff([]);
+      setDataDeletionRequests([]);
+      for (const key of ['orders', 'customers', 'staff', 'deletionRequests']) loadedMap.current[key] = false;
+      for (const key of ['orders', 'customers', 'staff', 'deletionRequests']) delete inFlightMap.current[key];
+    }
+    previousPrincipal.current = principal;
+  }, [authenticatedStaff?.id, authenticatedStaff?.isMasterAdmin, authenticatedStaff?.permissions, authenticatedCustomer?.id]);
 
   // Synchronous refs to prevent useCallback dependency invalidation and infinite re-render loops
   const productsRef = useRef(products);
@@ -175,21 +194,19 @@ export function DataProvider({ children }) {
           settingsLoaded.current = false;
 
           if (settingsData) {
-            if (settingsData.swastik_location_groups && Array.isArray(settingsData.swastik_location_groups) && settingsData.swastik_location_groups.length > 0) {
-              setLocationGroups(settingsData.swastik_location_groups);
-            }
-            if (settingsData.swastik_referral_settings) setReferralSettings(settingsData.swastik_referral_settings);
-            if (settingsData.swastik_celebration_settings) setCelebrationSettings(settingsData.swastik_celebration_settings);
-            if (settingsData.swastik_prime_settings) setPrimeSettings(settingsData.swastik_prime_settings);
-            if (settingsData.swastik_slides) setSlides(settingsData.swastik_slides);
-            if (settingsData.swastik_categories) setCategories(settingsData.swastik_categories);
-            if (settingsData.swastik_offers) setOffers(settingsData.swastik_offers);
-            if (settingsData.swastik_contact_messages) setContactMessages(settingsData.swastik_contact_messages);
-            if (settingsData.swastik_about_settings) setAboutSettings(settingsData.swastik_about_settings);
-            if (settingsData.swastik_contact_settings) setContactSettings(settingsData.swastik_contact_settings);
-            if (settingsData.swastik_refund_sections && Array.isArray(settingsData.swastik_refund_sections)) setRefundSections(settingsData.swastik_refund_sections);
-            if (settingsData.swastik_privacy_sections && Array.isArray(settingsData.swastik_privacy_sections)) setPrivacySections(settingsData.swastik_privacy_sections);
-            if (settingsData.swastik_terms_sections && Array.isArray(settingsData.swastik_terms_sections)) setTermsSections(settingsData.swastik_terms_sections);
+            if (Object.hasOwn(settingsData, 'swastik_location_groups')) setLocationGroups(Array.isArray(settingsData.swastik_location_groups) ? settingsData.swastik_location_groups : []);
+            if (Object.hasOwn(settingsData, 'swastik_referral_settings')) setReferralSettings(settingsData.swastik_referral_settings || {});
+            if (Object.hasOwn(settingsData, 'swastik_celebration_settings')) setCelebrationSettings(settingsData.swastik_celebration_settings || {});
+            if (Object.hasOwn(settingsData, 'swastik_prime_settings')) setPrimeSettings(settingsData.swastik_prime_settings || {});
+            if (Object.hasOwn(settingsData, 'swastik_slides')) setSlides(Array.isArray(settingsData.swastik_slides) ? settingsData.swastik_slides : []);
+            if (Object.hasOwn(settingsData, 'swastik_categories')) setCategories(Array.isArray(settingsData.swastik_categories) ? settingsData.swastik_categories : []);
+            if (Object.hasOwn(settingsData, 'swastik_offers')) setOffers(Array.isArray(settingsData.swastik_offers) ? settingsData.swastik_offers : []);
+            if (Object.hasOwn(settingsData, 'swastik_contact_messages')) setContactMessages(Array.isArray(settingsData.swastik_contact_messages) ? settingsData.swastik_contact_messages : []);
+            if (Object.hasOwn(settingsData, 'swastik_about_settings')) setAboutSettings(settingsData.swastik_about_settings || {});
+            if (Object.hasOwn(settingsData, 'swastik_contact_settings')) setContactSettings(settingsData.swastik_contact_settings || {});
+            if (Object.hasOwn(settingsData, 'swastik_refund_sections')) setRefundSections(Array.isArray(settingsData.swastik_refund_sections) ? settingsData.swastik_refund_sections : []);
+            if (Object.hasOwn(settingsData, 'swastik_privacy_sections')) setPrivacySections(Array.isArray(settingsData.swastik_privacy_sections) ? settingsData.swastik_privacy_sections : []);
+            if (Object.hasOwn(settingsData, 'swastik_terms_sections')) setTermsSections(Array.isArray(settingsData.swastik_terms_sections) ? settingsData.swastik_terms_sections : []);
           }
           loadedMap.current.settings = true;
         }
@@ -204,6 +221,7 @@ export function DataProvider({ children }) {
     })();
     return inFlightMap.current.settings;
   }, []);
+  reconcileSettings.current = () => { fetchSettings(true).catch(() => {}); };
 
   // 3. Products Loader (Only fetched on Home, Shop, Cart, or Products Manager)
   const fetchProducts = useCallback(async (force = false, isImage = null) => {
@@ -254,6 +272,9 @@ export function DataProvider({ children }) {
             loadedMap.current.orders = true;
             return data;
           }
+        } else if (orderRes.status === 401 || orderRes.status === 403) {
+          setOrders([]);
+          loadedMap.current.orders = false;
         }
       } catch (e) {
         console.warn("Failed to fetch orders:", e);
@@ -266,7 +287,8 @@ export function DataProvider({ children }) {
   }, []);
 
   // 5. Customers Loader (Only fetched on Customers Manager or Checkout Customer lookup)
-  const fetchCustomers = useCallback(async () => {
+  const fetchCustomers = useCallback(async (force = false) => {
+    if (loadedMap.current.customers && !force) return customersRef.current;
     if (inFlightMap.current.customers) {
       return inFlightMap.current.customers;
     }
@@ -280,8 +302,12 @@ export function DataProvider({ children }) {
   
           if (Array.isArray(custData)) {
             setCustomers(custData);
+            loadedMap.current.customers = true;
             return custData;
           }
+        } else if (custRes.status === 401 || custRes.status === 403) {
+          setCustomers([]);
+          loadedMap.current.customers = false;
         }
       } catch (e) {
         console.warn("Failed to fetch customers:", e);
@@ -310,6 +336,9 @@ export function DataProvider({ children }) {
             loadedMap.current.staff = true;
             return list;
           }
+        } else if (res.status === 401 || res.status === 403) {
+          setStaff([]);
+          loadedMap.current.staff = false;
         }
       } catch (e) {
         console.warn("Could not fetch staff from server:", e);
@@ -388,6 +417,9 @@ export function DataProvider({ children }) {
             loadedMap.current.deletionRequests = true;
             return delReqData;
           }
+        } else if (delReqRes.status === 401 || delReqRes.status === 403) {
+          setDataDeletionRequests([]);
+          loadedMap.current.deletionRequests = false;
         }
       } catch (e) {
         console.warn("Failed to fetch data deletion requests:", e);
@@ -416,6 +448,18 @@ export function DataProvider({ children }) {
     fetchConfig();
     fetchSettings();
   }, [fetchConfig, fetchSettings]);
+
+  useEffect(() => {
+    if (!authenticatedStaff || (!authenticatedStaff.isMasterAdmin && !authenticatedStaff.permissions?.includes('settings'))) {
+      setContactMessages([]);
+      return;
+    }
+    fetch('/api/contact/messages').then(async response => {
+      const result = await response.json().catch(() => []);
+      if (!response.ok) throw new Error(result.error || 'Unable to load contact messages.');
+      setContactMessages(Array.isArray(result) ? result : []);
+    }).catch(error => console.warn(error.message));
+  }, [authenticatedStaff?.id, authenticatedStaff?.isMasterAdmin, authenticatedStaff?.permissions]);
 
   // CRUD actions for products via GORM REST API
   const addProduct = async (p) => {
@@ -447,7 +491,7 @@ export function DataProvider({ children }) {
       });
       if (res.ok) {
         const saved = await res.json();
-        setProducts(prev => prev.map(p => p.id === Number(id) ? { ...p, ...saved } : p));
+        setProducts(prev => prev.map(p => p.id === Number(id) ? saved : p));
       } else {
         const error = await res.json().catch(() => ({}));
         throw new Error(error.error || 'Product update failed.');
@@ -552,13 +596,12 @@ export function DataProvider({ children }) {
         const created = await res.json();
         setPartners(prev => [...prev, created]);
       } else {
-        const newId = partners.length > 0 ? Math.max(...partners.map(x => x.id)) + 1 : 1;
-        setPartners(prev => [...prev, { ...par, id: newId }]);
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || 'Partner creation failed.');
       }
     } catch (e) {
       console.error(e);
-      const newId = partners.length > 0 ? Math.max(...partners.map(x => x.id)) + 1 : 1;
-      setPartners(prev => [...prev, { ...par, id: newId }]);
+      throw e;
     }
   };
 
@@ -571,16 +614,15 @@ export function DataProvider({ children }) {
       });
       if (res.ok) {
         const returned = await res.json();
-        setPartners(prev => prev.map(p => p.id === Number(id) ? { ...p, ...returned } : p));
+        setPartners(prev => prev.map(p => p.id === Number(id) ? returned : p));
         return returned;
       } else {
-        setPartners(prev => prev.map(p => p.id === Number(id) ? { ...p, ...updated } : p));
-        return { id: Number(id), ...updated };
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || 'Partner update failed.');
       }
     } catch (e) {
       console.error("Failed to update partner:", e);
-      setPartners(prev => prev.map(p => p.id === Number(id) ? { ...p, ...updated } : p));
-      return { id: Number(id), ...updated };
+      throw e;
     }
   };
 
@@ -590,11 +632,12 @@ export function DataProvider({ children }) {
       if (res.ok) {
         setPartners(prev => prev.filter(p => p.id !== Number(id)));
       } else {
-        setPartners(prev => prev.filter(p => p.id !== Number(id)));
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || 'Partner deletion failed.');
       }
     } catch (e) {
       console.error(e);
-      setPartners(prev => prev.filter(p => p.id !== Number(id)));
+      throw e;
     }
   };
 
@@ -610,13 +653,12 @@ export function DataProvider({ children }) {
         const created = await res.json();
         setReviews(prev => [created, ...prev]);
       } else {
-        const newId = reviews.length > 0 ? Math.max(...reviews.map(x => x.id)) + 1 : 1;
-        setReviews(prev => [{ ...rev, id: newId, date: "Just now" }, ...prev]);
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || 'Review creation failed.');
       }
     } catch (e) {
       console.error(e);
-      const newId = reviews.length > 0 ? Math.max(...reviews.map(x => x.id)) + 1 : 1;
-      setReviews(prev => [{ ...rev, id: newId, date: "Just now" }, ...prev]);
+      throw e;
     }
   };
 
@@ -628,22 +670,30 @@ export function DataProvider({ children }) {
         body: JSON.stringify({ response: updated.response || '' }),
       });
       if (res.ok) {
-        setReviews(prev => prev.map(r => r.id === Number(id) ? { ...r, ...updated } : r));
+        const returned = await res.json();
+        setReviews(prev => prev.map(r => r.id === Number(id) ? returned : r));
+        return returned;
       } else {
-        setReviews(prev => prev.map(r => r.id === Number(id) ? { ...r, ...updated } : r));
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || 'Review update failed.');
       }
     } catch (e) {
       console.error(e);
-      setReviews(prev => prev.map(r => r.id === Number(id) ? { ...r, ...updated } : r));
+      throw e;
     }
   };
 
   const deleteReview = async (id) => {
-    setReviews(prev => prev.filter(r => r.id !== Number(id) && String(r.id) !== String(id)));
     try {
-      await fetch(`/api/reviews/${id}`, { method: 'DELETE' });
+      const response = await fetch(`/api/reviews/${id}`, { method: 'DELETE' });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || 'Review deletion failed.');
+      }
+      setReviews(prev => prev.filter(r => r.id !== Number(id) && String(r.id) !== String(id)));
     } catch (e) {
       console.error("Failed to delete review on server:", e);
+      throw e;
     }
   };
 
@@ -655,10 +705,8 @@ export function DataProvider({ children }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(order),
       });
-      let createdOrder = order;
       if (res.ok) {
-        const serverData = await res.json();
-        createdOrder = { ...order, ...serverData };
+        const createdOrder = await res.json();
         setOrders(prev => [createdOrder, ...prev]);
 
         await fetchProducts(true);
@@ -702,41 +750,6 @@ export function DataProvider({ children }) {
           });
           if (Object.keys(sanitizedPayload).length === 0) return;
           updated = sanitizedPayload;
-        }
-      }
-
-      // Automatically update local product stock if order status transitions to or from Cancelled
-      if (existingOrder && Array.isArray(existingOrder.items) && existingOrder.items.length > 0) {
-        const wasCancelled = (existingOrder.status || "").toLowerCase().includes("cancel") || existingOrder.step === -1;
-        const isNowCancelled = (updated.status || "").toLowerCase().includes("cancel") || updated.step === -1;
-
-        if (isNowCancelled && !wasCancelled) {
-          // Restore stock locally
-          setProducts(prevProducts => {
-            return prevProducts.map(p => {
-              const matchedItem = existingOrder.items.find(it => Number(it.productId || it.id) === Number(p.id));
-              if (matchedItem) {
-                const qtyToAdd = Number(matchedItem.quantity || matchedItem.qty || 1);
-                const currentStock = Number(p.stockCount || 0);
-                return { ...p, stockCount: currentStock + qtyToAdd };
-              }
-              return p;
-            });
-          });
-        } else if (!isNowCancelled && wasCancelled) {
-          // Re-deduct stock locally if uncancelled
-          setProducts(prevProducts => {
-            return prevProducts.map(p => {
-              const matchedItem = existingOrder.items.find(it => Number(it.productId || it.id) === Number(p.id));
-              if (matchedItem) {
-                const qtyToSub = Number(matchedItem.quantity || matchedItem.qty || 1);
-                const currentStock = Number(p.stockCount || 0);
-                const newStock = Math.max(0, currentStock - qtyToSub);
-                return { ...p, stockCount: newStock };
-              }
-              return p;
-            });
-          });
         }
       }
 
@@ -784,11 +797,7 @@ export function DataProvider({ children }) {
     setCategories(prev => prev.map(c => c.id === id ? { ...c, ...updated } : c));
   };
   const deleteCategory = (id) => {
-    setCategories(prev => {
-      const updated = prev.filter(c => c.id !== id && String(c.id) !== String(id));
-      saveSettingToDb('swastik_categories', updated);
-      return updated;
-    });
+    setCategories(prev => prev.filter(c => c.id !== id && String(c.id) !== String(id)));
   };
 
   // Dynamic offers CRUD
@@ -800,27 +809,29 @@ export function DataProvider({ children }) {
     setOffers(prev => prev.map(o => (o.id === id || String(o.id) === String(id) || o.id === Number(id)) ? { ...o, ...updated } : o));
   };
   const deleteOffer = (id) => {
-    setOffers(prev => {
-      const updated = prev.filter(o => o.id !== id && String(o.id) !== String(id) && o.id !== Number(id));
-      saveSettingToDb('swastik_offers', updated);
-      return updated;
-    });
+    setOffers(prev => prev.filter(o => o.id !== id && String(o.id) !== String(id) && o.id !== Number(id)));
   };
 
   // Dynamic contact messages submission
-  const addContactMessage = (msg) => {
-    const newId = contactMessages.length > 0 ? Math.max(...contactMessages.map(m => m.id)) + 1 : 1;
-    setContactMessages(prev => [{ ...msg, id: newId, date: "Just now", answer: "" }, ...prev]);
+  const addContactMessage = async (msg) => {
+    const response = await fetch('/api/contact/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(msg) });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.message) throw new Error(result.error || 'Unable to submit contact message.');
+    return result.message;
   };
-  const updateContactMessage = (id, updated) => {
-    setContactMessages(prev => prev.map(m => (m.id === id || String(m.id) === String(id) || m.id === Number(id)) ? { ...m, ...updated } : m));
+  const updateContactMessage = async (id, updated) => {
+    const response = await fetch(`/api/contact/messages/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.message) throw new Error(result.error || 'Unable to update contact message.');
+    setContactMessages(prev => prev.map(message => String(message.id) === String(id) ? result.message : message));
+    return result.message;
   };
-  const deleteContactMessage = (id) => {
-    setContactMessages(prev => {
-      const updated = prev.filter(m => m.id !== id && String(m.id) !== String(id) && m.id !== Number(id));
-      saveSettingToDb('swastik_contact_messages', updated);
-      return updated;
-    });
+  const deleteContactMessage = async (id) => {
+    const response = await fetch(`/api/contact/messages/${id}`, { method: 'DELETE' });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Unable to delete contact message.');
+    setContactMessages(prev => prev.filter(message => String(message.id) !== String(id)));
+    return true;
   };
 
   // Dynamic customers register & synchronization with backend
@@ -928,8 +939,8 @@ export function DataProvider({ children }) {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Could not delete staff member');
-      setStaff(prev => prev.filter(item => item.id !== Number(id)));
-      return { success: true };
+      setStaff(prev => prev.map(item => item.id === Number(id) ? data.staff : item));
+      return { success: true, staff: data.staff };
     } catch (e) {
       console.error('Staff deletion failed:', e);
       return { success: false, error: e.message };

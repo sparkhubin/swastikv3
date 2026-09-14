@@ -3,14 +3,19 @@ import path from "node:path";
 import sqlite3 from "sqlite3";
 
 const REQUIRED_SCHEMA = {
-  user: ["id", "password_hash", "role_id", "is_master_admin"],
+  role: ["id", "name", "is_system"],
+  permission: ["id", "code", "module"],
+  role_permission: ["role_id", "permission_id"],
+  user: ["id", "phone_number", "password_hash", "role_id", "status", "is_master_admin"],
   user_session: ["user_id", "token_hash", "expires_at", "revoked_at"],
-  customer: ["id", "phone", "password_hash"],
+  customer: ["id", "phone", "password_hash", "status"],
   customer_session: ["customer_id", "token_hash", "expires_at", "revoked_at"],
   customer_otp: ["phone", "otp_hash", "expires_at", "attempts", "consumed_at"],
   product: ["id", "code", "price", "gst_percent", "is_active"],
   inventory: ["product_id", "stock_qty", "reserved_qty"],
   stock_movement: ["product_id", "type", "before_qty", "after_qty"],
+  cart: ["id", "customer_id", "coupon_code"],
+  cart_item: ["cart_id", "product_id", "qty", "weight_label", "unit_price"],
   order: ["id", "customer_id", "grand_total", "payment_status", "status"],
   order_item: ["order_id", "product_id", "price", "qty", "gst_percent", "line_total"],
   payment_settings: ["gateway", "enabled", "key_id", "secret_key", "app_id", "app_secret"],

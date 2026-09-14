@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
 
 // Icons Import
 import { 
@@ -68,6 +69,7 @@ import AdminPageLoader from '../../components/admin/AdminPageLoader';
 
 export default function AdminDashboard({ onViewChange }) {
   const { isHindi } = useLanguage();
+  const { staff: loggedInStaff, staffStatus, loginStaff, logoutStaff, refreshStaff } = useAuth();
   const { 
     products, 
     categories,
@@ -95,31 +97,10 @@ export default function AdminDashboard({ onViewChange }) {
     fetchDataDeletionRequests
   } = useData();
 
-  // Authentication State
-  const [loggedInStaff, setLoggedInStaff] = useState(null);
-
   // Login Form States
   const [loginMobile, setLoginMobile] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
-
-  useEffect(() => {
-    let active = true;
-    fetch('/api/auth/staff/session')
-      .then(async response => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json();
-      })
-      .then(data => {
-        if (!active || !data.user) return;
-        setLoggedInStaff(data.user);
-      })
-      .catch(() => {
-        if (!active) return;
-        setLoggedInStaff(null);
-      });
-    return () => { active = false; };
-  }, []);
 
   // Change Password Modal States
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
@@ -132,7 +113,7 @@ export default function AdminDashboard({ onViewChange }) {
   const [dateTo, setDateTo] = useState('2026-06-30');
 
   // Active Tab State (Auto-assigned inside useEffect based on permissions)
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState(() => window.location.pathname.split('/')[2] || 'dashboard');
   const [searchQuery, setSearchQuery] = useState('');
 
   // 1. Theme Configuration State (Light/Dark Toggle)
@@ -147,6 +128,17 @@ export default function AdminDashboard({ onViewChange }) {
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const profileDropdownRef = React.useRef(null);
   const [isBackupDownloading, setIsBackupDownloading] = useState(false);
+
+  useEffect(() => {
+    const currentTab = window.location.pathname.split('/')[2] || 'dashboard';
+    if (currentTab !== activeTab) window.history.pushState(null, '', `/admin/${activeTab}`);
+  }, [activeTab]);
+
+  useEffect(() => {
+    const restoreTab = () => setActiveTab(window.location.pathname.split('/')[2] || 'dashboard');
+    window.addEventListener('popstate', restoreTab);
+    return () => window.removeEventListener('popstate', restoreTab);
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -191,16 +183,55 @@ export default function AdminDashboard({ onViewChange }) {
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffMobile, setNewStaffMobile] = useState('');
   const [newStaffPassword, setNewStaffPassword] = useState('');
-  const [newStaffPerms, setNewStaffPerms] = useState(['orders']); // default to orders permission
+  const [newStaffRoleId, setNewStaffRoleId] = useState('');
   const [editingStaffId, setEditingStaffId] = useState(null);
   const [newStaffStatus, setNewStaffStatus] = useState('enabled');
+  const [roles, setRoles] = useState([]);
+  const [permissionCatalog, setPermissionCatalog] = useState([]);
+  const [roleMutationId, setRoleMutationId] = useState(null);
+
+  useEffect(() => {
+    if (!loggedInStaff) {
+      setUserRole('customer');
+      return;
+    }
+    const permissions = loggedInStaff.permissions || [];
+    const deliveryOnly = permissions.includes('delivery') && permissions.every(permission => ['orders', 'delivery'].includes(permission));
+    setUserRole(deliveryOnly ? 'delivery' : (loggedInStaff.isMasterAdmin ? 'admin' : 'manager'));
+  }, [loggedInStaff, setUserRole]);
+
+  const fetchAccessModel = async () => {
+    const [rolesResponse, permissionsResponse] = await Promise.all([fetch('/api/roles'), fetch('/api/permissions')]);
+    const rolesData = await rolesResponse.json().catch(() => []);
+    const permissionsData = await permissionsResponse.json().catch(() => []);
+    if (!rolesResponse.ok || !permissionsResponse.ok) throw new Error(rolesData.error || permissionsData.error || 'Unable to load roles and permissions.');
+    setRoles(Array.isArray(rolesData) ? rolesData : []);
+    setPermissionCatalog(Array.isArray(permissionsData) ? permissionsData : []);
+  };
+
+  const handleRolePermissionToggle = async (role, permissionCode) => {
+    if (!loggedInStaff?.isMasterAdmin || roleMutationId) return;
+    const permissions = role.permissions.includes(permissionCode) ? role.permissions.filter(code => code !== permissionCode) : [...role.permissions, permissionCode];
+    setRoleMutationId(role.id);
+    try {
+      const response = await fetch(`/api/roles/${role.id}/permissions`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ permissions }) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.role) throw new Error(result.error || 'Role update failed.');
+      setRoles(current => current.map(item => item.id === role.id ? result.role : item));
+      await Promise.all([fetchStaff(true), refreshStaff()]);
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      setRoleMutationId(null);
+    }
+  };
 
   // Keep loggedInStaff synced with global staff directory updates (or auto-logout if suspended)
   useEffect(() => {
     if (loggedInStaff && Array.isArray(staff) && staff.length > 0) {
       const current = staff.find(s => s.id === loggedInStaff.id || s.mobile === loggedInStaff.mobile);
       if (current) {
-        if (current.status === 'disabled') {
+        if (String(current.status).toLowerCase() === 'disabled') {
           alert('Your staff workspace account has been suspended by Administrator.');
           handleLogout();
         } else {
@@ -209,12 +240,12 @@ export default function AdminDashboard({ onViewChange }) {
           const permsChanged = currentPerms !== loggedInPerms;
           const infoChanged = current.name !== loggedInStaff.name || current.role !== loggedInStaff.role;
           if (permsChanged || infoChanged) {
-            setLoggedInStaff(current);
+            refreshStaff();
           }
         }
       }
     }
-  }, [staff]);
+  }, [staff, loggedInStaff, refreshStaff]);
 
   const [isDashboardLoading, setIsDashboardLoading] = useState(false);
   const [isStaffLoading, setIsStaffLoading] = useState(false);
@@ -245,56 +276,43 @@ export default function AdminDashboard({ onViewChange }) {
       if (!staff || staff.length === 0) {
         setIsStaffLoading(true);
       }
-      fetchStaff(true).finally(() => {
+      Promise.all([fetchStaff(true), fetchAccessModel()]).finally(() => {
         if (isMounted) setIsStaffLoading(false);
       });
       return () => { isMounted = false; };
+    } else if (activeTab === 'orders' || activeTab === 'delivery') {
+      fetchOrders(true);
+      if (loggedInStaff.isMasterAdmin || loggedInStaff.permissions?.includes('staff')) fetchStaff(true);
     }
-  }, [activeTab, staffLoggedInId, fetchOrders, fetchProducts, fetchPartners, fetchReviews, fetchStaff]);
+  }, [activeTab, staffLoggedInId, loggedInStaff, fetchOrders, fetchProducts, fetchPartners, fetchReviews, fetchStaff]);
 
   // Login Submission
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setLoginError('');
     try {
-      const response = await fetch('/api/auth/staff/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mobile: loginMobile, password: loginPassword })
-      });
-      const data = await response.json();
-      if (!response.ok || !data.user || !data.token) {
-        setLoginError(data.error || 'Invalid credentials. Access denied.');
-        return;
-      }
-
-      const matched = data.user;
-      setLoggedInStaff(matched);
-      window.dispatchEvent(new Event('staff_session_change'));
+      const matched = await loginStaff(loginMobile, loginPassword);
       const perms = matched.permissions || [];
-      const isSuper = matched.isMasterAdmin || matched.role_code === 'admin';
-      const isDeliveryOnly = perms.length === 1 && perms[0] === 'delivery';
+      const isSuper = matched.isMasterAdmin;
+      const isDeliveryOnly = perms.includes('delivery') && perms.every(permission => ['orders', 'delivery'].includes(permission));
       const roleToSet = isDeliveryOnly ? 'delivery' : (isSuper ? 'admin' : 'manager');
       setUserRole(roleToSet);
       await fetchStaff(true);
     } catch (error) {
-      console.error('Staff authentication failed:', error);
-      setLoginError('The authentication service is unavailable.');
+      setLoginError(error.message || 'Authentication failed.');
     }
   };
 
   // Logout handler
   const handleLogout = () => {
-    fetch('/api/auth/staff/logout', { method: 'POST' }).catch(() => {});
-    setLoggedInStaff(null);
-    window.dispatchEvent(new Event('staff_session_change'));
+    logoutStaff().catch(() => {});
     setUserRole('customer');
   };
 
   // Staff creation Super Admin CRUD
   const handleCreateStaffSubmit = async (e) => {
     e.preventDefault();
-    if (!newStaffName || !newStaffMobile || (!editingStaffId && !newStaffPassword)) {
+    if (!newStaffName || !newStaffMobile || !newStaffRoleId || (!editingStaffId && !newStaffPassword)) {
       alert('Please fill out all staff credentials.');
       return;
     }
@@ -303,7 +321,7 @@ export default function AdminDashboard({ onViewChange }) {
       name: newStaffName,
       mobile: newStaffMobile,
       ...(newStaffPassword ? { password: newStaffPassword } : {}),
-      permissions: newStaffPerms,
+      roleId: Number(newStaffRoleId),
       status: newStaffStatus
     };
 
@@ -328,7 +346,7 @@ export default function AdminDashboard({ onViewChange }) {
     setNewStaffMobile('');
     setNewStaffPassword('');
     setNewStaffStatus('enabled');
-    setNewStaffPerms(['orders']);
+    setNewStaffRoleId('');
   };
 
   const handleStartStaffEdit = (s) => {
@@ -336,8 +354,8 @@ export default function AdminDashboard({ onViewChange }) {
     setNewStaffName(s.name);
     setNewStaffMobile(s.mobile);
     setNewStaffPassword('');
-    setNewStaffPerms(s.permissions || []);
-    setNewStaffStatus(s.status || 'enabled');
+    setNewStaffRoleId(String(s.role_id || ''));
+    setNewStaffStatus(String(s.status || 'enabled').toLowerCase());
   };
 
   const handleCancelStaffEdit = () => {
@@ -345,51 +363,39 @@ export default function AdminDashboard({ onViewChange }) {
     setNewStaffName('');
     setNewStaffMobile('');
     setNewStaffPassword('');
-    setNewStaffPerms(['orders']);
+    setNewStaffRoleId('');
     setNewStaffStatus('enabled');
   };
 
-  const handleTogglePerm = (permKey) => {
-    setNewStaffPerms(prev => 
-      prev.includes(permKey) ? prev.filter(p => p !== permKey) : [...prev, permKey]
-    );
-  };
-
-  const handleDeleteStaff = (id) => {
-    if (id === 1) {
-      alert('Cannot delete the root backup Super Admin.');
-      return;
-    }
+  const handleDeleteStaff = async (id) => {
     if (window.confirm('Strike off this staff identity from Swastik nodes?')) {
-      deleteStaff(id);
+      const result = await deleteStaff(id);
+      if (!result?.success) alert(result?.error || 'Unable to disable staff account.');
     }
   };
 
   // Determine if active user has Super Admin clearance (Root Admin)
   // Strict Staff Role & Permission Mapping
-  const isRootAdmin = Boolean(loggedInStaff?.isMasterAdmin || ['MASTER_ADMIN', 'ADMIN'].includes(String(loggedInStaff?.role_code || '').toUpperCase()));
+  const isRootAdmin = Boolean(loggedInStaff?.isMasterAdmin);
 
   // Delivery Rider identification: strictly delivery operations only
   const isRiderRole = Boolean(
     loggedInStaff && (
-      String(loggedInStaff.role_code || '').toUpperCase() === 'DELIVERY' ||
-      (Array.isArray(loggedInStaff.permissions) && loggedInStaff.permissions.length === 1 && loggedInStaff.permissions[0] === 'delivery')
+      Array.isArray(loggedInStaff.permissions) && loggedInStaff.permissions.includes('delivery') &&
+      loggedInStaff.permissions.every(permission => ['orders', 'delivery'].includes(permission))
     ) && !isRootAdmin
   );
 
   const allAdminTabs = ["dashboard", "products", "bulk-stock", "categories", "orders", "offers", "membership", "customers", "partners", "reviews", "pages", "staff", "delivery", "payment-reports", "gst-reports", "sliders", "locations", "marg-billing", "payment-settings"];
 
   // Strictly enforce granted permissions per staff member
-  const baseAuthorized = isRiderRole
-    ? ['delivery']
-    : (isRootAdmin
-        ? allAdminTabs
-        : (loggedInStaff?.permissions && Array.isArray(loggedInStaff.permissions) && loggedInStaff.permissions.length > 0
-            ? loggedInStaff.permissions.filter(p => p !== 'staff') // Only Super Admin can manage staff
-            : ['orders']));
-  const authorizedTabs = (baseAuthorized.includes('products') && !baseAuthorized.includes('bulk-stock'))
-    ? [...baseAuthorized, 'bulk-stock']
-    : baseAuthorized;
+  const tabPermissions = {
+    dashboard: 'dashboard', products: 'products', 'bulk-stock': 'inventory', categories: 'categories', orders: 'orders',
+    offers: 'products', membership: 'settings', customers: 'customers', partners: 'settings', reviews: 'settings',
+    pages: 'settings', staff: 'staff', delivery: 'delivery', 'payment-reports': 'reports', 'gst-reports': 'reports',
+    sliders: 'settings', locations: 'settings', 'marg-billing': 'settings', 'payment-settings': 'settings'
+  };
+  const authorizedTabs = isRootAdmin ? allAdminTabs : allAdminTabs.filter(tab => loggedInStaff?.permissions?.includes(tabPermissions[tab]));
 
   // Automatically clamp activeTab if current tab is unauthorized for logged in staff member
   useEffect(() => {
@@ -399,6 +405,10 @@ export default function AdminDashboard({ onViewChange }) {
       }
     }
   }, [loggedInStaff, isRootAdmin, authorizedTabs, activeTab]);
+
+  if (staffStatus === 'checking') {
+    return <AdminPageLoader title="Restoring secure staff session…" subtitle="Loading current database role and permissions." />;
+  }
 
   // Render Login state gate
   if (!loggedInStaff) {
@@ -1650,9 +1660,10 @@ export default function AdminDashboard({ onViewChange }) {
                         <label className="text-[9px] font-black uppercase text-slate-400 block">System password PIN</label>
                         <div className="relative">
                           <input 
-                            type="text" 
-                            required
-                            placeholder="staff123"
+                          type="password"
+                          required={!editingStaffId}
+                          minLength="10"
+                          placeholder={editingStaffId ? 'Leave blank to keep current' : 'At least 10 characters'}
                             value={newStaffPassword}
                             onChange={(e) => setNewStaffPassword(e.target.value)}
                             className="w-full bg-slate-950 border border-white/10 px-3.5 py-2.5 rounded-xl text-xs font-mono text-cyan-300"
@@ -1674,109 +1685,15 @@ export default function AdminDashboard({ onViewChange }) {
                       </select>
                     </div>
 
-                    {/* Quick Role Permission Presets */}
-                    <div className="space-y-1 bg-slate-950/70 border border-white/10 p-3 rounded-2xl">
-                      <span className="text-[9px] font-black uppercase text-cyan-400 block pb-1">⚡ Quick Role Presets:</span>
-                      <div className="flex flex-wrap gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setNewStaffPerms(['delivery'])}
-                          className={`text-[9px] px-2 py-1 rounded-lg font-bold border transition ${
-                            newStaffPerms.length === 1 && newStaffPerms.includes('delivery')
-                              ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40 font-black'
-                              : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
-                          }`}
-                        >
-                          🛵 Delivery Boy (Delivery Only)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setNewStaffPerms(['products', 'categories'])}
-                          className={`text-[9px] px-2 py-1 rounded-lg font-bold border transition ${
-                            newStaffPerms.length === 2 && newStaffPerms.includes('products') && newStaffPerms.includes('categories')
-                              ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40 font-black'
-                              : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
-                          }`}
-                        >
-                          📦 Stock & Inventory
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setNewStaffPerms(['orders', 'customers'])}
-                          className={`text-[9px] px-2 py-1 rounded-lg font-bold border transition ${
-                            newStaffPerms.length === 2 && newStaffPerms.includes('orders') && newStaffPerms.includes('customers')
-                              ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40 font-black'
-                              : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
-                          }`}
-                        >
-                          🛎️ Orders & Cashier Desk
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setNewStaffPerms(['dashboard', 'orders', 'products', 'categories', 'customers'])}
-                          className="text-[9px] px-2 py-1 rounded-lg font-bold border bg-white/5 text-slate-300 border-white/10 hover:bg-white/10"
-                        >
-                          👔 Store Manager
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setNewStaffPerms([
-                            'dashboard', 'orders', 'products', 'categories', 'sliders', 'offers',
-                            'delivery', 'locations', 'partners', 'membership', 'customers', 'reviews',
-                            'staff', 'payment-settings', 'payment-reports', 'marg-billing', 'pages'
-                          ])}
-                          className="text-[9px] px-2 py-1 rounded-lg font-bold border bg-emerald-500/15 text-emerald-300 border-emerald-400/30 hover:bg-emerald-500/25"
-                        >
-                          👑 Full Super Admin (All 17)
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Checkbox Checklist of permissions (Requirement 8) */}
                     <div className="space-y-1.5 bg-slate-950 border border-white/10 p-4 rounded-2xl">
-                      <div className="flex items-center justify-between border-b border-white/5 pb-1">
-                        <span className="text-[9px] font-black uppercase text-slate-400 block">Assigned Clearances Checklist ({newStaffPerms.length} of 17 Selected):</span>
-                        <span className="text-[9px] font-mono text-cyan-400 font-bold">
-                          {newStaffPerms.length === 17 ? 'ALL MODULES' : `${newStaffPerms.length} MODULES`}
-                        </span>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 text-[10px]">
-                        {[
-                          { key: 'dashboard', label: '📊 Dashboard Overview' },
-                          { key: 'orders', label: '🚚 Orders & Bills' },
-                          { key: 'products', label: '📦 Products Catalog' },
-                          { key: 'categories', label: '🥦 Categories' },
-                          { key: 'sliders', label: '🖼️ Banners & Sliders' },
-                          { key: 'offers', label: '🏷️ Deals & Coupons' },
-                          { key: 'delivery', label: '🛵 Delivery Dashboard' },
-                          { key: 'locations', label: '📍 Delivery Areas' },
-                          { key: 'partners', label: '🧑‍🌾 Store Partners' },
-                          { key: 'membership', label: '👑 VIP Membership' },
-                          { key: 'customers', label: '👥 Customer CRM' },
-                          { key: 'reviews', label: '💬 Reviews Moderator' },
-                          { key: 'staff', label: '🛡️ Staff Roles Editor' },
-                          { key: 'payment-settings', label: '💳 Payment Gateway' },
-                          { key: 'payment-reports', label: '📄 Payment Ledger' },
-                          { key: 'marg-billing', label: '🗄️ MARG ERP Billing' },
-                          { key: 'pages', label: '📜 Store Pages & Info' }
-                        ].map((pOpt) => {
-                          const hasPerm = newStaffPerms.includes(pOpt.key);
-                          return (
-                            <label key={pOpt.key} className="flex items-center gap-2 cursor-pointer hover:bg-white/5 p-1 rounded">
-                              <input 
-                                type="checkbox"
-                                checked={hasPerm}
-                                onChange={() => handleTogglePerm(pOpt.key)}
-                                className="accent-cyan-400"
-                              />
-                              <span className={hasPerm ? "text-cyan-300 font-extrabold" : "text-slate-400 font-semibold"}>
-                                {pOpt.label}
-                              </span>
-                            </label>
-                          );
-                        })}
-                      </div>
+                      <label className="text-[9px] font-black uppercase text-slate-400 block">Database role</label>
+                      <select required value={newStaffRoleId} onChange={event => setNewStaffRoleId(event.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white">
+                        <option value="">Select a role…</option>
+                        {roles.filter(role => String(role.name).toLowerCase() !== 'user').map(role => (
+                          <option key={role.id} value={role.id}>{role.name} — {role.permissions.join(', ') || 'no permissions'}</option>
+                        ))}
+                      </select>
+                      <p className="text-[9px] text-slate-500">Access is resolved from user.role_id → role_permission → permission on every server request.</p>
                     </div>
 
                     <div className="flex gap-2">
@@ -1784,7 +1701,7 @@ export default function AdminDashboard({ onViewChange }) {
                         type="submit"
                         className="w-full bg-cyan-400 text-slate-950 font-black text-xs uppercase tracking-wider py-2.5 rounded-xl border border-cyan-300 hover:bg-cyan-500 transition-all active:scale-95 cursor-pointer"
                       >
-                        {editingStaffId ? "Save Configurations" : "Save Staff permissions clearance"}
+                        {editingStaffId ? "Save Staff Role" : "Create Staff Account"}
                       </button>
                       {editingStaffId && (
                         <button 
@@ -1805,8 +1722,8 @@ export default function AdminDashboard({ onViewChange }) {
                     <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
                       {staff.map((s) => {
                         const perms = Array.isArray(s.permissions) ? s.permissions : [];
-                        const isSuper = s.id === 1 || s.isMasterAdmin || perms.length >= 12;
-                        const isDeliveryOnly = s.role_id === 4 || s.role_code === 'rider' || (s.role && String(s.role).toLowerCase().includes('rider')) || (!isSuper && perms.includes('delivery') && perms.length <= 3);
+                        const isSuper = Boolean(s.isMasterAdmin);
+                        const isDeliveryOnly = !isSuper && perms.includes('delivery') && perms.every(permission => ['orders', 'delivery'].includes(permission));
                         
                         return (
                           <div key={s.id} className="bg-slate-900 border border-white/10 p-4 rounded-2xl space-y-2 flex justify-between items-start">
@@ -1820,13 +1737,13 @@ export default function AdminDashboard({ onViewChange }) {
                                 ) : (
                                   <span className="bg-purple-500/10 border border-purple-500/20 text-purple-400 px-1.5 py-0.5 text-[8px] font-mono uppercase rounded font-black">{s.role || 'Staff Member'}</span>
                                 )}
-                                {s.status === 'disabled' ? (
+                                {String(s.status).toLowerCase() === 'disabled' ? (
                                   <span className="bg-red-500/10 border border-red-500/20 text-red-400 px-1.5 py-0.5 text-[8px] font-mono uppercase rounded font-black">Suspended</span>
                                 ) : (
                                   <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1.5 py-0.5 text-[8px] font-mono uppercase rounded font-black">Active</span>
                                 )}
                               </div>
-                              <p className="font-mono text-[10px] text-slate-400">Mobile: +91 {s.mobile} • Access: <span className="text-amber-300 font-bold">{perms.length} of 17 modules</span></p>
+                              <p className="font-mono text-[10px] text-slate-400">Mobile: +91 {s.mobile} • Access: <span className="text-amber-300 font-bold">{perms.length} of {permissionCatalog.length} permissions</span></p>
                               
                               <div className="flex flex-wrap gap-1 pt-1">
                                 {perms.map((pSub) => (
@@ -1849,7 +1766,7 @@ export default function AdminDashboard({ onViewChange }) {
                               >
                                 <Edit3 className="h-3.5 w-3.5" />
                               </button>
-                              {s.id !== 1 && !s.isMasterAdmin && (
+                              {!s.isMasterAdmin && (
                                 <button 
                                   onClick={() => handleDeleteStaff(s.id)}
                                   title="Strike off partner identity"
@@ -1866,6 +1783,36 @@ export default function AdminDashboard({ onViewChange }) {
                   </div>
 
                 </div>
+
+                {isRootAdmin && (
+                  <section className="mt-6 rounded-2xl border border-white/10 bg-slate-950 p-4 space-y-4">
+                    <div>
+                      <h4 className="text-xs font-black uppercase text-white">Database role permissions</h4>
+                      <p className="mt-1 text-[10px] text-slate-400">Changes apply to every staff member assigned to the role and are revalidated by the server.</p>
+                    </div>
+                    <div className="grid gap-3 lg:grid-cols-2">
+                      {roles.filter(role => String(role.name).toLowerCase() !== 'user').map(role => (
+                        <div key={role.id} className="rounded-xl border border-white/10 bg-slate-900 p-3">
+                          <div className="mb-3 flex items-center justify-between gap-2">
+                            <span className="text-xs font-black text-white">{role.name}</span>
+                            {roleMutationId === role.id && <span className="text-[9px] font-bold text-cyan-300">Saving…</span>}
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {permissionCatalog.map(permission => {
+                              const checked = role.permissions.includes(permission.code);
+                              return (
+                                <label key={permission.code} className={`cursor-pointer rounded-lg border px-2 py-1 text-[9px] font-bold ${checked ? 'border-cyan-400/40 bg-cyan-400/10 text-cyan-200' : 'border-white/10 text-slate-500'}`}>
+                                  <input className="sr-only" type="checkbox" checked={checked} disabled={Boolean(roleMutationId)} onChange={() => handleRolePermissionToggle(role, permission.code)} />
+                                  {checked ? '✓ ' : ''}{permission.code}
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
 
               </div>
               )

@@ -18,7 +18,7 @@ router.post("/marg/bill",async(req,res)=>{
     const bill=String(req.body?.billNumber||req.body?.billNo||req.body?.invoiceNo||"").trim();
     const amount=Number(req.body?.billAmount);
     if(phone.length!==10||!bill||!Number.isFinite(amount)||amount<0)return res.status(400).json({error:"Customer phone, bill number, and a non-negative bill amount are required."});
-    const customer=await db.get("SELECT id,phone FROM customer WHERE phone LIKE ? LIMIT 1",[`%${phone}`]);
+    const customer=await db.get("SELECT id,phone FROM customer WHERE phone=? LIMIT 1",[phone]);
     const referenceId=`MARG:${bill}`.slice(0,100);
     const pointsEarned=customer?Math.floor(amount/Number(settings.points_ratio)):0;
     const payload={billNumber:bill,billAmount:amount,pdfUrl:String(req.body?.pdfUrl||"").slice(0,2000),customerMatched:Boolean(customer),pointsEarned};

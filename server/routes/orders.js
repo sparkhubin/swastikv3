@@ -12,12 +12,13 @@ function normalizeStatus(value) {
   return STATUS_ALIASES[String(value || "").trim().toUpperCase().replaceAll("_", " ")] || null;
 }
 
-function isDeliveryStaff(staff) {
-  return ["DELIVERY", "RIDER"].includes(String(staff?.role_code || "").toUpperCase());
+function hasStaffPermission(staff, permission) {
+  return Boolean(staff && (staff.isMasterAdmin || staff.permissions.includes(permission)));
 }
 
-function hasStaffPermission(staff, permission) {
-  return Boolean(staff && (staff.isMasterAdmin || ["MASTER_ADMIN", "ADMIN"].includes(String(staff.role_code).toUpperCase()) || staff.permissions.includes(permission)));
+async function deliveryRecordFor(staff) {
+  if (!staff || staff.isMasterAdmin) return null;
+  return db.get("SELECT id,user_id FROM delivery_staff WHERE user_id=? AND status='ACTIVE' LIMIT 1", [staff.id]);
 }
 
 async function itemsForOrders(orderIds) {
@@ -64,7 +65,7 @@ router.get("/orders", requireAnyIdentity, async (req, res) => {
   try {
     if (req.customer) return res.json(await loadOrders("WHERE o.customer_id=?", [req.customer.id]));
     if (!hasStaffPermission(req.staff, "orders") && !hasStaffPermission(req.staff, "delivery")) return res.status(403).json({ error: "Insufficient permission." });
-    if (isDeliveryStaff(req.staff)) return res.json(await loadOrders("WHERE ds.user_id=?", [req.staff.id]));
+    if (await deliveryRecordFor(req.staff)) return res.json(await loadOrders("WHERE ds.user_id=?", [req.staff.id]));
     res.json(await loadOrders());
   } catch (error) { console.error("Order list failed:", error.message); res.status(500).json({ error: "Unable to load orders." }); }
 });
@@ -75,7 +76,7 @@ router.get("/orders/:id", requireAnyIdentity, async (req, res) => {
     const order = orders[0];
     if (!order) return res.status(404).json({ error: "Order not found." });
     if (req.customer && order.customerId !== Number(req.customer.id)) return res.status(403).json({ error: "Access denied." });
-    if (req.staff && isDeliveryStaff(req.staff) && order.deliveryStaffId !== req.staff.id) return res.status(403).json({ error: "This order is not assigned to you." });
+    if (req.staff && await deliveryRecordFor(req.staff) && order.deliveryStaffId !== req.staff.id) return res.status(403).json({ error: "This order is not assigned to you." });
     if (req.staff && !hasStaffPermission(req.staff, "orders") && !hasStaffPermission(req.staff, "delivery")) return res.status(403).json({ error: "Insufficient permission." });
     res.json(order);
   } catch (error) { console.error("Order load failed:", error.message); res.status(500).json({ error: "Unable to load order." }); }
@@ -203,8 +204,9 @@ router.put(["/orders/:id","/orders/:id/transit"], requireStaffAuth, requirePermi
   try {
     const order = await db.get(`${ORDER_SELECT} WHERE o.id=?`,[req.params.id]);
     if (!order) return res.status(404).json({error:"Order not found."});
-    if (isDeliveryStaff(req.staff) && Number(order.delivery_user_id)!==req.staff.id) return res.status(403).json({error:"This order is not assigned to you."});
-    if (req.body?.deliveryStaffId && !isDeliveryStaff(req.staff)) await assignDelivery(req,req.params.id,Number(req.body.deliveryStaffId));
+    const deliveryRecord = await deliveryRecordFor(req.staff);
+    if (deliveryRecord && Number(order.delivery_user_id)!==req.staff.id) return res.status(403).json({error:"This order is not assigned to you."});
+    if (req.body?.deliveryStaffId && !deliveryRecord) await assignDelivery(req,req.params.id,Number(req.body.deliveryStaffId));
     const nextStatus=normalizeStatus(req.body?.status || req.body?.statusCode);
     if (!nextStatus) return res.status(400).json({error:"A supported order status is required."});
     if (TERMINAL.has(order.status) && nextStatus!==order.status) return res.status(409).json({error:"A terminal order status cannot be changed."});

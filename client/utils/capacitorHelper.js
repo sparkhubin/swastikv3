@@ -31,18 +31,7 @@ export function getBackendBaseUrl() {
     return envUrl.trim().replace(/\/+$/, '');
   }
 
-  // 2. Custom override stored in localStorage
-  const savedUrl = localStorage.getItem('swastik_backend_url');
-  if (savedUrl && typeof savedUrl === 'string' && savedUrl.trim()) {
-    return savedUrl.trim().replace(/\/+$/, '');
-  }
-
-  // 3. If running on native platform without env var, fall back to production server domain
-  if (isNativePlatform()) {
-    return 'https://swastiksupermarket.com';
-  }
-
-  // 4. Standard web browser: relative calls work out of the box
+  // Backend routing is build-time configuration; browser storage must never redirect credentials.
   return '';
 }
 
@@ -72,7 +61,6 @@ export function initCapacitorBridge() {
       }
       return originalFetch.call(this, finalUrl, init);
     };
-    console.log(`📱 Capacitor bridge active: API & uploads routed to ${backendUrl}`);
   }
 
   // 2. Android Hardware Back Button Handling

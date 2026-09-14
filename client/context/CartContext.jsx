@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useData } from './DataContext';
 import { useLanguage } from './LanguageContext';
+import { useAuth } from './AuthContext';
 
 const CartContext = createContext();
 
@@ -10,8 +11,9 @@ const defaultCartItems = [];
 export const CartProvider = ({ children }) => {
   const { products, contactSettings } = useData();
   const { language } = useLanguage();
+  const { customer, customerStatus } = useAuth();
   const [cartItems, setCartItems] = useState(defaultCartItems);
-  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [appliedCoupon, setAppliedCouponState] = useState(null);
 
   const [shippingInfo, setShippingInfo] = useState({
     fullName: "",
@@ -21,7 +23,48 @@ export const CartProvider = ({ children }) => {
   const [paymentMethod, setPaymentMethod] = useState("card"); // card, upi, cod (disabled)
   const [distance, setDistance] = useState(5.2); // Current selected delivery distance in KM
 
-  const addToCart = (product, selectedUnit, qtyToAdd = 1) => {
+  const applyServerCart = (cart) => {
+    const items = Array.isArray(cart?.items) ? cart.items : [];
+    setCartItems(items.map(item => ({
+      product: item.product,
+      quantity: Number(item.quantity),
+      selectedUnit: item.selectedUnit,
+      unitPrice: Number(item.unitPrice)
+    })));
+    setAppliedCouponState(cart?.coupon || null);
+  };
+
+  useEffect(() => {
+    if (customerStatus === 'checking') return;
+    if (!customer) {
+      setCartItems([]);
+      setAppliedCouponState(null);
+      return;
+    }
+    let active = true;
+    fetch('/api/cart')
+      .then(async response => {
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.error || 'Unable to restore cart.');
+        if (active) applyServerCart(body);
+      })
+      .catch(error => console.error('Cart restoration failed:', error));
+    return () => { active = false; };
+  }, [customer?.id, customerStatus]);
+
+  const saveCustomerCartItem = async (productId, quantity, selectedUnit) => {
+    const response = await fetch(`/api/cart/items/${productId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quantity, selectedUnit })
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.error || 'Unable to update cart.');
+    applyServerCart(body);
+    return body;
+  };
+
+  const addToCart = async (product, selectedUnit, qtyToAdd = 1) => {
     const unit = selectedUnit || product.unit || product.packEn || '1 Unit';
     // Match against dynamic products list to get latest real-time stock
     const dbProduct = products?.find(p => p.id === product.id) || product;
@@ -34,50 +77,57 @@ export const CartProvider = ({ children }) => {
       return false;
     }
 
-    let errorMsg = "";
-
-    setCartItems(prev => {
-      // Find if item already exists by matching product.id and the unit size
-      const index = prev.findIndex(item => item.product.id === product.id && (item.selectedUnit === unit));
-      if (index > -1) {
-        const nextQty = prev[index].quantity + qtyToAdd;
-        if (nextQty > maxStock) {
-          errorMsg = language === 'hi'
-            ? `"${dbProduct.nameHi || dbProduct.nameEn || dbProduct.name}" के केवल ${maxStock} पैकेट स्टॉक में उपलब्ध हैं! (कार्ट में पहले से: ${prev[index].quantity})`
-            : `Only ${maxStock} units of "${dbProduct.nameEn || dbProduct.name}" are currently available in stock! (You already have ${prev[index].quantity} in cart)`;
-          return prev;
-        }
-        const nextItems = [...prev];
-        nextItems[index].quantity = nextQty;
-        return nextItems;
-      } else {
-        if (qtyToAdd > maxStock) {
-          errorMsg = language === 'hi'
-            ? `"${dbProduct.nameHi || dbProduct.nameEn || dbProduct.name}" के केवल ${maxStock} पैकेट स्टॉक में उपलब्ध हैं!`
-            : `Only ${maxStock} units of "${dbProduct.nameEn || dbProduct.name}" are currently available in stock!`;
-          return prev;
-        }
-        return [...prev, { product: dbProduct, quantity: qtyToAdd, selectedUnit: unit }];
-      }
-    });
+    const current = cartItems.find(item => item.product.id === product.id && item.selectedUnit === unit);
+    const nextQty = Number(current?.quantity || 0) + Number(qtyToAdd);
+    const errorMsg = nextQty > maxStock
+      ? (language === 'hi'
+        ? `"${dbProduct.nameHi || dbProduct.nameEn || dbProduct.name}" के केवल ${maxStock} पैकेट स्टॉक में उपलब्ध हैं!`
+        : `Only ${maxStock} units of "${dbProduct.nameEn || dbProduct.name}" are currently available in stock!`)
+      : '';
 
     if (errorMsg) {
       alert(errorMsg);
       return false;
     }
+    if (customer) {
+      try {
+        await saveCustomerCartItem(product.id, nextQty, unit);
+      } catch (error) {
+        alert(error.message);
+        return false;
+      }
+    } else {
+      setCartItems(prev => current
+        ? prev.map(item => item.product.id === product.id && item.selectedUnit === unit ? { ...item, quantity: nextQty } : item)
+        : [...prev, { product: dbProduct, quantity: nextQty, selectedUnit: unit }]);
+    }
     return true;
   };
 
-  const removeFromCart = (id, selectedUnit) => {
+  const removeFromCart = async (id, selectedUnit) => {
+    if (customer) {
+      try {
+        const query = selectedUnit ? `?selectedUnit=${encodeURIComponent(selectedUnit)}` : '';
+        const response = await fetch(`/api/cart/items/${id}${query}`, { method: 'DELETE' });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.error || 'Unable to remove cart item.');
+        applyServerCart(body);
+        return true;
+      } catch (error) {
+        alert(error.message);
+        return false;
+      }
+    }
     setCartItems(prev => prev.filter(item => {
       if (selectedUnit) {
         return !(item.product.id === id && item.selectedUnit === selectedUnit);
       }
       return item.product.id !== id;
     }));
+    return true;
   };
 
-  const updateQuantity = (id, arg2, arg3) => {
+  const updateQuantity = async (id, arg2, arg3) => {
     let unit = undefined;
     let changeVal = 1;
 
@@ -143,6 +193,14 @@ export const CartProvider = ({ children }) => {
       return;
     }
 
+    if (customer) {
+      try {
+        await saveCustomerCartItem(id, targetQty, unit || targetItem.selectedUnit);
+      } catch (error) {
+        alert(error.message);
+      }
+      return;
+    }
     setCartItems(prev => {
       return prev.map(item => {
         const idMatches = item.product.id === id;
@@ -155,8 +213,33 @@ export const CartProvider = ({ children }) => {
     });
   };
 
-  const clearCart = () => {
+  const clearCart = async () => {
+    if (customer) {
+      const response = await fetch('/api/cart', { method: 'DELETE' });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || 'Unable to clear cart.');
+      applyServerCart(body);
+      setAppliedCouponState(null);
+      return;
+    }
     setCartItems([]);
+  };
+
+  const setAppliedCoupon = async (coupon) => {
+    if (!customer) {
+      setAppliedCouponState(coupon || null);
+      return true;
+    }
+    try {
+      const response = await fetch('/api/cart/coupon', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ couponCode: coupon?.code || '' }) });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || 'Unable to update coupon.');
+      applyServerCart(body);
+      return true;
+    } catch (error) {
+      alert(error.message);
+      return false;
+    }
   };
 
   const getUnitPrice = (product, selectedUnit) => {
@@ -174,7 +257,7 @@ export const CartProvider = ({ children }) => {
   };
 
   // Calculations
-  const subtotal = cartItems.reduce((acc, item) => acc + (getUnitPrice(item.product, item.selectedUnit) * item.quantity), 0);
+  const subtotal = cartItems.reduce((acc, item) => acc + (Number.isFinite(Number(item.unitPrice)) ? Number(item.unitPrice) : getUnitPrice(item.product, item.selectedUnit)) * item.quantity, 0);
   
   // Dynamic Delivery Fee tiers from store settings
   const calculateDeliveryFee = (dist, amt) => {
@@ -201,7 +284,7 @@ export const CartProvider = ({ children }) => {
 
   // Dynamic GST calculation based on item-wise GST rates
   const itemGstTotal = cartItems.reduce((acc, item) => {
-    const price = getUnitPrice(item.product, item.selectedUnit);
+    const price = Number.isFinite(Number(item.unitPrice)) ? Number(item.unitPrice) : getUnitPrice(item.product, item.selectedUnit);
     const rate = item.product?.gstPercent !== undefined 
       ? Number(item.product.gstPercent) 
       : (item.product?.gst_percent !== undefined ? Number(item.product.gst_percent) : 5);

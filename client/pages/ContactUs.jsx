@@ -17,23 +17,20 @@ export default function ContactUs() {
     commentHi: ''
   });
   const [reviewSuccess, setReviewSuccess] = useState(false);
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
 
-  const handleSubmitReview = (e) => {
+  const handleSubmitReview = async (e) => {
     e.preventDefault();
     if (!newReviewForm.name || !newReviewForm.commentEn) return;
 
-    addReview({
-      name: newReviewForm.name,
-      rating: Number(newReviewForm.rating),
-      commentEn: newReviewForm.commentEn,
-      commentHi: newReviewForm.commentHi || newReviewForm.commentEn,
-      avatarBg: "from-cyan-400 to-emerald-500",
-      response: ""
-    });
-
-    setNewReviewForm({ name: '', rating: 5, commentEn: '', commentHi: '' });
-    setReviewSuccess(true);
-    setTimeout(() => setReviewSuccess(false), 2000);
+    setReviewSubmitting(true);
+    try {
+      await addReview({ rating: Number(newReviewForm.rating), commentEn: newReviewForm.commentEn, commentHi: newReviewForm.commentHi || newReviewForm.commentEn, avatarBg: "from-cyan-400 to-emerald-500" });
+      setNewReviewForm({ name: '', rating: 5, commentEn: '', commentHi: '' });
+      setReviewSuccess(true);
+      setTimeout(() => setReviewSuccess(false), 2000);
+    } catch (error) { alert(error.message); }
+    finally { setReviewSubmitting(false); }
   };
 
   const [formData, setFormData] = useState({
@@ -44,24 +41,22 @@ export default function ContactUs() {
   });
 
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [contactSubmitting, setContactSubmitting] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.name || !formData.mobile || !formData.message) {
       alert(isHindi ? "कृपया सभी आवश्यक फ़ील्ड भरें।" : "Please complete all required fields.");
       return;
     }
     
-    // Save submission into the shared global state inbox
-    addContactMessage({
-      name: formData.name,
-      mobile: formData.mobile,
-      subject: formData.subject || "No Subject",
-      message: formData.message
-    });
-    
-    setIsSubmitted(true);
-    setFormData({ name: '', mobile: '', subject: '', message: '' });
+    setContactSubmitting(true);
+    try {
+      await addContactMessage({ name: formData.name, mobile: formData.mobile, subject: formData.subject, message: formData.message });
+      setIsSubmitted(true);
+      setFormData({ name: '', mobile: '', subject: '', message: '' });
+    } catch (error) { alert(error.message); }
+    finally { setContactSubmitting(false); }
   };
 
   return (
@@ -218,10 +213,11 @@ export default function ContactUs() {
 
               <button
                 type="submit"
+                disabled={contactSubmitting}
                 className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-xs active:scale-95 cursor-pointer"
               >
                 <Send className="h-4 w-4" />
-                <span>{isHindi ? "संदेश भेजें" : "Submit Message"}</span>
+                <span>{contactSubmitting ? (isHindi ? "भेजा जा रहा है…" : "Submitting…") : (isHindi ? "संदेश भेजें" : "Submit Message")}</span>
               </button>
             </form>
           )}
@@ -386,9 +382,10 @@ export default function ContactUs() {
 
             <button 
               type="submit"
+              disabled={reviewSubmitting}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase tracking-wider px-6 py-3 rounded-xl transition-all active:scale-95 cursor-pointer shadow-xs"
             >
-              {isHindi ? "रिव्यू प्रकाशित करें" : "Publish Google Review"}
+              {reviewSubmitting ? (isHindi ? "प्रकाशित हो रहा है…" : "Publishing…") : (isHindi ? "रिव्यू प्रकाशित करें" : "Publish Google Review")}
             </button>
           </form>
         </div>
