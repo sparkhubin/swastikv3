@@ -83,7 +83,7 @@ export async function createServer() {
     if (bucket.count > limit) return res.status(429).json({ error: "Too many requests. Please try again later." });
     next();
   };
-  app.use(["/api/auth/staff/login", "/api/auth/customer/login", "/api/auth/otp/send", "/api/auth/otp/verify"], rateLimit(10, 15 * 60_000));
+  app.use(["/api/auth/staff/login", "/api/auth/customer/login", "/api/auth/otp/send", "/api/auth/otp/verify"], rateLimit(100, 15 * 60_000));
 
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });

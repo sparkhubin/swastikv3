@@ -12,6 +12,10 @@ import {
   DEFAULT_PRODUCT_FALLBACK,
   extractCleanImageName
 } from '../../utils/imageHelper';
+import {
+  parseUnitPrices,
+  serializeUnitPrices,
+} from '../../utils/unitPrices';
 import { 
   Package, 
   Search, 
@@ -420,7 +424,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
       originalPrice: productForm.originalPrice ? Number(productForm.originalPrice) : null,
       discount: productForm.discount || null,
       unit: productForm.unit || '1 Unit',
-      unitPrices: productForm.unitPrices || '',
+      unitPrices: serializeUnitPrices(productForm.unitPrices),
       packEn: productForm.unit ? productForm.unit.split(',')[0].trim() : '1 Unit',
       packHi: productForm.unit ? productForm.unit.split(',')[0].trim() : '1 Unit',
       image: extractCleanImageName(productForm.image || ''),
@@ -463,7 +467,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
       originalPrice: prod.originalPrice !== undefined && prod.originalPrice !== null ? prod.originalPrice : '',
       discount: prod.discount || prod.discount_tag || '',
       unit: prod.unit || '1 Unit',
-      unitPrices: prod.unitPrices || '',
+      unitPrices: serializeUnitPrices(prod.unitPrices),
       image: extractCleanImageName(prod.image || prod.image_url || ''),
       stockCount: prod.stockCount !== undefined ? String(prod.stockCount) : '0',
       code: prod.code || prod.Code || '',
@@ -1221,7 +1225,7 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
                   </label>
                   <input 
                     type="text" 
-                    placeholder="e.g. 1 Unit:180"
+                    placeholder='e.g. {"1 kg":180,"5 kg":850}'
                     value={productForm.unitPrices}
                     onChange={(e) => setProductForm({ ...productForm, unitPrices: e.target.value })}
                     className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-cyan-300 font-mono placeholder:text-slate-700"
@@ -1719,10 +1723,8 @@ export default function ProductsManager({ searchQuery, setSearchQuery, userRole,
                   <td className="p-4">
                     {p.unitPrices ? (
                       <div className="flex flex-wrap gap-1 max-w-[180px]">
-                        {p.unitPrices.split(',').map((pricePair, pi) => (
-                          <span key={pi} className="bg-cyan-950/40 border border-cyan-800/40 text-cyan-300 font-mono text-[8px] px-1 py-0.5 rounded">
-                            {pricePair.trim()}
-                          </span>
+                        {Object.entries(parseUnitPrices(p.unitPrices)).map(([unit, price]) => (
+                          <span key={unit}>{unit}: ₹{price}</span>
                         ))}
                       </div>
                     ) : (

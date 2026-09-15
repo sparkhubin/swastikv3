@@ -6,6 +6,8 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { resolveProductImage, getNextCandidateImage, markImageFailed, DEFAULT_PRODUCT_FALLBACK } from '../utils/imageHelper';
 import { getCurrentGpsPosition } from '../utils/capacitorHelper';
+import { getUnitPrice } from '../utils/unitPrices';
+
 import { 
   Trash2, 
   MapPin, 
@@ -626,19 +628,7 @@ export default function CartCheckout({ onViewChange }) {
   const storeLat = contactSettings?.latitude !== undefined ? contactSettings.latitude : 28.5708;
   const storeLng = contactSettings?.longitude !== undefined ? contactSettings.longitude : 77.3259;
 
-  const getUnitPrice = (product, selectedUnit) => {
-    if (!product) return 0;
-    if (!selectedUnit || !product.unitPrices) return product.price;
-    const parts = product.unitPrices.split(',').map(p => p.trim());
-    const matched = parts.find(p => p.toLowerCase().startsWith(selectedUnit.toLowerCase() + ':'));
-    if (matched) {
-      const priceStr = matched.split(':')[1];
-      if (priceStr && !isNaN(Number(priceStr))) {
-        return Number(priceStr);
-      }
-    }
-    return product.price;
-  };
+
 
   const [couponCodeField, setCouponCodeField] = useState('');
   const [couponError, setCouponError] = useState('');
@@ -955,7 +945,7 @@ export default function CartCheckout({ onViewChange }) {
         productId: Number(item.product.id),
         nameEn: item.product.nameEn,
         nameHi: item.product.nameHi,
-        price: Number(getUnitPrice(item.product, item.selectedUnit)),
+        price: getUnitPrice(item.product, item.selectedUnit),
         qty: Number(item.quantity),
         weight: item.selectedUnit || (language === 'hi' ? (item.product.packHi || "100gm") : (item.product.packEn || "100gm")),
         gstPercent: item.product?.gstPercent !== undefined ? Number(item.product.gstPercent) : (item.product?.gst_percent !== undefined ? Number(item.product.gst_percent) : 0)

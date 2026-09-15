@@ -2,6 +2,8 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useData } from './DataContext';
 import { useLanguage } from './LanguageContext';
 import { useAuth } from './AuthContext';
+import { getUnitPrice } from '../utils/unitPrices';
+
 
 const CartContext = createContext();
 
@@ -29,7 +31,9 @@ export const CartProvider = ({ children }) => {
       product: item.product,
       quantity: Number(item.quantity),
       selectedUnit: item.selectedUnit,
-      unitPrice: Number(item.unitPrice)
+      unitPrice: Number.isFinite(Number(item.unitPrice))
+  ? Number(item.unitPrice)
+  : getUnitPrice(item.product, item.selectedUnit)
     })));
     setAppliedCouponState(cart?.coupon || null);
   };
@@ -242,19 +246,6 @@ export const CartProvider = ({ children }) => {
     }
   };
 
-  const getUnitPrice = (product, selectedUnit) => {
-    if (!product) return 0;
-    if (!selectedUnit || !product.unitPrices) return product.price;
-    const parts = product.unitPrices.split(',').map(p => p.trim());
-    const matched = parts.find(p => p.toLowerCase().startsWith(selectedUnit.toLowerCase() + ':'));
-    if (matched) {
-      const priceStr = matched.split(':')[1];
-      if (priceStr && !isNaN(Number(priceStr))) {
-        return Number(priceStr);
-      }
-    }
-    return product.price;
-  };
 
   // Calculations
   const subtotal = cartItems.reduce((acc, item) => acc + (Number.isFinite(Number(item.unitPrice)) ? Number(item.unitPrice) : getUnitPrice(item.product, item.selectedUnit)) * item.quantity, 0);

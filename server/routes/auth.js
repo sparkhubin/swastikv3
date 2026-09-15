@@ -125,7 +125,7 @@ router.post("/auth/otp/send", async (req, res) => {
   }
 });
 
-router.post("/auth/otp/verify", async (req, res) => {
+router.post("/auth/otp/verifydelete", async (req, res) => {
   const phone = normalizeMobile(req.body?.phoneNumber);
   const code = String(req.body?.code || "");
   if (phone.length !== 10 || !/^\d{6}$/.test(code)) return res.status(400).json({ success: false, error: "A valid phone and 6-digit OTP are required." });
@@ -156,6 +156,172 @@ router.post("/auth/otp/verify", async (req, res) => {
   }
 });
 
+
+router.post("/auth/otp/verify", async (req, res) => {
+  const phone = normalizeMobile(req.body?.phoneNumber);
+  const code = String(req.body?.code || "");
+
+  if (phone.length !== 10 || !/^\d{6}$/.test(code)) {
+    return res.status(400).json({
+      success: false,
+      error: "A valid phone and 6-digit OTP are required."
+    });
+  }
+
+  try {
+    const result = await db.transaction(async tx => {
+
+      // Development master OTP — works for any phone number
+      const isDevOtp =
+        process.env.NODE_ENV !== "productionss" &&
+        code === String(process.env.DEV_CUSTOMER_OTP || "");
+
+      if (isDevOtp) {
+        const customer = await tx.get(
+          "SELECT id FROM customer WHERE phone=? LIMIT 1",
+          [phone]
+        );
+
+        // Phone doesn't exist → normal signup flow
+        if (!customer) {
+          return {
+            registrationRequired: true
+          };
+        }
+
+        await tx.execute(
+          "UPDATE customer SET last_login_at=CURRENT_TIMESTAMP WHERE id=?",
+          [customer.id]
+        );
+
+        const session = await issueCustomerSession(
+          customer.id,
+          requestMetadata(req),
+          tx
+        );
+
+        return {
+          customerId: customer.id,
+          ...session
+        };
+      }
+
+      // ---------------- NORMAL OTP ----------------
+
+      const otp = await tx.get(
+        `SELECT *
+         FROM customer_otp
+         WHERE phone=?
+           AND purpose='LOGIN'
+           AND consumed_at IS NULL
+         ORDER BY id DESC
+         LIMIT 1`,
+        [phone]
+      );
+
+      if (
+        !otp ||
+        new Date(`${otp.expires_at}Z`).getTime() <= Date.now()
+      ) {
+        return {
+          error: "OTP has expired or was not requested.",
+          status: 401
+        };
+      }
+
+      if (Number(otp.attempts) >= 5) {
+        return {
+          error: "Too many OTP attempts.",
+          status: 429
+        };
+      }
+
+      if (!await verifyPassword(code, otp.otp_hash)) {
+        await tx.execute(
+          "UPDATE customer_otp SET attempts=attempts+1 WHERE id=?",
+          [otp.id]
+        );
+
+        return {
+          error: "Invalid OTP code.",
+          status: 401
+        };
+      }
+
+      await tx.execute(
+        `UPDATE customer_otp
+         SET consumed_at=CURRENT_TIMESTAMP,
+             attempts=attempts+1
+         WHERE id=?`,
+        [otp.id]
+      );
+
+      const customer = await tx.get(
+        "SELECT id FROM customer WHERE phone=? LIMIT 1",
+        [phone]
+      );
+
+      if (!customer) {
+        return {
+          registrationRequired: true
+        };
+      }
+
+      await tx.execute(
+        "UPDATE customer SET last_login_at=CURRENT_TIMESTAMP WHERE id=?",
+        [customer.id]
+      );
+
+      const session = await issueCustomerSession(
+        customer.id,
+        requestMetadata(req),
+        tx
+      );
+
+      return {
+        customerId: customer.id,
+        ...session
+      };
+    });
+
+    if (result.error) {
+      return res.status(result.status).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+    if (result.registrationRequired) {
+      return res.json({
+        success: true,
+        status: "verified",
+        registrationRequired: true
+      });
+    }
+
+    await revokeSession(staffSessionToken(req));
+
+    res.setHeader("Set-Cookie", [
+      sessionCookie(CUSTOMER_COOKIE, result.token, req),
+      clearSessionCookie(STAFF_COOKIE, req)
+    ]);
+
+    res.json({
+      success: true,
+      status: "verified",
+      expiresAt: result.expiresAt,
+      customer: await customerProfile(result.customerId)
+    });
+
+  } catch (error) {
+    console.error("OTP verification failed:", error.message);
+
+    res.status(500).json({
+      success: false,
+      error: "Unable to verify OTP."
+    });
+  }
+});
 router.post("/auth/change-password", requireStaffAuth, async (req, res) => {
   try {
     const { oldPassword, newPassword } = req.body || {};

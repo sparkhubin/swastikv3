@@ -61,7 +61,7 @@ router.post("/customers", optionalIdentity, async (req, res) => {
     const email = String(req.body?.email || "").trim().slice(0, 255);
     const address = String(req.body?.address || "").trim().slice(0, 4000);
     if (phone.length !== 10 || name.length < 2 || name.length > 255) return res.status(400).json({ error: "A valid name and phone number are required." });
-    if (req.body?.password && (String(req.body.password).length < 10 || String(req.body.password).length > 128)) return res.status(400).json({ error: "Password must be between 10 and 128 characters." });
+    if (req.body?.password && (String(req.body.password).length < 5 || String(req.body.password).length > 128)) return res.status(400).json({ error: "Password must be between 5 and 128 characters." });
     const existing = await db.get("SELECT id FROM customer WHERE phone=? LIMIT 1", [phone]);
     if (existing) return res.status(409).json({ error: "A customer with this phone number already exists." });
     const proof = await db.get("SELECT id FROM customer_otp WHERE phone=? AND purpose='LOGIN' AND consumed_at > datetime('now','-10 minutes') AND customer_id IS NULL ORDER BY id DESC LIMIT 1", [phone]);
