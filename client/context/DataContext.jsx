@@ -753,10 +753,27 @@ export function DataProvider({ children }) {
         }
       }
 
-      const res = await fetch(`/api/orders/${id}/transit`, {
-        method: 'PUT',
+      const hasStatusChange = updated?.status !== undefined || updated?.statusCode !== undefined;
+      const hasSettlementChange = updated?.codStatus !== undefined;
+      const hasAssignmentChange = updated?.deliveryStaffId !== undefined;
+      let endpoint = `/api/orders/${id}/transit`;
+      let requestMethod = 'PUT';
+      let requestBody = updated;
+
+      if (!hasStatusChange && hasSettlementChange) {
+        endpoint = `/api/orders/${id}/settlement`;
+      } else if (!hasStatusChange && hasAssignmentChange) {
+        endpoint = `/api/orders/${id}/assignment`;
+        requestMethod = 'POST';
+        requestBody = { deliveryStaffId: updated.deliveryStaffId };
+      } else if (!hasStatusChange) {
+        throw new Error('This order change is not supported by the server.');
+      }
+
+      const res = await fetch(endpoint, {
+        method: requestMethod,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updated),
+        body: JSON.stringify(requestBody),
       });
       const saved = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(saved.error || 'Order update failed.');

@@ -6,10 +6,15 @@ import { sendWhatsAppEvent } from "../services/whatsapp.js";
 
 const router = express.Router();
 const TERMINAL = new Set(["CANCELLED", "DELIVERED", "REFUNDED"]);
-const STATUS_ALIASES = { "PENDING PAYMENT":"PENDING_PAYMENT", CONFIRMED:"CONFIRMED", PROCESSING:"PROCESSING", PACKED:"PACKED", DISPATCHED:"DISPATCHED", "OUT FOR DELIVERY":"OUT_FOR_DELIVERY", DELIVERED:"DELIVERED", CANCELLED:"CANCELLED", CANCELED:"CANCELLED", FAILED:"FAILED", REFUNDED:"REFUNDED" };
+const STATUS_ALIASES = { "PENDING PAYMENT":"PENDING_PAYMENT", CONFIRMED:"CONFIRMED", PROCESSING:"PROCESSING", PACKED:"PACKED", DISPATCHED:"DISPATCHED", "IN TRANSIT":"DISPATCHED", "OUT FOR DELIVERY":"OUT_FOR_DELIVERY", DELIVERED:"DELIVERED", CANCELLED:"CANCELLED", CANCELED:"CANCELLED", FAILED:"FAILED", REFUNDED:"REFUNDED" };
+const COD_STATUS_ALIASES = { "PENDING CLEARANCE":"PENDING_CLEARANCE", "COLLECTED BY RIDER":"COLLECTED_BY_RIDER", "CLEARED TO ADMIN":"CLEARED_TO_ADMIN" };
 
 function normalizeStatus(value) {
   return STATUS_ALIASES[String(value || "").trim().toUpperCase().replaceAll("_", " ")] || null;
+}
+
+function normalizeCodStatus(value) {
+  return COD_STATUS_ALIASES[String(value || "").trim().toUpperCase().replaceAll("_", " ")] || null;
 }
 
 function hasStaffPermission(staff, permission) {
@@ -41,11 +46,16 @@ function mapOrder(row, items = []) {
     celebrationOfferName:row.celebration_offer_name || "", appliedPoints:Number(row.applied_points), pointsEarned:Number(row.points_earned), couponCode:row.coupon_code || "",
     shippingAddress:row.shipping_address, customerName:row.customer_name, customerPhone:row.customer_phone, customerEmail:row.customer_email,
     deliveryAssignmentId:row.assignment_id || null, deliveryStaffId:row.delivery_user_id || null, deliveryPartnerName:row.delivery_name || "", deliveryPartnerPhone:row.delivery_phone || "",
-    deliveryStatus:row.delivery_status || null, codStatus:row.cod_status || null, createdAt:row.created_at, updatedAt:row.updated_at, items
+    deliveryStatus:row.delivery_status || null, codStatus:row.cod_status || null,
+    codCollectedAmount:Number(row.cod_collected_amount || 0), codSettledAt:row.cod_settled_at || null,
+    codSettlementNote:row.cod_settlement_note || "", codClearedByUserId:row.cod_cleared_by_user_id || null,
+    createdAt:row.created_at, updatedAt:row.updated_at, items
   };
 }
 
-const ORDER_SELECT = `SELECT o.*,da.id AS assignment_id,da.status AS delivery_status,da.cod_status,ds.user_id AS delivery_user_id,ds.name AS delivery_name,ds.phone AS delivery_phone
+const ORDER_SELECT = `SELECT o.*,da.id AS assignment_id,da.status AS delivery_status,da.cod_status,da.cod_collected_amount,
+  da.cod_settled_at,da.cod_settlement_note,da.cod_cleared_by_user_id,
+  ds.user_id AS delivery_user_id,ds.name AS delivery_name,ds.phone AS delivery_phone
   FROM "order" o LEFT JOIN delivery_assignment da ON da.order_id=o.id LEFT JOIN delivery_staff ds ON ds.id=da.delivery_staff_id`;
 
 async function loadOrders(where = "", params = []) {
@@ -200,6 +210,43 @@ router.post("/orders/:id/assignment", requireStaffAuth, requirePermission("deliv
   catch(error){ res.status(error.status||500).json({error:error.status?error.message:"Unable to assign delivery."}); }
 });
 
+router.put("/orders/:id/settlement", requireStaffAuth, requirePermission("orders"), async (req,res) => {
+  try {
+    if (await deliveryRecordFor(req.staff)) return res.status(403).json({ error: "A store administrator must confirm COD settlement." });
+    const order = await db.get(`${ORDER_SELECT} WHERE o.id=?`, [req.params.id]);
+    if (!order) return res.status(404).json({ error: "Order not found." });
+    if (String(order.payment_method).toUpperCase() !== "COD") return res.status(409).json({ error: "COD settlement is only available for cash-on-delivery orders." });
+    if (!order.assignment_id) return res.status(409).json({ error: "Assign a delivery rider before recording COD settlement." });
+    if (order.status !== "DELIVERED") return res.status(409).json({ error: "COD settlement can only be recorded after delivery." });
+
+    const nextCodStatus = normalizeCodStatus(req.body?.codStatus);
+    if (!nextCodStatus) return res.status(400).json({ error: "A supported COD settlement status is required." });
+    if (order.cod_status === "CLEARED_TO_ADMIN" && nextCodStatus !== "CLEARED_TO_ADMIN") {
+      return res.status(409).json({ error: "A completed COD settlement cannot be reopened." });
+    }
+
+    const note = String(req.body?.codClearanceNote || req.body?.codSettlementNote || "").trim().slice(0, 2000);
+    await db.transaction(async tx => {
+      if (nextCodStatus === "CLEARED_TO_ADMIN") {
+        await tx.execute(`UPDATE delivery_assignment
+          SET cod_status=?,cod_collected_amount=?,cod_settled_at=COALESCE(cod_settled_at,CURRENT_TIMESTAMP),
+              cod_cleared_by_user_id=?,cod_settlement_note=?,updated_at=CURRENT_TIMESTAMP
+          WHERE order_id=?`, [nextCodStatus, Number(order.grand_total), req.staff.id, note, order.id]);
+        await tx.execute("UPDATE \"order\" SET payment_status='PAID',updated_at=CURRENT_TIMESTAMP WHERE id=?", [order.id]);
+      } else {
+        await tx.execute(`UPDATE delivery_assignment
+          SET cod_status=?,cod_collected_amount=?,cod_settlement_note=?,updated_at=CURRENT_TIMESTAMP
+          WHERE order_id=?`, [nextCodStatus, nextCodStatus === "COLLECTED_BY_RIDER" ? Number(order.grand_total) : 0, note, order.id]);
+      }
+    });
+    await audit("USER", req.staff.id, "UPDATE_COD_SETTLEMENT", "order", order.id, { codStatus: nextCodStatus }, req);
+    res.json((await loadOrders("WHERE o.id=?", [order.id]))[0]);
+  } catch (error) {
+    console.error("COD settlement update failed:", error.message);
+    res.status(error.status || 500).json({ error: error.status ? error.message : "Unable to update COD settlement." });
+  }
+});
+
 router.put(["/orders/:id","/orders/:id/transit"], requireStaffAuth, requirePermission("orders","delivery"), async (req,res) => {
   try {
     const order = await db.get(`${ORDER_SELECT} WHERE o.id=?`,[req.params.id]);
@@ -209,6 +256,11 @@ router.put(["/orders/:id","/orders/:id/transit"], requireStaffAuth, requirePermi
     if (req.body?.deliveryStaffId && !deliveryRecord) await assignDelivery(req,req.params.id,Number(req.body.deliveryStaffId));
     const nextStatus=normalizeStatus(req.body?.status || req.body?.statusCode);
     if (!nextStatus) return res.status(400).json({error:"A supported order status is required."});
+    const requestedCodStatus = req.body?.codStatus === undefined ? null : normalizeCodStatus(req.body.codStatus);
+    if (req.body?.codStatus !== undefined && !requestedCodStatus) return res.status(400).json({error:"A supported COD status is required."});
+    if (String(order.payment_method).toUpperCase() === "COD" && requestedCodStatus === "CLEARED_TO_ADMIN") {
+      return res.status(403).json({error:"Use the administrator COD settlement action after delivery."});
+    }
     if (TERMINAL.has(order.status) && nextStatus!==order.status) return res.status(409).json({error:"A terminal order status cannot be changed."});
     if (["REFUNDED"].includes(nextStatus) && order.payment_status!=="REFUNDED") return res.status(409).json({error:"Refund status must be confirmed by the payment gateway."});
     await db.transaction(async tx=>{
@@ -227,6 +279,11 @@ router.put(["/orders/:id","/orders/:id/transit"], requireStaffAuth, requirePermi
       await tx.execute("UPDATE \"order\" SET status=?,status_label=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",[nextStatus,nextStatus.replaceAll('_',' '),order.id]);
       const deliveryTimes={ASSIGNED:"assigned_at",DISPATCHED:"picked_up_at",OUT_FOR_DELIVERY:"out_for_delivery_at",DELIVERED:"delivered_at",FAILED:"failed_at"};
       if(deliveryTimes[nextStatus]) await tx.execute(`UPDATE delivery_assignment SET status=?,${deliveryTimes[nextStatus]}=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE order_id=?`,[nextStatus,order.id]);
+      if (String(order.payment_method).toUpperCase() === "COD" && requestedCodStatus) {
+        const collected = requestedCodStatus === "COLLECTED_BY_RIDER";
+        await tx.execute("UPDATE delivery_assignment SET cod_status=?,cod_collected_amount=?,updated_at=CURRENT_TIMESTAMP WHERE order_id=?", [requestedCodStatus, collected ? Number(order.grand_total) : 0, order.id]);
+        await tx.execute("UPDATE \"order\" SET payment_status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?", [collected ? "PAID" : "UNPAID", order.id]);
+      }
       await tx.execute("INSERT INTO notification (recipient_type,recipient_id,recipient_phone,order_id,title_en,message_en,type) VALUES ('CUSTOMER',?,?,?,'Order status updated',?,'ORDER_STATUS')",[order.customer_id,order.customer_phone,order.id,`Your order is now ${nextStatus.replaceAll('_',' ')}.`]);
     });
     await audit("USER",req.staff.id,"UPDATE_ORDER_STATUS","order",order.id,{status:nextStatus},req);
