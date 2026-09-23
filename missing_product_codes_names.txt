@@ -1,0 +1,1866 @@
+code       product_name                              
+---------  ------------------------------------------
+1893       RIMJIM JEERA 250 ML                       
+3127       REAL JUICE PINEAPPLE 1LT.                 
+SP002605   420 CHATPATA CHANA PAPAD 200G             
+SP002606   420 GOLD PU. PAPAD 200G                   
+SP002610   AAKASH KHATTA MITHA MIX 1KG               
+SP002611   AAKASH SOHAN PAPDI 400G                   
+SP002612   AAKASH WAFERS RS10                        
+SP002613   AALAY SOAP RS10                           
+SP002614   AALU CHIPS 250M                           
+SP002617   AATA LOOSE                                
+SP002618   ABIR 50G                                  
+SP002619   ACT CLASSIC SALTED RS10                   
+SP002620   ACT GOLDEN SIZZLE RS10                    
+SP002621   ACT MAGIC BUUTTER RS10                    
+SP002622   ACT2 BUTTER 30G                           
+SP002623   ADHIRAJ COLOUR BOOK RS50                  
+SP002624   AGRBATTI PREMIUM RS100                    
+SP002628   AJAY TB COMPLETE JUNIOR RS18              
+SP002630   AJWAIN 100G                               
+SP002632   ALOO CHIPS MOTI 200G                      
+SP002633   ALOO CHIPS MOTI 500G                      
+SP002634   ALPENLIEBE LOLIPOP RS5                    
+SP002635   ALSI 100G                                 
+SP002636   AMLA PICKLE 500G                          
+SP002637   AMUL ALMOND CHOCOLATE 200G                
+SP002641   AMUL BUTTERY G&H 100G                     
+SP002642   AMUL CHEE SLICE 750G                      
+SP002643   AMUL CHEESE CUBE                          
+SP002645   AMUL CHEESE CUBE 200G                     
+SP002646   AMUL CHOCOLATE GIFT PACK 175G             
+SP002647   AMUL COW GHEE 1LT. JAR                    
+SP002648   AMUL COW GHEE 200ML                       
+SP002649   AMUL COW GHEE 500ML                       
+SP002650   AMUL FRUIT N NUT 150G                     
+SP002652   AMUL LASSI 1LT.                           
+SP002653   AMUL LASSI MANGO 1L                       
+SP002656   AMUL MILK CHOCOLATE 150G                  
+SP002657   AMUL PANEER FRESH 200G                    
+SP002658   AMUL R&A MILK CHOCO. 150G                 
+SP002659   AMUL SF DARK CHOCOLATE 35G                
+SP002662   APSARA PENCILS MRP50                      
+SP002663   ARIEL LIQ. FL 3KG                         
+SP002664   ARIEL LIQ. FL RS10                        
+SP002666   ARIEL POWDER 4KG+2KG FREE                 
+SP002667   AROME ETHENA 6ML                          
+SP002668   AROME SUKHAAD 6ML                         
+SP002670   ATTER RS20                                
+SP002671   B&S ALMOND STICKS 250GM                   
+SP002672   B&S FRUIT & NUT COOKIES 250G              
+SP002673   B&S SF ATTA BISCUIT 300GM                 
+SP002674   BAATI ATTA LOOSE                          
+SP002675   BABY CARE KIT                             
+SP002676   BABY SAFFRON 250MG                        
+SP002678   BADAM BOLD 250G                           
+SP002679   BADI ELAICHI 10GM                         
+SP002680   BAJAJ ALMOND DROP OIL 190ML               
+SP002681   BAJAJ ALMOND DROP OIL 285ML               
+SP002682   BAJAJ ALMOND DROP OIL 475ML               
+SP002683   BAJAJ ALMOND DROP OIL 600ML               
+SP002685   BAJAJ AMLA HAIR OIL 500ML                 
+SP002686   BAJAJ BRAHMI AMLA OIL 180ML               
+SP002687   BAJAJ COCONUT OIL 175ML                   
+SP002689   BALL PAN RS3                              
+SP002690   BALL SOFT                                 
+SP002692   BATTI RS30                                
+SP002693   BATTI RS40                                
+SP002694   BB POPULAR SUGAR 5KG                      
+SP002696   BELLAVITA PERFUM GS 60ML                  
+SP002697   BESAN DESI 500G                           
+SP002698   BHARAT GRASS BROOMS                       
+SP002699   BHAVNAGAR HERBAL MEHNDI 50G               
+SP002700   BIKAJI BHUJIA 1KG                         
+SP002701   BIKAJI RASGULLA 1KG                       
+SP002702   BLACK SLATE RS30                          
+SP002704   BLUE CHIP BODY LOTION 500ML               
+SP002708   BOROPLUS LIP BALM 10G                     
+SP002710   BREAD RS55                                
+SP002711   BRITANNIA BOURBON RS30                    
+SP002712   BRITANNIA GOBBLES CHOCO CAKE RS25         
+SP002713   BRITANNIA MARIE GOLD RS10                 
+SP002717   BRITANNIA NICE TIME RS10                  
+SP002718   BUCKET MOP SET                            
+SP002720   BUSH APPLE GREEN 100G                     
+SP002721   BUSH ORANGE RED 100GM                     
+SP002722   BUTTER PAPER 20MT.                        
+SP002723   C&C FACE WASH 50ML                        
+SP002725   CADBURY CELEBRATION RS50                  
+SP002726   CADBURY CHOCLAIRS GOLD 588G               
+SP002727   CADBURY CHOCLAIRS GOLD RS120              
+SP002728   CADBURY DAIRY MILK RA 52G                 
+SP002729   CADBURY DM LOLLY RS5                      
+SP002730   CADBURY SHOTS RS116                       
+SP002735   CB CREMY VANILLA 700ML                    
+SP002738   CB MAXXUM CHOCO 80ML                      
+SP002740   CB SF VANILLA CUP RS60                    
+SP002741   CD 5STAR 3D RS20                          
+SP002742   CD GEMS SURPRISE 14.69G                   
+SP002744   CDM CHOCOLATE F&N RS50                    
+SP002745   CDM CHOCOLATE RS45                        
+SP002747   CDM SILK F&N RS100                        
+SP002748   CDM SILK OREO 124G                        
+SP002749   CDM SILK OREO RS100                       
+SP002751   CELL TAP RS20                             
+SP002753   CHANA JOR 200G                            
+SP002754   CHANA PAPAD HM 200G                       
+SP002755   CHANA ROSTED BOLD 500G                    
+SP002756   CHANDRIKA HANDWASH 600ML                  
+SP002757   CHAWLA DAL 500G                           
+SP002758   CHAWLA SMALL 250G                         
+SP002760   CHINA CAMPUS BOX                          
+SP002761   CHINGS CHILLI VINEGER 170ML               
+SP002762   CHINGS GREEN CHILLLI SAUCE 90G            
+SP002763   CHINGS RED CHILLI SAUCE 90G               
+SP002764   CHINGS SCHEZWAN CHUTNEY 250G              
+SP002765   CHINGS SCHEZWAN SAUCE 80G                 
+SP002766   CHINGS SOUP MANCHOW RS10                  
+SP002767   CHINGS SOUP TOMATO RS10                   
+SP002768   CHOCO CHIPS LOOSE                         
+SP002771   CLASSIC BRUSH HARD 1N                     
+SP002772   CLASSIC BRUSH MEDIUM 1N                   
+SP002773   CLASSIC BRUSH SOFT 1N                     
+SP002774   CLASSIC CLEANING POWDER RS25              
+SP002775   CLASSMATE A4 NOTE BOOK MRP100             
+SP002776   CLASSMATE A4 NOTE BOOK MRP40              
+SP002777   CLASSMATE A4 NOTE BOOK MRP58              
+SP002778   CLASSMATE A4 NOTE BOOK RS 95              
+SP002780   CLASSMATE NOTE BOOK MRP48                 
+SP002781   CLASSMATE NOTE BOOK MRP55                 
+SP002785   CLAY 12 SHADES RS85                       
+SP002787   CLINIC PLUS SHAMPOO 80ML                  
+SP002788   CLOSEUP FRESH GEL 300G                    
+SP002790   CLOTH DUSTER                              
+SP002791   COCONUT TOFFEE 756G                       
+SP002792   COCONUT TOFFEE RS1                        
+SP002793   COFFEE CUP RS10                           
+SP002794   COKE ZERO SUGAR 250ML                     
+SP002795   COLGATE MAX FRESH RS10                    
+SP002796   COLGATE MF BLUE 150G                      
+SP002797   COLGATE MF BLUE 300G                      
+SP002798   COLGATE MF BLUE 70G                       
+SP002799   COLGATE MF RED 150G                       
+SP002800   COLGATE MF RED 300GM                      
+SP002801   COLGATE MF RED 70G                        
+SP002802   COLGATE TB GENTLE RS36                    
+SP002803   COLGATE TB KIDS RS25                      
+SP002805   COLGATE TB ZIG ZAG 3N                     
+SP002806   COLGATE TOOTHPASTE VEDSHAKTI 140G         
+SP002807   COLOUR BOOK RS35                          
+SP002808   COLOUR PENCIL RS12                        
+SP002809   COLOUR PENCIL RS20                        
+SP002810   COMB RS10                                 
+SP002811   COMB RS20                                 
+SP002812   COMFORT BLUE 860ML                        
+SP002813   COMFORT PINK 860ML                        
+SP002814   COMPURE AIR FRESHNER 30G                  
+SP002815   COMPURE CONE 60G                          
+SP002818   CORN STARCH ARAROTH 100G                  
+SP002819   CORN STARCH ARAROTH 250G                  
+SP002820   CORNITOS NACHO CRISPS RS35                
+SP002821   CRAX NAMKEEN RS10                         
+SP002822   CRAX NAMKEEN RS20                         
+SP002824   CUP NOODLES 70G                           
+SP002825   CYCLE AGERBATTI 100G                      
+SP002827   DAAWAT BASMATI RICE ROZANA MINI 5KG       
+SP002828   DAAWAT ROZANA NIKI 10KG                   
+SP002832   DABUR GULABARI 30ML                       
+SP002833   DABUR GULABARI 59ML                       
+SP002837   DAIXO DISHWASH LIQUIDE 5L                 
+SP002838   DALADA MUSTERD OIL 1L                     
+SP002839   DALDA VANSPATI 420G                       
+SP002840   DALIYA 500G                               
+SP002841   DARK FANTASY BOURBON RS10                 
+SP002842   DARSHAN INCENSE STICKS RS10               
+SP002844   DAVE DAAL MASALA 50G                      
+SP002845   DAVE GARAM MASALA 50G                     
+SP002846   DELA VINEGER 600ML                        
+SP002847   DELICIOUS BUTTER 100G                     
+SP002848   DENVER DEO 150ML                          
+SP002849   DENVER DEO ICON 150ML                     
+SP002850   DENVER GOAL TALC 100G+100G                
+SP002851   DENVER PERFUM RS399                       
+SP002852   DENVER PERFUM RS450                       
+SP002853   DERMA FACE WASH 100ML                     
+SP002854   DETTOL ANTISEPTIC LIQ. 125ML              
+SP002855   DETTOL HW FOAMING 250ML                   
+SP002856   DETTOL HW ORIGINAL 650ML                  
+SP002858   DETTOL HW SKINCARE 675ML                  
+SP002859   DETTOL ORG HANDWASH 200ML                 
+SP002860   DETTOL SOAP COOL 100G*4+1                 
+SP002861   DETTOL SOAP SKINCARE 4*100G               
+SP002862   DHANIYA KHADA 100 GM                      
+SP002863   DHANIYA KHADA 250 GM                      
+SP002864   DHOOP STICK RS10                          
+SP002866   DIARY ANOOP RS80                          
+SP002867   DISPOSABLE PLATE 7NO.                     
+SP002868   DISPOSABLE PLATE 8NO                      
+SP002869   DOMS A5 NOTEBOOK RS65                     
+SP002870   DOMS ALL THE BEST RS20                    
+SP002872   DOMS BRUSH PENS                           
+SP002873   DOMS BRUSHES 5N                           
+SP002874   DOMS CRAYONS 12 SHADES                    
+SP002875   DOMS DRAWING BOOK RS35                    
+SP002876   DOMS DRAWING BOOK RS55                    
+SP002877   DOMS KIT MRP150                           
+SP002878   DOMS KITS RS399                           
+SP002879   DOMS LONG 12 SHADDES                      
+SP002880   DOMS MARKER RS25                          
+SP002881   DOMS NOTE BOOK MRP65                      
+SP002882   DOMS PENSIL BOX                           
+SP002883   DOMS PERMANENT MARKER RS20                
+SP002884   DOMS POSTER COLOURS 6SHADES               
+SP002886   DOOR GUARD                                
+SP002887   DORITOS CHIPS RS20                        
+SP002888   DOUBLE CHABI SELA RICE LOOSE              
+SP002889   DOUBLE TAP RS15                           
+SP002890   DOUBLE TAP RS20                           
+SP002891   DOVE COND. DS 75ML                        
+SP002892   DOVE COND. HFR RS4                        
+SP002893   DOVE COND. IR 75ML                        
+SP002894   DOVE SHAMPOO DS 75ML                      
+SP002896   DOVE SOAP 75GM*3                          
+SP002899   DR. PHYNAYLE 450ML                        
+SP002901   DRAWING SHEETS RS10                       
+SP002905   DRY MATER 500G                            
+SP002906   DUNAR FESTIVA BASMATI RICE 1KG            
+SP002907   DURACELL AA 15RS                          
+SP002909   DUSTPAN                                   
+SP002912   DWARKESH JET IMLI 100G                    
+SP002913   EFFECT DHOOP STICKS 100G                  
+SP002914   EMAMI 7OIL H OIL 100ML                    
+SP002915   EMAMI 7OIL H OIL 200ML                    
+SP002917   EMAMI 7OIL H OIL 650ML                    
+SP002919   ENO 5G                                    
+SP002920   ENVELOP RS3                               
+SP002921   ENVELOP RS5                               
+SP002923   EVA RAINCOAT RS100                        
+SP002924   EVEREADY 9W BULB                          
+SP002927   EVEREADY CR2032 LITHIUM BATTERY           
+SP002936   EVEREDAY 12W BLUB                         
+SP002939   EVEREST PERI PERI MASALA RS5              
+SP002941   EVEREST SHAHI BIRYANI MASALA              
+SP002942   EVEREST SHAHI PANEER MASALA 50G           
+SP002946   EVERYUTH SCRUB WALNUT 50G                 
+SP002954   FARMLEY FLAX SEEDS 200G                   
+SP002963   FARMLEY PACHMEVA JAR 405G                 
+SP002965   FARMLEY PISTA ROASTED 200G                
+SP002971   FE D MIRCHI POW. 100G                     
+SP002972   FE D MIRCHI POW. 200G                     
+SP002973   FE D MIRCHI POW. 500G                     
+SP002974   FE DHANIYA POWDER 100G                    
+SP002975   FE DHANIYA POWDER 200G                    
+SP002976   FE DHANIYA POWDER 500G                    
+SP002977   FE HALDI POWDER 500G                      
+SP002978   FE MIRCHI POW. 500G                       
+SP002979   FIAMA SHOWER GEL 500ML                    
+SP002981   FINGER SMALL 250GM                        
+SP002982   FINOSTA PASTA FUSILLI 500G                
+SP002983   FLAG BADGE RS30                           
+SP002984   FLAG PIN RS5                              
+SP002985   FLAG RS10                                 
+SP002986   FOOT PILLER 1N                            
+SP002987   FORTUNE SUNLITE OIL 1.740KG               
+SP002988   FRIENDSHIP BELT RS10                      
+SP002989   FRIENDSHIP BELT RS20                      
+SP002990   FRIENDSHIP RING RS5                       
+SP002991   FRUIT RUSK 250G                           
+SP002993   FUNFOODS PIZZA TOPPING 100G               
+SP003005   GANDHI HARDE PACHAK 100G                  
+SP003007   GANDHI LOBAN 50G                          
+SP003010   GANGWAL IDLI MIX 500GM                    
+SP003011   GANGWAL MUNG BHAJIYA MIX 500G             
+SP003012   GARNET LED 10W                            
+SP003013   GARNIER D BROWN 3N SMALL                  
+SP003014   GARNIER FW TURBO BRIGHT 100G              
+SP003015   GARNIER MEN CREAM AF 45G                  
+SP003017   GARNIER MEN FW OILCLEAR 100G              
+SP003018   GAS LIGHTER RS199                         
+SP003021   GHAR MAGIC BAR 300G                       
+SP003022   GILLETTE 7O'CLOCK RAZOR RS 125            
+SP003023   GILLETTE 7O'CLOCK RAZOR RS49              
+SP003024   GILLETTE GUARD RAZOR RS133                
+SP003025   GILLETTE GUARD RAZOR RS178                
+SP003027   GILLETTE VECTOR+                          
+SP003028   GILLETTE VECTOR+ 6N                       
+SP003031   GIRNAR MASALA CHAI LS 10N                 
+SP003032   GK FLASH LIQ 45ML                         
+SP003033   GLAZE WAX D-TAN 250ML                     
+SP003035   GODREJ AIR MATIC 1N                       
+SP003036   GODREJ CAR FRAGRANCE 7.5G                 
+SP003037   GODREJ CREME HAIR COLOUR BLACK BROWN 3.00 
+SP003038   GODREJ MAGIC HANDWASH 1U BOTTLE+SACHET 9GM
+SP003039   GODREJ PROTEKT HANDWASH 650ML             
+SP003040   GODREJ RICH CREME DARK BROWN RS40         
+SP003041   GOLD KHARATA                              
+SP003042   GONDH 100G                                
+SP003043   GONDH 250G                                
+SP003044   GOOD DAY PISTA COOKIES 200G               
+SP003047   GRAPH BOOK RS15                           
+SP003048   GRAPH BOOK RS35                           
+SP003049   GREEN SARDA MIRCH 100G                    
+SP003050   GUD CUBE LOOSE                            
+SP003051   GUD GLASS SMALL                           
+SP003052   GUGAL 50G                                 
+SP003053   GULAB JAMUN MIX 200G                      
+SP003054   GULAL 50G                                 
+SP003055   GUNDA PICKLE 500G                         
+SP003057   H&C ALOE VERA OIL 100ML                   
+SP003058   H&C ALOE VERA OIL 300ML                   
+SP003060   H&S COND. HF 80ML                         
+SP003061   H&S SHAMPOO AC 190ML                      
+SP003062   H&S SHAMPOO CHARCOAL 180ML                
+SP003063   H&S SHAMPOO CM 180ML                      
+SP003064   H&S SHAMPOO COOL 500ML                    
+SP003065   H&S SHAMPOO HF 180ML                      
+SP003066   H&S SHAMPOO LF 180ML                      
+SP003067   H&S SHAMPOO S&S 500ML                     
+SP003068   H&S SHAMPOO SB 180ML                      
+SP003069   H&S SHAMPOO SS 180ML                      
+SP003070   HALDI POWDER 100G                         
+SP003071   HALDI POWDER 200G                         
+SP003072   HALDIRAM AGRA PETHA 200G                  
+SP003076   HALDIRAM NAMKEEN RS10                     
+SP003077   HALDIRAM RATLAMI SEV 200G                 
+SP003078   HALDIRAM SOAN CAKE 200G                   
+SP003079   HALDIRAM'S ALL IN ONE 200G                
+SP003081   HALDIRAM'S BHUJIA SEV 200G                
+SP003082   HALDIRAM'S BHUJIA SEV 400G                
+SP003085   HALDIRAM'S GOL KACHORI 200G               
+SP003091   HALDIRAM'S MOONG DAL 400G                 
+SP003099   HALDIRAM'S TASTY NUT 400G                 
+SP003100   HAMAM SOAP NEEM 150G                      
+SP003101   HANDLE WASHING BRUSH RS45                 
+SP003102   HAPPYDENT WHITE GUM RS10                  
+SP003103   HARPIC FLUS CITRUS 2U*50G                 
+SP003106   HERSHEY'S SYRUP 180GM                     
+SP003107   HEXEL SUPER PENCIL MRP50                  
+SP003108   HIDE&SEEK CHOCOCHIP RS10                  
+SP003112   HIMALAYA BABY GIFT PACK RS269             
+SP003113   HIMALAYA BABY SOAP 125G*2                 
+SP003114   HIMALAYA NEEM GEL 100ML                   
+SP003115   HIMALAYA TP CC 150G*2                     
+SP003116   HIMALAYA TP CC 150GM                      
+SP003117   HIMALAYA TP S WHITE 150GM                 
+SP003118   HOME ONE TOILET BRUSH RS140               
+SP003119   HOMEONE BOTTLE COLOR                      
+SP003120   HOMEONE BOTTLE PLAIN                      
+SP003121   HORLICKS BISCUITS RS10                    
+SP003122   HORLICKS CHOCOLATE 500G                   
+SP003123   HUGGIES PANTS M 52N                       
+SP003124   HUGGIES PANTS S 64                        
+SP003125   HUGGIES PANTS XL 38                       
+SP003126   HUMIDIFIER AIR FRESHNER                   
+SP003127   INDIAN LEGEND NOTEBOOK                    
+SP003128   IODEX 16G                                 
+SP003129   JALA BRUSH                                
+SP003131   JANMAY GROUNDNUT OIL 910G                 
+SP003132   JAORA GOLD CHAKKI AATA 30KG               
+SP003135   JEERA 100G                                
+SP003136   JEERA 200G                                
+SP003137   JEERA 500G                                
+SP003139   JINRUIXIN ROUND COMB 1N                   
+SP003140   JK EASY COPIER 70GSM                      
+SP003145   JOWAR AATA 500G                           
+SP003146   JOY CREAM H&A 50ML                        
+SP003147   JOY CREAM SKIN FRUITS 50ML                
+SP003152   JUMBO NOTE BOOK COVER                     
+SP003153   JUMBO SANITARY PADS 40N                   
+SP003154   KABULI CHANA 250G                         
+SP003155   KABULI CHANA LOOSE                        
+SP003156   KAJU LOOSE                                
+SP003157   KAJU TUKADI                               
+SP003158   KAJU TUKDI 100G                           
+SP003159   KAJU W 320N 100G                          
+SP003160   KAJU W 320N LOOSE                         
+SP003161   KAJU W320 200GM                           
+SP003162   KALA CHANA DESI 500G                      
+SP003163   KALIMIRCH LOOSE                           
+SP003164   KALONJI 50G                               
+SP003165   KAMAL GATTA 25G                           
+SP003166   KAMAL GATTA LOOSE                         
+SP003170   KASHMIRI GOLD TEA 250G                    
+SP003171   KASHNI UBTAN POWDER 200G                  
+SP003177   KELLOGG'S MUESLI SF 400G                  
+SP003178   KELLOGG'S MUSESLI F&S 65G                 
+SP003179   KELLOGGS MUESLI F&N 750GM                 
+SP003180   KELLOGGS MUESLI MULTIGRAIN 1KG            
+SP003181   KESAR CHANDAN ASHTGANDH 25G               
+SP003182   KESAR CHANDAN ASHTGANDH 50G               
+SP003184   KESH KANTI SHAMPOO MP 450ML               
+SP003185   KESH KANTI SHAMPOO RS1                    
+SP003186   KESH KING OIL GOLD 100ML                  
+SP003188   KHAJUR 500G                               
+SP003189   KHARAK 250GM                              
+SP003190   KHARI 250G                                
+SP003193   KHUSHBU TEA 500G                          
+SP003194   KISHMISH SP 100G                          
+SP003195   KISHMISH SP 250G                          
+SP003196   KISSAN MF JAM 200GM                       
+SP003200   KIWI SHOE SPOUNGE                         
+SP003202   KNIFE RS10                                
+SP003203   KNOOR MANCHOW VEG SOUP RS10               
+SP003204   KOHINOOR BASMATI RICE DUBAR 5KG           
+SP003205   KOHINOOR BASMATI RICE TIBAR 1KG           
+SP003206   KOHINOOR BASMATI RICE TIBAR 5KG           
+SP003207   KOHINOOR ROZANA RICE 1KG                  
+SP003208   KOHINOOR SUPER BASAMATI RICE 1KG          
+SP003209   KOKRON CHALC RS20                         
+SP003211   KORES PENCIL 10N                          
+SP003212   KRITI GROUNDNUT OIL 4.5L                  
+SP003213   KRITI SUNFLOWER OIL 4.5L                  
+SP003214   LA'BOLIA FLORAL TALC 100G                 
+SP003215   LA'BOLIA FLORAL TALC 400G                 
+SP003216   LA'BOLIA FRUTINA BODY LOTION 650ML        
+SP003217   LA'BOLIA H&A BODY LOTION 650ML            
+SP003218   LAL QUILA POHA 1KG                        
+SP003219   LALKILA MUSTARD OIL 100ML                 
+SP003224   LION LAYINA DATES 250G                    
+SP003225   LION OATS 500G                            
+SP003226   LION SULTAN DATES 500GM                   
+SP003227   LIPTON GREEN TEA C&L 10N                  
+SP003228   LIPTON GREEN TEA HL 10N                   
+SP003229   LIZOL BC FLORAL 500ML                     
+SP003230   LIZOL BC PINE FOREST 200ML                
+SP003231   LIZOL JASMINE 500ML                       
+SP003232   LIZOL LAVENDR 500ML                       
+SP003234   LOCK 25MM                                 
+SP003235   LOCK 38MM                                 
+SP003236   LOCK 42MM                                 
+SP003238   LONG 100G                                 
+SP003239   LONG 10G                                  
+SP003240   LONG 20G                                  
+SP003241   LOOFA HANDLE                              
+SP003242   LOOFA RS10                                
+SP003243   LOREAL COND. 6OIL 70ML                    
+SP003244   LOREAL COND. CL 175ML                     
+SP003245   LOREAL COND. CL 70ML                      
+SP003246   LOREAL COND. CP 175ML                     
+SP003247   LOREAL COND. GLYCOLIC 70ML                
+SP003250   LOREAL COND. HM 70ML                      
+SP003251   LOREAL SHAMPOO CL 200ML                   
+SP003252   LOREAL SHAMPOO CL 80ML                    
+SP003253   LOREAL SHAMPOO CP 200ML                   
+SP003255   LOREAL SHAMPOO HF 200ML                   
+SP003256   LOREAL SHAMPOO HM 200ML                   
+SP003257   LOREAL SHAMPOO HM 80ML                    
+SP003258   LOREAL SHAMPOO OIL 200ML                  
+SP003259   LOREAL SHAMPOO OIL 80ML                   
+SP003262   LOTTE LOLLY POP RS5                       
+SP003263   LOTUS BISCOFF 250G                        
+SP003264   LOTUS CHUCKLESS WAFERS RS5                
+SP003265   LOTUS ON&ON CHOCOLATE RS5                 
+SP003267   LUXAR MARKER INK RS25                     
+SP003268   MADHUBANI MAKHANA 100G                    
+SP003269   MAGGI PAZZTA CHEESE RS35                  
+SP003270   MAIDA 500G                                
+SP003271   MAKKA AATA 1KG                            
+SP003272   MALA'S PINEAPPLE CRUSH 750ML              
+SP003273   MAMAEARHT FW RICE 100ML                   
+SP003274   MAMAEARTH FW VITAMIN-C 100ML              
+SP003278   MAMRA ALMOND 100G                         
+SP003279   MAMY POKO PANTS L 6                       
+SP003280   MAMY POKO PANTS M 7                       
+SP003282   MAMY POKO PANTS XL 5                      
+SP003283   MANGALAM CAMPHOR 50G                      
+SP003284   MANGLAM KAPOOR DANI 1N                    
+SP003293   MASUR DAL KHADA 1KG                       
+SP003294   MASUR DAL LOOSE                           
+SP003295   MB DARK MUSESLI 400G                      
+SP003296   MB PROTEIN OATS 400G                      
+SP003297   MCCAIN VEGGIE NUGGETS 325G                
+SP003298   MCVITIES BISCUITS RS10                    
+SP003299   MECHANICAL PENCIL RS10                    
+SP003300   MEDIMIX SOAP AYURVEDIC 3N*125G            
+SP003301   MENTOS JAR RS150                          
+SP003303   METHI DANA 500GM                          
+SP003304   MILTON BUCKET 20L                         
+SP003305   MILTON DUSTBIN                            
+SP003306   SAFAL GREEN CHILLY PICKLE 400G            
+SP003307   SAFAL LIME PICKLE 400G                    
+SP003308   SAFAL MAIDA 500G                          
+SP003309   SAFAL MANGO PICKLE 400G                   
+SP003310   SAFAL MIXED PICKLE 400G                   
+SP003311   SAFAL SUJI 500G                           
+SP003312   SAFARI CRUNCH RS10                        
+SP003313   SAFARI CRUNCH RS5                         
+SP003314   SAFETY PIN RS10                           
+SP003316   SAFFOLA OATS 460GM                        
+SP003317   SAFFOLA OATS 900G                         
+SP003318   SAGAR DAIRY WHITENER RS10                 
+SP003320   SANI FRESH 500ML                          
+SP003321   SANIDHYA GOLD ATTA LOOSE                  
+SP003325   SANTOOR SOAP 75G*4                        
+SP003326   SANTOOR SOAP WHITE 100G*5                 
+SP003327   SAPHIRE HAZELFILLS 42G                    
+SP003328   SAPPHIRE HAZELFILLS 70G                   
+SP003329   SARAS DESI GHEE 100ML                     
+SP003330   SARAS DESI GHEE 500ML                     
+SP003333   SARSO DAL 200GM                           
+SP003334   SATWIK COCONUT OIL 500ML                  
+SP003335   SATWIK GROUNDNUT OIL 1LT.                 
+SP003336   SATWIK GROUNDNUT OIL 5LT.                 
+SP003337   SATWIK MUSTARD OIL 1LT.                   
+SP003338   SATWIK MUSTARD OIL 500ML                  
+SP003339   SATWIK MUSTARD OIL 5LT.                   
+SP003340   SATWIK RAW HONEY 250G                     
+SP003341   SATWIK SESAME OIL 1LT.                    
+SP003342   SATWIK SESAME OIL 500ML                   
+SP003343   SATWIK YELLOW MUSTARD OIL 1LT.            
+SP003344   SATWIK YELLOW MUSTARD OIL 500ML           
+SP003345   SAVLON HANDWASH MRP10                     
+SP003346   SAYA PAGE MARKERS RS35                    
+SP003347   SCISSORS MINI                             
+SP003349   SENSODYNE TOOTHBRUSH 2N+1N                
+SP003350   SHAHI GARLIC CHATNI 200GM                 
+SP003351   SHAHI JEERA 100GM                         
+SP003352   SHAHI JEERAVAN 100G                       
+SP003353   SHAHI JEERAVAN 200G                       
+SP003354   SHAHI JIRAVAN 50G                         
+SP003357   SHILLS FACE WAX STRIPS 20N                
+SP003360   SHREE AYU-VEDA HAIR OIL 200ML             
+SP003361   SHREE AYU-VEDA HAIR OIL AMLA 500ML        
+SP003362   SHREE AYU-VEDA HAIR OIL J 500ML           
+SP003366   SIGNATURE COCKTAIL DEO 200ML              
+SP003367   SIGNATURE YOLO DEO 200ML                  
+SP003368   SINGDANA SIKA 250G                        
+SP003369   SINGDANA SIKA 500G                        
+SP003370   SINGHADA LOOSE                            
+SP003371   SKORE NOT OUT 3N                          
+SP003375   SNICKERS RS10                             
+SP003376   SNICKERS RS20                             
+SP003381   SOFY BODYFIT PAD XL 6                     
+SP003382   SOFY BODYFIT XXL 40 PAD                   
+SP003383   SONA HALDI POWDER 100G                    
+SP003385   SOPH 100G                                 
+SP003386   SOPH 500G                                 
+SP003387   SOPH BARIK LOOSE                          
+SP003389   SPICY CARBONARA VEG 80G                   
+SP003393   SPOTZERO BOTTLE BRUSH                     
+SP003396   SPOTZERO POCHA RS60                       
+SP003397   SPOTZERO PRIME SPIN MOP 1U                
+SP003398   SPOTZERO SINK&DISH BRUSH                  
+SP003399   SPOTZERO SWEEP WIPER RS200                
+SP003400   SPOTZERO TOILET BRUSH ROUND               
+SP003401   SPRIT ZERO 250ML                          
+SP003402   STAYFREE NIGHT XXL 18U                    
+SP003403   STAYFREE NIGHTS XXL 6N                    
+SP003404   STEEL SCALE RS30                          
+SP003405   suagr                                     
+SP003406   SUGAR BURU 250G                           
+SP003407   SUGAR BURU 500G                           
+SP003410   SUGAR FREE GOLD POWDER 100G               
+SP003412   SUGAR POWDER 500G                         
+SP003418   SUHANA GARAM MASALA RS10                  
+SP003421   SUMICO GOLD CHOCO 575G                    
+SP003422   SUMICO JOYLAND 230G                       
+SP003423   SUMICO JOYLAND 330G                       
+SP003428   SUNDER SUJI RUSK 1KG                      
+SP003430   SUNNY BLACK COMPOUND 500ML                
+SP003431   SUNRISE COFFE RS10                        
+SP003432   SUNRISE COFFEE 2RS                        
+SP003433   SUNSILK SHAMPOO BLACK RS1                 
+SP003435   SUNSILK SHAMPOO PINK RS1                  
+SP003436   SUNSILK SHMAPOO PINK 180ML                
+SP003437   SUPER LIGHT CLAY                          
+SP003439   SWAGAT RASGULLA 1KG                       
+SP003441   T COCOA POWDER 50G                        
+SP003442   TALATI BLACK SALT 100G                    
+SP003443   TALATI KULFI 100G                         
+SP003444   TAP CUTTER 1N                             
+SP003445   TAP ROLL RS70                             
+SP003446   TATA AGNI EXTRA JOSH 225G                 
+SP003447   TATA AGNI TEA 1KG                         
+SP003448   TATA COFFEE 200G                          
+SP003449   TATA GOLD ALL IN 1 140G                   
+SP003450   TATA OATS MASALA 33G                      
+SP003452   TATA SALT 1KG                             
+SP003453   TATA SAMPANN POHA 1KG                     
+SP003454   TATA TEA GOLD 250G                        
+SP003455   TEA CUP RS8                               
+SP003456   TEJ PATTA 25GM                            
+SP003461   TIDE LIQUID RS10                          
+SP003462   TIKKU CHILLI FLAKES RS10                  
+SP003463   TIKKU OREGANO RS10                        
+SP003466   TIL BLACK 100G                            
+SP003467   TIL SADA 250G                             
+SP003468   TOFFEEMAN CANDY RS5                       
+SP003469   TOFFEEMAN TOFFEE RS50                     
+SP003470   TOFILUK RS5                               
+SP003472   TONIC WATER 300ML                         
+SP003473   TOOFAN OIL 2ML                            
+SP003475   TOPS CAKE MIX VANILLA 225G                
+SP003476   TOPS CUSTARD POWDER 100G                  
+SP003483   TULIPS COTTON BUDS 100N                   
+SP003484   TULIPS COTTON BUDS 200N                   
+SP003485   TULIPS FACIAL TISSUES 100N                
+SP003488   UDAD DAL CHILKA                           
+SP003489   UJJAINI TOAST 350G                        
+SP003490   UNIBIC BISCOT RS10                        
+SP003491   UNIBIC BUTTER COOKIES RS10                
+SP003492   UNIBIC CHOCO CHIP COOKIES 450G            
+SP003493   UNIBIC CHOCO NUT COOKIES 450G             
+SP003494   UNIBIC OATS DIGESTIVE BISCUITS 120G       
+SP003495   UNIBIC SUGAR FREE COOKIS RS60             
+SP003496   URAD KHADA 250GM                          
+SP003497   URAD MOGAR 1KG                            
+SP003498   URAD MOGAR 500GM                          
+SP003499   URAD MOGAR LOOSE                          
+SP003500   UTSAV BESAN LADDO 200G                    
+SP003501   UTSAV BESAN LADDO 400G                    
+SP003502   UTSAV RAJGIRA ATTA 200G                   
+SP003503   UTSAV SOAN PAPDI 200G                     
+SP003504   UTTAM GULAB JAMUN 1KG                     
+SP003507   V WASH 100ML                              
+SP003508   V-MARK INHALER RS50                       
+SP003509   VASELINE LOTION DEEP 400ML                
+SP003511   VEEBA CHILLI PAPRIKA 200G                 
+SP003512   VEEBA MAYONNAISE EGGLESS 100G             
+SP003513   VEEBA PASTA & PIZZA SAUCE 100G            
+SP003514   VEEBA SANDWICH SPREAD 75G                 
+SP003515   VEEBA SCHEZWAN CHUTNY 100G                
+SP003516   VEET STRIP DRY SKIN 8N                    
+SP003517   VEET STRIP NORMAL 8N                      
+SP003518   VEET STRIP SENSITIVE 8N                   
+SP003519   VI-JOHN SHAVING BRUSH                     
+SP003520   VI-JOHN SHAVING FOAM 200G                 
+SP003521   VICCO TOOTHBRUSH                          
+SP003522   VICCO WSO CREAM 15G                       
+SP003523   VICKS BABY RUB 25ML                       
+SP003524   VICKS BABYRUB 10ML                        
+SP003525   VICKS EXTRA STRONG 10ML                   
+SP003526   VICKS EXTRA STRONG 25ML                   
+SP003527   VICKS RS2                                 
+SP003528   VICKS VAPORUB 50ML                        
+SP003529   VICKS VAPORUB 5ML                         
+SP003530   VIM BAR 500G                              
+SP003531   VIM BAR RS10                              
+SP003532   VIM DROP RS20                             
+SP003533   VIM LIQUID 250ML                          
+SP003534   VIM LIQUID 500ML                          
+SP003535   VIM LIQUID 900ML                          
+SP003536   VIM LIQUID RS15                           
+SP003537   VIMAAN BROOM GRASS                        
+SP003539   WAGH BAKRI MASALA TEA 250G                
+SP003541   WAGH BAKRI TEA 1KG                        
+SP003544   WATER DISPOSAL RS20                       
+SP003545   WAX STRIPS                                
+SP003546   WEIKFILELD COCOA DRINK 75G                
+SP003547   WHEEL COCONUNT POWDER 1KG                 
+SP003550   WHISPER CHOICE NIGHT XXL 16N              
+SP003551   WHISPER ULTRA NIGHT XXL 7N                
+SP003554   WHISPER ULTRA XL+ 15N                     
+SP003555   WHITE TONE POWDER 55GM                    
+SP003558   WILD STONE PERFUME 240ML                  
+SP003559   WILD STONE SOAP DEO 75G                   
+SP003561   YARDLEY LONDON HANDWASH 200ML             
+SP003562   YARDLEY TALC 50G                          
+SP003565   YB 5G PROTEIN BAR 25G                     
+SP003566   YB APRICOT FIG 45G                        
+SP003567   YB BLUEBERRY PIE 45G                      
+SP003568   YB CRUNCH DARK CHOCOLATE 50G              
+SP003569   YB DOUBLE CHOCOLATE SHAKE 250ML           
+SP003570   YB GRANOLA BAR 40G                        
+SP003571   YB MANGO RIZZ SHAKE 250ML                 
+SP003572   YB MUESLI DC & CRANBERRY 40G              
+SP003573   YB MUESLI FRUITS & SEEDS 40G              
+SP003574   YB PROTEIN MINI CHOCO RS20                
+SP003575   YB PROTEIN MINI COFFEE RS20               
+SP003576   YB WAFER STRAWBERRY POP 40G               
+SP003577   YB WAFERS DARK CHOCOLATE 40G              
+SP003578   YIPPEE MASALA NOODLES RS10                
+SP003579   ZANDU BALM UP 8ML                         
+SP003580   ZANDU PARAS TIKADI 30N                    
+SP003581   ZEEBA CLASSIC BASMATI RICE 1KG            
+SP003582   ZEEBA CLASSIC BASMATI RICE 5KG            
+SP003583   ZEEBA DUBAR BASMATI RICE 1KG              
+SP003584   ZEEBA EVERYDAY BASMATI RICE 1KG           
+SP003585   ZEEBA EVERYDAY BASMATI RICE 5KG           
+SP003586   ZEEBA SPECIAL BIRYANI RICE 800G           
+SP003587   ZEEBA TIBAR BASMATI RICE 1KG              
+SP003588   ZEEBA TIBAR BASMATI RICE 5KG              
+SP003589   ZIGGY CAKE RS20                           
+SP003590   ZIPPER RS10                               
+SP003591   ZIPPER RS20                               
+SP003593   ZOFF AJWAIN 50G                           
+SP003594   ZOFF AJWAIN RS10                          
+SP003595   ZOFF AMCHUR POWDER 100G                   
+SP003596   ZOFF AMCHUR POWDER 50G                    
+SP003597   ZOFF BLACK PEPPER POWDER 100G             
+SP003598   ZOFF BLACK PEPPER RS10                    
+SP003599   ZOFF CHICKEN CURRY MASALA 50G             
+SP003600   ZOFF CHICKEN MASALA RS10                  
+SP003601   ZOFF CHILLI POWDER 100G                   
+SP003602   ZOFF CHILLI POWDER 200G                   
+SP003603   ZOFF CHILLI POWDER 500G                   
+SP003604   ZOFF CHOLLE MASALA 100G                   
+SP003605   ZOFF DALCHINI 100G                        
+SP003606   ZOFF DRY GINGER WHOLE 100G                
+SP003607   ZOFF ELAICHI 50G                          
+SP003608   ZOFF ELAICHI BADI 50G                     
+SP003609   ZOFF ELAICHI BADI RS20                    
+SP003610   ZOFF ELAICHI RS10                         
+SP003611   ZOFF ELAICHI RS20                         
+SP003612   ZOFF GARAM MASALA 100G                    
+SP003613   ZOFF IMLI 500G                            
+SP003614   ZOFF JAVITRI 25G                          
+SP003615   ZOFF JEERA 100G                           
+SP003616   ZOFF KALI MIRCH 100G                      
+SP003617   ZOFF LAUNG RS20                           
+SP003618   ZOFF MEAT MASALA 50G                      
+SP003619   ZOFF MEAT MASALA RS10                     
+SP003620   ZOFF METHI DANA 200G                      
+SP003621   ZOFF PANI PURI MASALA 100G                
+SP003622   ZOFF PAV BHAJI MASALA 100G                
+SP003623   ZOFF PAV BHAJI MASALA 50G                 
+SP003624   ZOFF RAI 100G                             
+SP003625   ZOFF RED CHILLI WHOLE 100G                
+SP003626   ZOFF RED CHILLI WHOLE 200G                
+SP003627   ZOFF ROCK SALT 100G                       
+SP003628   ZOFF SABJI MASALA 100G                    
+SP003629   ZOFF SHAHI BIRYANI MASALA 100G            
+SP003630   ZOFF SHAHI PANEER MASALA 100G             
+SP003631   ZOFF SOUNF 100G                           
+SP003632   ZOFF SOYA BADI 200G                       
+SP003633   ZOFF SOYA BADI 35G                        
+SP003634   ZOFF STAR SEED 20G                        
+SP003635   ZOFF STAR SEED 50G                        
+SP003636   ZOFF YELLOW SARSO RS10                    
+SP003637   MIRCH DALIYA 100G                         
+SP003638   MIRCH DALIYA 500G                         
+SP003639   MISHRI CUTTING LOOSE                      
+SP003640   MISHRI WHOLE 250G                         
+SP003641   MIXED PICKLE 500G                         
+SP003642   MM ALMOND 250G                            
+SP003643   MM ALMOND 500G                            
+SP003644   MM ALMOND MAMRA 250G                      
+SP003645   MM CASHEWS W320 250G                      
+SP003646   MM CHIA SEEDS 250G                        
+SP003647   MM PACHMEWA 250G                          
+SP003648   MM PISTACHIO R&S 250g                     
+SP003649   MM PUMPKIN SEEDS 250G                     
+SP003650   MM RAISIN 250G                            
+SP003651   MM SUNFLOWER SEEDS 250G                   
+SP003652   MOMS MAGIC BISCUIT MRP10                  
+SP003653   MOMS MAGIC BUTTER 126G                    
+SP003654   MOMS MAGIC BUTTER RS10                    
+SP003655   MOMS MAGIC CASHEW RS10                    
+SP003656   MOMS MAGIC CASHEW RS20                    
+SP003657   MOMS MAGIC CASHEW RS40                    
+SP003658   MOMS MAGIC FRUIT RS10                     
+SP003659   MOOV SPARY 35G                            
+SP003660   MOTHER DAIRY FRESH CREAM 200ML            
+SP003661   MOTHER DAIRY LASSI 180ML                  
+SP003662   MOTHER DAIRY MASALA CHACH 180ML           
+SP003665   MTR DOSA MIX 500G                         
+SP003666   MTR RAVA IDLI 500G                        
+SP003667   MTR UPMA 160G                             
+SP003668   MUKHWAS JUMBO MIX 100G                    
+SP003669   MUNAKKA SP 250G                           
+SP003670   MUNAKKA SYN 250GM                         
+SP003671   MUNCH RS20                                
+SP003672   MUNG DAL CHILKA 500G                      
+SP003673   MUNG KHADA LOOSE                          
+SP003674   MUNG MOGAR DAL 500G                       
+SP003675   MURLIWALA AGARBATTI 360G                  
+SP003676   MURLIWALA AGERBATTI RS70                  
+SP003677   MYFITNESS PB CRISPY 510G                  
+SP003678   MYFITNESS PB CRUNCHY 510G                 
+SP003679   MYFITNESS PB CRUNCHY 900G                 
+SP003680   MYFITNESS PB SMOOTH 510G                  
+SP003681   MYFITNESS PEANUT BUTTER 227G              
+SP003682   NAFEES RUSK 400G                          
+SP003684   NAIL CUTTER BELL                          
+SP003685   NAIL POLISH REMOVER 30ML                  
+SP003686   NAIL REMOVAL WIPES RS40                   
+SP003687   NAPKIN WHITE RS50                         
+SP003688   NAPTHALENE BALLS 100GM                    
+SP003689   NATRAJ SHARPNER RS3                       
+SP003691   NEERAJ AMLA MURABBA 500GM                 
+SP003692   NEERAJ ATHANA MIRCHI 200G                 
+SP003693   NEERAJ MANGO MURABBA 200G                 
+SP003694   NEERAJ MANGO PICKLE 500G                  
+SP003695   NEERAJ MIX PICKLE 500G                    
+SP003696   NEETA MEHANDI CONE RS10                   
+SP003697   NESCAFE COLD COFFEE 200ML                 
+SP003698   NILON'S R SEWAIYAN 200GM                  
+SP003699   NILON'S SZECHUAN CHUTNEY 250G             
+SP003700   NILON'S TOMATO KETCHUP 400G               
+SP003701   NILON'S TOMATO KETCHUP RS15               
+SP003702   NIRMA WHITE SOAP RS10                     
+SP003703   NISH ROSE WATER 120ML                     
+SP003704   NISH ROSE WATER 60ML                      
+SP003705   NIVEA BLUE CREAM 100ML                    
+SP003706   NIVEA LOTION ALOE 200ML                   
+SP003707   NIVEA LOTION BODY MILK 200ML              
+SP003708   NIVEA LOTION BODY MILK 50ML               
+SP003710   NN FOREST HONEY 400G                      
+SP003711   NN JAMUN HONEY 400G                       
+SP003712   NN KASHMIR HONEY 400G                     
+SP003713   NN NATURAL HONEY 1KG                      
+SP003714   NN NATURAL HONEY 500G                     
+SP003715   NN NATURAL HONEY SQUEEZY 250G             
+SP003716   NN NATURAL HONEY SQUEEZY 500G             
+SP003717   NN ORG HONEY SQUEEZY 325G                 
+SP003718   NN ORG HONEY SQUEEZY 500G                 
+SP003719   NN ORGANIC HONEY 150G                     
+SP003720   NN ORGANIC HONEY 325G                     
+SP003721   NN ORGANIC HONEY 400G                     
+SP003722   NN TULSI HONEY 450G                       
+SP003723   NOTE BOOK COVER                           
+SP003727   ODO NIL 50G                               
+SP003734   OLD SPICE SC MUSK 30G                     
+SP003735   OLD SPICE SC MUSK 70G                     
+SP003737   ORAL-B CC SENSITIVE 3PCS                  
+SP003742   OREO BISCUIT CHOCO RS10                   
+SP003743   OREO BISCUIT CHOCO RS30                   
+SP003744   OREO BISCUIT ORIGINAL RS30                
+SP003745   ORGANIC TULSI CLASSIC 25N                 
+SP003747   OURA CAR PERFUME 7.5G                     
+SP003748   PADDLE HAIR BRUSH                         
+SP003749   PANTENE COND. BIOTIN 200ML                
+SP003752   PAPAD 100G                                
+SP003753   PAPAD KATRAN 200G                         
+SP003754   PAPER SOAP RS 40                          
+SP003757   PARACHUTE ALOE HAIR OIL 150ML             
+SP003758   PARACHUTE ALOE HAIR OIL 250ML             
+SP003759   PARACHUTE ALOE HAIR OIL 90ML              
+SP003763   PARI MANGO ACHAR 200G                     
+SP003764   PARLE 2IN1 ECLAIRS RS47                   
+SP003765   PARLE DUET CLASSIC 198G                   
+SP003766   PARLE FULL 2 IMLI 173G                    
+SP003767   PARLE FUNTOOSH CLASSIC 200G               
+SP003768   PARLE FUSION MANGO 198G                   
+SP003769   PARLE JAM-IN RS10                         
+SP003770   PARLE KAPI CANDY 198G                     
+SP003771   PARLE MANACO 185.6 G                      
+SP003772   PARLE MAZELO CANDY RS50                   
+SP003773   PARLE POPPINS CANDY RS5                   
+SP003774   PARLE TOP CRACKERS RS10                   
+SP003775   PATANJALI BASMATI RICE TIBAR 1KG          
+SP003776   PAV RS35                                  
+SP003777   PEARS BODY WASH 250ML                     
+SP003778   PEARS PG SOAP 100G                        
+SP003780   PEARS S&F SOAP 100G                       
+SP003788   PEPSODENT GC PASTE 150G*2                 
+SP003789   PERISONS DISHWASH LIQ. 1L                 
+SP003790   PERK RS20                                 
+SP003791   PIGEON TOOTHBRUSH                         
+SP003792   PINTOLA PB CHOCOLATE CREAMY 350G          
+SP003793   PINTOLA PB CREAMY 350G                    
+SP003794   PINTOLA PEANUT BUTTER AN CRUNCHY 350G     
+SP003795   PINTOLA PEANUT BUTTER CRUNCHY 350G        
+SP003796   PISTA 100G                                
+SP003797   PLASTIC STOOL RS299                       
+SP003798   PLASTIC TEA STRAINER RS25                 
+SP003800   POHA 500GM                                
+SP003801   PONDS BRIGHT CREAM 15GM                   
+SP003803   PONDS LIGHT MOISTURISER 50ML              
+SP003804   PONDS SUPERLIGHT GEL 25ML                 
+SP003805   POOJA SUPARI LOOSE                        
+SP003806   POPCORN ACT RS15                          
+SP003810   PRAN DRINKO JUICE 250ML                   
+SP003811   PRAN LITCHI DRINK 250ML                   
+SP003812   PRINTED UMBRELLA RS150                    
+SP003813   PRINTED UMBRELLA RS180                    
+SP003814   PT. AAROGYA BISCUIT RS10                  
+SP003815   PT. ATTA NOODLES 240G                     
+SP003820   PT. HONEY 50G                             
+SP003823   PT. ROCK SALT 1KG                         
+SP003825   PT. SOYA OIL 13KG                         
+SP003826   PT. VIRGIN COCONUT OIL 250ML              
+SP003827   PT.CC COOKIES RS10                        
+SP003828   PT.CHOCO FLAKES 30G                       
+SP003830   PT.JAMUN VINEGAR 500ML                    
+SP003831   PT.MASALA OATS 200GM                      
+SP003833   PUDINA POWDER 100G                        
+SP003835   PULSE IMLI RS136                          
+SP003836   PULSE TOFFEE RS1                          
+SP003841   PURO PINK SALT 1KG                        
+SP003842   PUSHP AMCHUR POWDER RS10                  
+SP003843   PUSHP JEERA 500G                          
+SP003844   PUSHP JEERA 50G                           
+SP003845   PUSHP KASHMIRI MIRCH 50G                  
+SP003846   PUSHP KASUDRI METHI 250GM                 
+SP003847   PUSHP MUNIMJI CHAI 250G                   
+SP003848   PUSHP PANI PURI MASALA RS10               
+SP003849   PUSHP PAV-BHAJI MASALA 50G                
+SP003851   PUSHP TEA MASALA 50G                      
+SP003852   PUSHP TIKHA TADKA MIRCH 500G              
+SP003853   RAI 500G                                  
+SP003854   RAI DAL 200GM                             
+SP003855   RAINCOAT RS250                            
+SP003856   RAINCOAT RS300                            
+SP003858   RAJLAXMI STEEL PIPE BROOM M               
+SP003859   RAJMA SAFED 250G                          
+SP003860   RAMDEV HING 100G                          
+SP003861   RAMKALI TEA 200GM                         
+SP003864   RANG RED RS10                             
+SP003865   RASANA ORANGE RS10                        
+SP003867   RAVALGAON LOLIPOP RS5                     
+SP003870   REAL JUICE ORANGE 1L                      
+SP003871   RED LABLE TEA 250GM                       
+SP003872   REVIVE LIQUID 400G                        
+SP003875   RICH VELLY JARDALU 250G                   
+SP003879   ROYAL NOTE BOOK RS30                      
+SP003880   ROYAL WIPER NO.12                         
+SP003881   S&J GINGER GARLIC PASTE 200G              
+SP003882   SABISCO CAKE RS20                         
+SP003884   SACHAMOTI MORDHAN 500GM                   
+SP003885   SACHAMOTI SABUDANA 500G                   
+SP003886   SAFAL CHAKKI ATTA 30KG                    
+SW-SW0002  20-20 BUTTER COOKIES 80GM                 
+SW-SW0003  20-20 BUTTER COOKIES RS5                  
+SW-SW0004  20-20 CASHEW COOKIES 75GM                 
+SW-SW0006  20-20 CHIA SEED 200GM                     
+SW-SW0008  20-20 SUNFLOWER SEED                      
+SW-SW0011  420 CHANA PAPAD MM 200 GM                 
+SW-SW0015  420 MUNG SADA PAPAD 200G                  
+SW-SW0017  420 PAPAD KATRAN 200G                     
+SW-SW0018  420 URAD PAPAD 200G                       
+SW-SW0019  5 STAR 10MRP                              
+SW-SW0025  50-50 SWEET & SALTY RS5                   
+SW-SW0026  921 BASMATI RICE XXL 5KG                  
+SW-SW0028  AAKASH ALU BHUJIA 38GM                    
+SW-SW0029  AAKASH BIKANERI BHUJIA 150GM              
+SW-SW0032  AAKASH CHIPS INDORI MASALA 25GM           
+SW-SW0035  AAKASH HING CHANA 40GM                    
+SW-SW0039  AAKASH MASALA BOONDI 200G                 
+SW-SW0040  AAKASH MASTANA MIX 200G                   
+SW-SW0041  AAKASH MASTANA MIX 200GM                  
+SW-SW0042  AAKASH MASTANA MIX 400GM                  
+SW-SW0043  AAKASH MOONG DAL 32GM                     
+SW-SW0050  AAKASH SOYA STICK 42GM                    
+SW-SW0054  AAM PANNA 120G                            
+SW-SW0055  AAM PAPAD 250G                            
+SW-SW0057  AASHIRVAAD CHAKKI AATA 10KG               
+SW-SW0060  aashirwaad besan 500                      
+SW-SW0062  ABIS SOYA OIL 4KG JAR                     
+SW-SW0066  AER CAR GEL 45G                           
+SW-SW0067  AGRAWAL PAPAD KATRAN1KG                   
+SW-SW0068  AGRBATTI PEMIUM 400GM                     
+SW-SW0069  AISHU CIRULAR COMB                        
+SW-SW0070  AJAY TB HARD 1N                           
+SW-SW0071  AJAY TB SENSITIVE 1N                      
+SW-SW0073  AJINA MOTA 50GM                           
+SW-SW0074  AJINA MOTO 500GM                          
+SW-SW0076  AJWAIN LOOSE                              
+SW-SW0077  AKHAROT GIRI 100G                         
+SW-SW0081  ALPENLIEBE CARAMEL RS5                    
+SW-SW0086  AMBUJA SOYA OIL 5L                        
+SW-SW0088  AMCHUR KHADA                              
+SW-SW0096  AMUL CHEE CUBE 200G                       
+SW-SW0099  AMUL CHOCO SYRUP RS10                     
+SW-SW0100  AMUL CHOLATE SYRUP                        
+SW-SW0103  AMUL CUBE                                 
+SW-SW0105  AMUL DARK CHOCOLATE RS45                  
+SW-SW0108  AMUL FRESH CREAM 250ML                    
+SW-SW0109  AMUL GHEE 1LT.                            
+SW-SW0111  AMUL GHEE 200ML JAR                       
+SW-SW0115  AMUL MASTI BUTTERMILK 200ML               
+SW-SW0116  AMUL MILK CHOCOLATE RS45                  
+SW-SW0117  AMUL MILK POWDER RS10                     
+SW-SW0122  ANJEER 250G                               
+SW-SW0123  ANJEER LOOSE                              
+SW-SW0124  ANTI-ACNE FW 80ML                         
+SW-SW0128  APPY FIZZ RS20                            
+SW-SW0129  APPY FIZZ RS40                            
+SW-SW0130  APSARA PENCILS MRP70                      
+SW-SW0131  APSARA PENSIL COLOR MRP10                 
+SW-SW0141  AROME DEO 200ML                           
+SW-SW0143  AROME ROSE 6ML                            
+SW-SW0145  ATTAR SPRAY R&C 100ML                     
+SW-SW0147  AVI SOYA OIL 4KG                          
+SW-SW0158  B&S BUTTER FINGER COOKIES 300GM           
+SW-SW0165  B&S EGGLESS FRUIT CAKE 300GM              
+SW-SW0166  B&S F&N CAKE 300GM                        
+SW-SW0167  B&S FRENCH HEARTS 200GM                   
+SW-SW0168  B&S HONEY ALMOND CAKE 150GM               
+SW-SW0170  B&S MARBLE CAKE 150GM                     
+SW-SW0171  B&S OATMEAL COOKIES 200GM                 
+SW-SW0172  B&S PLAIN RUSK 200GM                      
+SW-SW0173  B&S RICH DRYFRUIT COOKIES 200GM           
+SW-SW0175  B&S TWIST KHARI 200GM                     
+SW-SW0176  B&S VANILLA CAKE 150GM                    
+SW-SW0179  BADAM 250G                                
+SW-SW0180  BADAM BOLD 100G                           
+SW-SW0181  BADAM KATARN                              
+SW-SW0182  BADAM LOOSE                               
+SW-SW0183  BADI ELAICHI 25GM                         
+SW-SW0184  BADI ELAICHI LOOSE                        
+SW-SW0185  BADIYAN FUL LOOSE                         
+SW-SW0189  BAJAJ ALMOND DROPS HAIR OIL 285ML         
+SW-SW0190  BAJAJ ALMOND DROPS HAIR OIL 475ML         
+SW-SW0193  BAJAJ ALMONDS OIL 600ML                   
+SW-SW0197  BAJAJ COCONUT OIL 475ML                   
+SW-SW0199  BAKERY BISCUITS 250G                      
+SW-SW0200  BAKERY RUSK 500G                          
+SW-SW0201  BAKET                                     
+SW-SW0206  BALAJI TIKHA MITHA MIX 500GM              
+SW-SW0212  BALL PAN RS15                             
+SW-SW0213  BALL PAN RS5                              
+SW-SW0216  BAMBINO PASTA SPIRAL 500G                 
+SW-SW0220  BARTAN JALI                               
+SW-SW0221  BASIL SABJA SEED 100G                     
+SW-SW0227  BESAN DESI                                
+SW-SW0228  BESAN SEV KA 500G                         
+SW-SW0229  BESAN SUREKA LOOSE                        
+SW-SW0231  BIKAJI CHOWPATI BHEL 300G                 
+SW-SW0234  BIKAJI SOYA STICKS 140G                   
+SW-SW0237  BIKAJI TANA TAN 400GM                     
+SW-SW0243  BLACK SALT 1KG                            
+SW-SW0248  BODY RAZOR                                
+SW-SW0249  BOOK COVER 7MTR                           
+SW-SW0253  BOROLINE CREAM 10G                        
+SW-SW0257  BOTTLE LOVELY 800                         
+SW-SW0258  BOUNCE 28 GM                              
+SW-SW0261  BOURNVITA 1KG REFILL                      
+SW-SW0263  BOURNVITA 500G JAR                        
+SW-SW0264  BOURNVITA 500G REFILL                     
+SW-SW0266  BOURNVITA BISCUITS RS10                   
+SW-SW0269  BRITANIYA BROWN BREAD                     
+SW-SW0271  BRITANNIA BOURBON RS35                    
+SW-SW0272  BRITANNIA BREAD                           
+SW-SW0273  BRITANNIA BREAD 300G                      
+SW-SW0274  BRITANNIA BROWN BREAD 400GM               
+SW-SW0275  BRITANNIA FUDGE CAKE RS20                 
+SW-SW0276  BRITANNIA GOBBLES CHOCO CHILL CAKE 60GM   
+SW-SW0278  BRITANNIA GOBBLES FRUIT CAKE RS25         
+SW-SW0279  BRITANNIA GOBBLES FRUITY FUN CAKE 110GM   
+SW-SW0285  BRITANNIA MILK BIKIS 45.6GM               
+SW-SW0288  BRITANNIA PAV 300G                        
+SW-SW0289  BRITANNIA PURE MAGIC BISCUIT RS25         
+SW-SW0290  BRITANNIA RUSK 200 GM                     
+SW-SW0292  BRITANNIA SANDWICH BREAD 700GM            
+SW-SW0296  BRITANNIA TIGER KRUNCH BISCUIT RS5        
+SW-SW0301  BRU COFFEE 75GM                           
+SW-SW0304  BRUNCH LUNCH BOX                          
+SW-SW0305  BUCKET 10L                                
+SW-SW0306  BUCKET 15L                                
+SW-SW0309  BUSH KESRI POWDER 100GM                   
+SW-SW0310  BUSH LEMON YELLOW POWDER 100GM            
+SW-SW0313  CADBURY CELEBRATION RS110                 
+SW-SW0317  CADBURY CHOCOREME OREO 41.75GM            
+SW-SW0319  CADBURY STRWBERRY BISCUITS 41.75GM        
+SW-SW0320  CALIFORNIA ALMONDS 250GM                  
+SW-SW0321  CAMEL ACRLIC COLOUR 12N                   
+SW-SW0322  CAMEL ACRYLIC COLOUR 6N                   
+SW-SW0328  CARBON PAPER RS5                          
+SW-SW0332  CB BELGIAN FUDGE RS50                     
+SW-SW0337  CB CHOCO BAR RS20                         
+SW-SW0338  CB CHOCO BROWNIE RS60                     
+SW-SW0339  CB CHOCO CRUNCH RS30                      
+SW-SW0340  CB CHOCO HAZELNUT CONE RS60               
+SW-SW0343  CB CHOCOLATE CUP RS20                     
+SW-SW0344  CB COOKIE & CREAM CONE RS50               
+SW-SW0346  CB ICE CREAM RS10                         
+SW-SW0351  CB MANGO 700ML                            
+SW-SW0357  CDM CHOCOLATE 105GM                       
+SW-SW0358  CDM CHOCOLATE 40GM                        
+SW-SW0360  CDM CHOCOLATE RS10                        
+SW-SW0361  CDM CHOCOLATE RS5                         
+SW-SW0362  CDM SILK BUBBLY 46G                       
+SW-SW0363  CDM SILK CHOCOLATE 55GM                   
+SW-SW0364  CDM SILK GANACHE 54GM                     
+SW-SW0365  CDM SILK HAZELNUT 54G                     
+SW-SW0366  CDM SILK MOUSSE 48.5GM                    
+SW-SW0367  CELLO CLAY SET                            
+SW-SW0368  CELLO TAPE RS10                           
+SW-SW0370  CELLO TAPE RS5                            
+SW-SW0378  CHAMPO MILKUIT RS10                       
+SW-SW0379  CHANA DAL 1KG                             
+SW-SW0380  CHANA DAL 500G                            
+SW-SW0381  CHANA DAL LOOSE                           
+SW-SW0382  CHANA PAPAD 200GM                         
+SW-SW0383  CHANA PAPAD 500G                          
+SW-SW0384  CHANA PAPAD 500GM                         
+SW-SW0385  CHANA PAPAD GARLIC 200G                   
+SW-SW0386  CHAROLI 10GM                              
+SW-SW0387  CHAROLI 20GM                              
+SW-SW0388  CHAWLA                                    
+SW-SW0389  CHAWLA 1KG                                
+SW-SW0390  CHAWLA 250 GM                             
+SW-SW0391  CHAWLA 500g                               
+SW-SW0398  CHHOTA CHAMMACH PERMIUM TEA 1KG           
+SW-SW0399  CHHOTA CHAMMACH PRIMIUM 500 GM            
+SW-SW0400  CHHOTA CHAMMACH PRIMIUM TEA 250GM         
+SW-SW0401  CHICK SHAMPOO RS1                         
+SW-SW0402  CHIK HAIR COLOUR BLACK RS10               
+SW-SW0404  CHILLI FLEX                               
+SW-SW0410  CHINGS MANCHURIAN MASALA RS10             
+SW-SW0411  CHINGS NOODLES MASALA 10MRP               
+SW-SW0416  chocos 385 gm                             
+SW-SW0419  CHUPA CHUPS BELT MRP5                     
+SW-SW0423  CINTOL COOL SAOP 400GM                    
+SW-SW0424  CITRIC ACID 100 GM                        
+SW-SW0425  CLASSIC BRUSH HARD RS20                   
+SW-SW0426  CLASSIC BRUSH SOFT RS20                   
+SW-SW0427  CLASSIC TB JUNIOR RS20                    
+SW-SW0429  clay rods                                 
+SW-SW0431  CLEAN SWIPE CLOTHS                        
+SW-SW0434  CLINIC PLUS SHAMPOO P.50                  
+SW-SW0436  CLINICPLUS SHAMPOO RS1                    
+SW-SW0437  CLIP HANGER                               
+SW-SW0440  CLOTH BRUSH 1N                            
+SW-SW0441  CLOTH BRUSH PLASTIC                       
+SW-SW0443  CLOUSEUP FRESH GEL 80G                    
+SW-SW0444  CLSSIC BRUSH MEDIUM RS20                  
+SW-SW0448  COCA-COLA 740ML                           
+SW-SW0449  COCONUT LACHA BURA 100GM                  
+SW-SW0450  COCONUT LACHA BURA 250G                   
+SW-SW0451  COCONUT POWDER 100G                       
+SW-SW0452  COCONUT POWDER 250G                       
+SW-SW0453  COCONUT POWDER LOOSE                      
+SW-SW0454  COCONUT TOFFEE RS50                       
+SW-SW0459  COLGATE CIBACA 175G                       
+SW-SW0460  COLGATE CIBACA 350GM                      
+SW-SW0462  COLGATE MAXFRESH MRP20                    
+SW-SW0463  COLGATE MF BLUE PASTE 150G                
+SW-SW0464  COLGATE MF BLUE PASTE 70G                 
+SW-SW0465  COLGATE MF RED PASTE 150G                 
+SW-SW0468  COLGATE PASTE 300G                        
+SW-SW0469  COLGATE PASTE RS10                        
+SW-SW0471  COLGATE PASTE RS36                        
+SW-SW0472  COLGATE PASTE RS40                        
+SW-SW0476  COLGATE TB CIBACA RS10                    
+SW-SW0478  COLGATE TB FLEXI RS18                     
+SW-SW0480  COLGATE TB KIDS RS30                      
+SW-SW0485  COLGATE TOTAL PASTE 80G                   
+SW-SW0486  COLGATE VW PASTE 100G                     
+SW-SW0489  COLGHATE TB SENSITIVE RS62                
+SW-SW0492  COLOUR MIX RS20                           
+SW-SW0493  COLOUR PAPER RS3                          
+SW-SW0494  COLOUR UP CLAY RODS 6                     
+SW-SW0495  COMFORT BLUE RS4                          
+SW-SW0502  COOKWEL VERMICELLI 5KG                    
+SW-SW0503  COOL CAMPUS 1400                          
+SW-SW0504  CORN STARCH ARAROT 1KG                    
+SW-SW0505  CORN STARCH ARAROTH 500G                  
+SW-SW0506  CORRECTION PEN MRP30                      
+SW-SW0508  CREAM ROLL BLACK CURRENT 50GM             
+SW-SW0509  CREAM ROLL BUTTER 50GM                    
+SW-SW0510  CREAM ROLL CHOCOLATE 50GM                 
+SW-SW0512  CROMPTON BATTERY LAMP 9WT.                
+SW-SW0514  CRUNCH LUNCH BOX                          
+SW-SW0515  CUTTER PN1801/P                           
+SW-SW0516  CUTTER RS15                               
+SW-SW0524  DAAWAT BASMATI RICE MOGRA 5KG             
+SW-SW0525  DAAWAT BASMATI RICE SUPER 1 KG            
+SW-SW0530  DABUR AMLA HAIR OIL 180ML                 
+SW-SW0533  DABUR AMLA HAIR OIL 90ML                  
+SW-SW0543  DABUR HONEY 500G                          
+SW-SW0545  DABUR LAL TAIL 100ML                      
+SW-SW0546  DABUR LAL TAIL 50ML                       
+SW-SW0552  DABUR RED POWDER 100G                     
+SW-SW0553  DABUR RED POWDER 50G                      
+SW-SW0557  DAIRY MILK RS10                           
+SW-SW0558  DALAD MUSTERD OIL 1L                      
+SW-SW0560  DALCHINI 50GM                             
+SW-SW0561  DALCHINI LOOSE                            
+SW-SW0572  DARK FANTASY YUMFILLS RS10                
+SW-SW0573  DARK FANTASY YUMFILLS RS180               
+SW-SW0576  DAVE GARAM MASALA 100GM                   
+SW-SW0580  DELA MAYONNAISE 1KG                       
+SW-SW0585  DENVER DEO CALIBER 150ML                  
+SW-SW0593  DENVER SOAP 2+1UNIT*125GM                 
+SW-SW0594  DENVER TALC BC 100G                       
+SW-SW0595  DENVER TALC BC 300G                       
+SW-SW0598  DENVER TALC IMPERIAL 100G                 
+SW-SW0602  DETOL BAR CHHOTA                          
+SW-SW0603  DETTOL ANTISEPTC LIQ. 125ML               
+SW-SW0604  DETTOL ANTISEPTIC LIQ 60ML                
+SW-SW0618  Dexo                                      
+SW-SW0621  DHAMPUR DESI KHAND 1KG                    
+SW-SW0624  DHANIYA KHADA 100GM                       
+SW-SW0625  DHANIYA KHADA LOOSE                       
+SW-SW0629  DHOOP CONES                               
+SW-SW0633  DISCO PAPAD 200GM                         
+SW-SW0634  DOCTOR HYPER FLOOR CLEANER 450ML          
+SW-SW0636  DOMS BRUSHES F&R                          
+SW-SW0646  DOUBLE CHABI SELA RICE                    
+SW-SW0654  DOUBLE HANS SINGDANA 500G                 
+SW-SW0655  DOUBLE TAP RS10                           
+SW-SW0656  DOVE COND. DS RS4                         
+SW-SW0658  DOVE COND. IR RS4                         
+SW-SW0659  DOVE SHAMPOO + CON RS5                    
+SW-SW0660  DOVE SHAMPOO DS 180ML                     
+SW-SW0661  DOVE SHAMPOO IR 180ML                     
+SW-SW0662  DOVE SHAMPOO RS2                          
+SW-SW0667  DOVE SOAP 75GM                            
+SW-SW0669  DR.RASHEL APRICOT SCRUB 380ML             
+SW-SW0670  DR.RASHEL D-TAN SCRUB                     
+SW-SW0671  DR.RASHEL DE-TAN CREAM 380ML              
+SW-SW0674  DR.RASHEL WHITE SKIN SCRUB                
+SW-SW0675  DRAWING BOOK RS52                         
+SW-SW0682  ELAICHI 10G                               
+SW-SW0683  ELAICHI 20G                               
+SW-SW0684  ELAICHI 50GM                              
+SW-SW0685  ELAICHI LOOSE                             
+SW-SW0687  ELITE LUNCH BOX                           
+SW-SW0693  ENGINE MUSTRARD OIL 900ML                 
+SW-SW0700  ENVELOP                                   
+SW-SW0701  ENVY DEO RS230                            
+SW-SW0704  ENVY ROOM FRESHENR RS220                  
+SW-SW0705  ENVY ROOM FRESHNER RS169                  
+SW-SW0717  EVEREST CHAAT MASALA 100GM                
+SW-SW0723  EVEREST CHILLI FLAKES 7G                  
+SW-SW0727  EVEREST KICHEN KING 100 GM,               
+SW-SW0729  EVEREST KK MASALA 50G                     
+SW-SW0732  EVEREST PAV BHAJI MASALA 100GM            
+SW-SW0735  EVEREST SAMBHAR MASALA 100G               
+SW-SW0743  EYEBROW RAZOR                             
+SW-SW0744  FABER CASTALL HILIGHTER                   
+SW-SW0745  FACE RAZOR                                
+SW-SW0746  FAIR & HANDSOME CREAM 30G                 
+SW-SW0747  FAIR & HANDSOME FW 50G                    
+SW-SW0751  FAIR & LOVELY FACEWASH 50G                
+SW-SW0755  FE ACHAR MASALA 250GM                     
+SW-SW0756  FE ACHAR MASALA 500GM                     
+SW-SW0764  FERRERO ROCHER CHOCOLATE RS319            
+SW-SW0765  FERRERO ROCHER CHOCOLATE RS539            
+SW-SW0767  FEVICOL RS25                              
+SW-SW0769  FHINGER BIG 250GM                         
+SW-SW0775  FINGER LOOSE                              
+SW-SW0782  FLAIR SKETCH PEN RS30                     
+SW-SW0783  flairn creatie buddy                      
+SW-SW0788  FOME TAP 24MM                             
+SW-SW0789  FOOD CALER                                
+SW-SW0790  FOOD ESSENCE CHOCOLTE 20ML                
+SW-SW0791  FOOD ESSENCE KEWRA WB 20ML                
+SW-SW0792  FOOD ESSENCE VANILLA 20ML                 
+SW-SW0793  FOOD ESSENCE WHITE ROSE 20ML              
+SW-SW0794  FOOD ESSENCES                             
+SW-SW0800  FORTUNE RICE BRAIN OIL 13KG               
+SW-SW0801  FORTUNE RICE BRAIN OIL 4.35KG             
+SW-SW0803  FORTUNE SOYA OIL 13KG JAR                 
+SW-SW0806  FORTUNE SOYA OIL 840G                     
+SW-SW0811  FRAYAMS CHIPS LOOSE                       
+SW-SW0812  FRAYAMS PAPAD LOOSE                       
+SW-SW0813  FRAYAMS POTATO CHIPS                      
+SW-SW0814  FREGHT & FORWORDING 5%                    
+SW-SW0817  FROOTI MANGO 1.8L                         
+SW-SW0818  FROZEN FRENCH FRIES                       
+SW-SW0820  FROZEN MATER 1KG                          
+SW-SW0822  FROZEN MATER 500GM                        
+SW-SW0824  FROZEN SWEET CORN 200G                    
+SW-SW0828  FUNFOODS PB CREAMY 450GM                  
+SW-SW0829  FUNFOODS PB CRUNCHY 450GM                 
+SW-SW0830  FUNFOODS PIZZA TOPPING 1KG                
+SW-SW0831  FUNFOODS PIZZA TOPPING ALL IN TIME 100G   
+SW-SW0832  GAIA OLIVE OIL 500ML                      
+SW-SW0834  GALA SCRUB 1N                             
+SW-SW0836  GALA XL BROOM                             
+SW-SW0839  GANGWAL DOSA MIX 500GM                    
+SW-SW0845  GARBAGE BAGS S                            
+SW-SW0846  GARLIC PAPAD 200GM                        
+SW-SW0848  GARNIER BRIGHT CREAM 45G                  
+SW-SW0851  GARNIER BURGUNDY 3.16 SMALL               
+SW-SW0856  GARNIER DARKEST BROWN 3N SMALL            
+SW-SW0860  GARNIER FW DOUBLE ACTION 50G              
+SW-SW0868  GARNIER SUNSCREEN GEL 60ML                
+SW-SW0869  GARNIER TURBO BRIGHT FW 100G              
+SW-SW0871  GEL PAN RS5                               
+SW-SW0878  GH ROSE WATER 500ML                       
+SW-SW0883  GHADI DETERGENT 5KG                       
+SW-SW0886  GHADI SMART 3KG                           
+SW-SW0891  GIFT PACK RS5                             
+SW-SW0892  GILETTE VECTOR 4 BLADE                    
+SW-SW0893  GILLATTE L SHAVING CREAM 30GM             
+SW-SW0895  GILLATTE R SHAVING CREAM 30GM             
+SW-SW0897  GILLETTE BLADES 10N                       
+SW-SW0901  GILLETTE FOAM SENSITIVE 418GM             
+SW-SW0902  GILLETTE GAURD BLADE 1N                   
+SW-SW0903  GILLETTE GUARD 3IN1 2 BLADE               
+SW-SW0914  GILLETTE R SHAVING CREAM 70GM             
+SW-SW0920  GINGER                                    
+SW-SW0926  GLABS KITCHEN                             
+SW-SW0930  GLITTER SHEET WITH GLU RS275              
+SW-SW0936  GLUE STICKS RS25                          
+SW-SW0942  GODREJ CREME BURGUNDY RS15                
+SW-SW0943  GODREJ CREME N BLACK RS15                 
+SW-SW0944  GODREJ CREME N BROWN RS15                 
+SW-SW0946  GODREJ EZEE 500 GM                        
+SW-SW0955  GODREJ RICH CREME BLACK BROWN 3.00        
+SW-SW0958  GODREJ RICH CREME NATURAL BROWN 4N        
+SW-SW0961  GOKUL 400 GM                              
+SW-SW0963  GOKUL PERMAL PACK 400G                    
+SW-SW0965  GOL GAPPA 50N                             
+SW-SW0969  GOND KATIRA 100GM                         
+SW-SW0970  GOND PACKING 250 GM                       
+SW-SW0973  GOOD DAY BUTTER JEERA RS20                
+SW-SW0978  GOOD DAY CHOCOCHIP RS10                   
+SW-SW0979  GOOD DAY FRUIT&NUT 450G                   
+SW-SW0992  GRAPH PAPERS A4 RS3                       
+SW-SW0993  GREEN SARDA MIRCH                         
+SW-SW0994  GUD 1KG                                   
+SW-SW0995  GUD 500GM                                 
+SW-SW0996  GUD LOOSE                                 
+SW-SW1000  GURUJI KESARIYA THANDAI 200ML             
+SW-SW1006  GUYUENA HAIR COMB                         
+SW-SW1007  GUYUENA ROUND COMB                        
+SW-SW1010  H&C HAIR OIL RS10                         
+SW-SW1012  H&R ALOE VERA OIL 300ML                   
+SW-SW1014  H&S SHAMPOO HF 72ML                       
+SW-SW1015  H&S SHAMPOO MRP2                          
+SW-SW1017  HAIR DYE BRUSH                            
+SW-SW1024  HALDIRAM CLASSIC LASSI 180ML              
+SW-SW1027  HAPPY COOKIES 63GM                        
+SW-SW1029  HARPIC B.C. LEMON 250ML                   
+SW-SW1035  HARPIC HYGIEN JASMINE RS99                
+SW-SW1040  HARSH KESAR MILK MASALA 100GM             
+SW-SW1044  HAVAN CUP                                 
+SW-SW1045  HERBAL MEHNDI 50G                         
+SW-SW1056  HIMALAYA BABY LOTION 200ML                
+SW-SW1064  HIMALAYA BABY SOAP 75GM                   
+SW-SW1067  HIMALAYA CC TOOTHPASE 150GM               
+SW-SW1069  HIMALAYA NEEM FACE WASH 100ML             
+SW-SW1072  HIMALAYA NEEM FACE WASH RS20              
+SW-SW1077  HIMAYA BABY CREM 50ml                     
+SW-SW1078  HING GOLI 100G                            
+SW-SW1083  HIT SPRAY BLACK 625ML                     
+SW-SW1086  HM CHOCOLATE 150MRP                       
+SW-SW1087  HM CHOCOLATE 80MRP                        
+SW-SW1088  HOLO TAPE RS10                            
+SW-SW1093  HOME ONE BUCKET MOP RS1899                
+SW-SW1094  HOME ONE DORI MOP RS230                   
+SW-SW1096  HOME ONE DUST FREE BROOM                  
+SW-SW1097  HOME ONE FLOOR WIPER                      
+SW-SW1098  HOME ONE GRASS BROOM                      
+SW-SW1102  HOME ONE SCRUB PAD                        
+SW-SW1103  HONEY 24RS                                
+SW-SW1115  HUGGIES PANTS L 7N                        
+SW-SW1121  HUGGIES PANTS S 10                        
+SW-SW1122  HUGGIES PANTS S 38N                       
+SW-SW1125  HUK 3PCS SET                              
+SW-SW1126  HUK 4PCS SET                              
+SW-SW1127  ILAICHI 10GM                              
+SW-SW1128  ILAICHI 20GM                              
+SW-SW1129  IMLI 100G                                 
+SW-SW1130  IMLI 250G                                 
+SW-SW1131  IMPERIAL JUMBO BASKET                     
+SW-SW1132  INCENSE 100 STICKS                        
+SW-SW1135  INDIA GATE ROZANA RICE 1KG                
+SW-SW1137  INDORI PERMAL 500G                        
+SW-SW1141  INDULEKHA SHMPOO RS2                      
+SW-SW1142  INSCENSE STICKS MRP75                     
+SW-SW1144  JAIFAL LOOSE                              
+SW-SW1145  JALANI AAM PANNA 100G                     
+SW-SW1148  JALANI JALJIRA RS1                        
+SW-SW1149  JALANI JALJIRA RS1*50                     
+SW-SW1150  JALANI NIMBU PANI 100G                    
+SW-SW1152  JALANI NIMBU PANI RS2.5*30                
+SW-SW1153  JALANI PANI PURI RS10                     
+SW-SW1155  JANOI RS3                                 
+SW-SW1157  JAORA GOLD ATTA(TANDOORI)                 
+SW-SW1160  JAORA GOLD DALIYA                         
+SW-SW1161  JAORA GOLD MAIDA                          
+SW-SW1165  JAORA GOLD WHEAT DALIYA 500GM             
+SW-SW1167  JAVITRI 10G                               
+SW-SW1168  JAVITRI LOOSE                             
+SW-SW1170  JIMJAM POPS BISCITS RS10                  
+SW-SW1174  JOHNSONS BABY SOAP 100G                   
+SW-SW1175  JOLIYA MASALA 500G                        
+SW-SW1179  JOY CREAM SPF20 50ML                      
+SW-SW1180  JOY FACE WASH RS15                        
+SW-SW1184  JOY FW COFFEE 150ML                       
+SW-SW1186  JOY FW LEMON 100ML                        
+SW-SW1190  JOY FW PAPAYA 100ML                       
+SW-SW1191  JOY FW PAPAYA 150ML                       
+SW-SW1192  JOY FW UBTAN 100ML                        
+SW-SW1193  JOY FW VITAMIN-C 100ML                    
+SW-SW1201  JOY LOTION COCOA 400ML                    
+SW-SW1202  JOY LOTION H&A 100ML                      
+SW-SW1212  KAAJU TUKDI 100GM                         
+SW-SW1213  KAALE TIL 100GM                           
+SW-SW1214  KABULI CHANA 250GM                        
+SW-SW1215  KABULI CHANA 500G                         
+SW-SW1216  KAJU 100G                                 
+SW-SW1217  KAJU 500G                                 
+SW-SW1218  KAJU FAD LOOSE                            
+SW-SW1219  KAJU KATRAN 1KG                           
+SW-SW1220  KAJU TUKDI 100GM                          
+SW-SW1221  KAJU TUKDI 250G                           
+SW-SW1222  KAJU W 320 LOOSE                          
+SW-SW1223  KAJU W 320N 250G                          
+SW-SW1224  KAJU W320 100G                            
+SW-SW1225  KALA CHANA DESI 250G                      
+SW-SW1226  KALA CHANA LOOSE                          
+SW-SW1230  KALONJI LOOSE                             
+SW-SW1231  KANKI RICE LOOSE                          
+SW-SW1233  KASHI DHOOP 24STICKS                      
+SW-SW1240  KELLOGG'S OATS 425G                       
+SW-SW1242  KEO KARPIN HAIR OIL 200ML                 
+SW-SW1248  KESH KANTI SHAMPOO ALOE 180ML             
+SW-SW1249  KESH KANTI SHAMPOO ALOE RS1               
+SW-SW1252  KESH KANTI SHAMPOO N RS1                  
+SW-SW1254  KESH KANTI SHAMPOO S 180ML                
+SW-SW1255  KESH KANTI SHAMPOO SS 180ML               
+SW-SW1260  KESH KING SHAMPOO RS2                     
+SW-SW1263  KHADA DHANIYA 100 GM                      
+SW-SW1264  KHADA DHANIYA 250 GM                      
+SW-SW1268  KHADA MASALA 100GM                        
+SW-SW1269  KHADA MASALA 50GM                         
+SW-SW1270  KHADA MOONG DAL 500GM                     
+SW-SW1271  KHAKHRA 200GM                             
+SW-SW1272  KHAN CHANA 250 GM                         
+SW-SW1275  KHARAK 500GM                              
+SW-SW1276  KHOPRA GOLA LOOSE                         
+SW-SW1277  KHOPRA LACCGA LOOSE                       
+SW-SW1278  KHUS KHUS 100G                            
+SW-SW1280  KINDER JOY GIRLS 20G                      
+SW-SW1281  KINGS 99                                  
+SW-SW1282  KINGS SOYA OIL 750G                       
+SW-SW1286  KINLEY WATER 500ML                        
+SW-SW1287  KISHMISH 250G                             
+SW-SW1288  KISHMISH INDIAN 100G                      
+SW-SW1289  KISHMISH KANDHARI 250G                    
+SW-SW1290  KISHMISH LOOSE                            
+SW-SW1293  KISSAN JAM 200GM                          
+SW-SW1294  KISSAN JAM 500GM                          
+SW-SW1295  KISSAN LEHSUN CHUTNEY 100G                
+SW-SW1298  kissan tomato 415 gm                      
+SW-SW1304  KIT KAT RS20                              
+SW-SW1305  KIT KAT RS30                              
+SW-SW1308  KLEEN WIPES RS175                         
+SW-SW1309  KNIFE ROCKET                              
+SW-SW1310  KNIFE SS GRATER                           
+SW-SW1313  KNORR SWEET CORN SOUP RS10                
+SW-SW1323  KOTA FRESH RASGULLA 1KG                   
+SW-SW1326  KRAZY LINE 15G                            
+SW-SW1337  LACHCHA                                   
+SW-SW1346  LAL QILLA DUBAR B RICE 1KG                
+SW-SW1347  LAL QILLA MOGRA LOOSE                     
+SW-SW1348  LAL QILLA PREMIUM RICE                    
+SW-SW1349  LAL QUILA DUBAR RICE 1KG                  
+SW-SW1351  LAL QUILA POHA 500GM                      
+SW-SW1352  LAL QUILA TIBAR RICE 1KG                  
+SW-SW1353  LALKILA TIL OIL 200ML                     
+SW-SW1354  LALKILA TIL OIL 800G                      
+SW-SW1355  LAVASA 4 SET                              
+SW-SW1356  LAYS WAFERS RS10                          
+SW-SW1358  LAYS WAFERS RS30                          
+SW-SW1359  LIFAFA WHITE RS1                          
+SW-SW1365  LION DOLIGO DATES 400GM                   
+SW-SW1371  LION ROSE SHARBAT 700ML                   
+SW-SW1372  LIPTON GREEN TEA 10N                      
+SW-SW1374  LIPTON GREEN TEA LEMON 100GM              
+SW-SW1376  LIRIL LIME SOAP 4*125G                    
+SW-SW1380  LIVON HAIR SERUM 45ML                     
+SW-SW1389  LONG LOOSE                                
+SW-SW1390  LOOFA RS50                                
+SW-SW1391  LOREAL CASTING BLACK 2N SMALL             
+SW-SW1393  LOREAL COND. EXRA.OIL 175ML               
+SW-SW1396  LOREAL COND. TR5 70ML                     
+SW-SW1400  LOREAL SHAMPOO H MOISTURE 200ML           
+SW-SW1402  LOREAL SHAMPOO TR5 200ML                  
+SW-SW1404  LOTOUS WHITE GLOW CREAM 35G               
+SW-SW1405  LOTTE CHOCO PIE 18N                       
+SW-SW1413  LUX SOAP SET RS40                         
+SW-SW1415  MAA SUGAR 25KG                            
+SW-SW1416  MAA SUGAR 5KG                             
+SW-SW1418  MAAZA 250ML                               
+SW-SW1419  MAAZA 600ML                               
+SW-SW1420  MAAZA 850 ML                              
+SW-SW1421  MADHUBANI GREEN MAKHANA 250GM             
+SW-SW1423  MADHUR SUGAR M 1KG                        
+SW-SW1424  MADHUR SUGAR M 5KG                        
+SW-SW1425  MADHUR SUGAR S 25KG                       
+SW-SW1427  MAGAJ SEEDS 100G                          
+SW-SW1428  MAGGI ATTA NOODLES 290GM                  
+SW-SW1431  MAGGI NOODELS 560GM                       
+SW-SW1436  MAGGI NOODLES 7MRP                        
+SW-SW1439  MAGGI PAZZTA TOMETO 68.5GM                
+SW-SW1443  MAHALAXMI KAJU RUSK 250G                  
+SW-SW1444  MAHALAXMI MILK RUSK 250GM                 
+SW-SW1445  MAHALAXMI RUSK 375GM                      
+SW-SW1446  MAHRAJA SUGER BURU 1KG                    
+SW-SW1449  MALA'S GM MOJITO SYRUP 750ML              
+SW-SW1463  MALAS LEMON 750ML                         
+SW-SW1466  MALKIST BISCUITS RS5                      
+SW-SW1473  MAMAEARTH UBTAN FW 50ML                   
+SW-SW1478  MANGALDEEP AGARBATTI 70                   
+SW-SW1479  MANGALDEEP AGARBATTI MRP70                
+SW-SW1485  MANMOHAK RICE LOOSE                       
+SW-SW1487  MANNUKA KISMIS  250 GM                    
+SW-SW1488  MANUKA SYN 250GM                          
+SW-SW1492  MARKER RS10                               
+SW-SW1493  MARUTI JIRAVAN 100GM                      
+SW-SW1495  MASUR DAL 1KG                             
+SW-SW1496  MASUR DAL 500G                            
+SW-SW1497  MASUR DAL KHADA 500G                      
+SW-SW1498  MASUR KHADA                               
+SW-SW1499  MAX3 DIS. RAZOR                           
+SW-SW1500  MAX3 SENSITIVE RAZOR                      
+SW-SW1504  MAYUR SELA RICE                           
+SW-SW1506  MC MASALA FRIES 1.5KG                     
+SW-SW1519  MDH GARAM MASALLA 50GM                    
+SW-SW1522  MDH KASOORI METHI 25  GM                  
+SW-SW1525  MDH MEAT MASALA 100 GM                    
+SW-SW1528  MDH SABJI MASALA 50GM                     
+SW-SW1531  MEAL MODE LUNCHBOX                        
+SW-SW1532  MEDIKER SHAMPOO RS7                       
+SW-SW1534  MEDIMIX SOAP 75GM                         
+SW-SW1537  MEGLOW SKIN CREAM MEN 30G                 
+SW-SW1541  METHI DANA 100GM                          
+SW-SW1543  MILKY BAR RS10                            
+SW-SW1544  MILTON MUG 1LT.                           
+SW-SW1545  MILTON STEEL SCRUBER 1N                   
+SW-SW1546  MILTON TOILET BRUSH                       
+SW-SW1548  MIRCHI SABUT                              
+SW-SW1550  MISHRI CUTTING 250G                       
+SW-SW1552  MISHRI WHOLE 500G                         
+SW-SW1554  MIX DAL 500G                              
+SW-SW1558  MONACO CLASSIC 185GM                      
+SW-SW1560  MONGINIS FRUIT MUFFINS CAKE 90G           
+SW-SW1562  MONKEY RUF RS50                           
+SW-SW1564  MOONG MOGAR 1KG                           
+SW-SW1565  MOONG MOGAR DAL 500 G                     
+SW-SW1569  MOP SET                                   
+SW-SW1570  MORDE DARK COMPOUND 400GM                 
+SW-SW1580  MR.MAGIC HANDWASH RS10                    
+SW-SW1583  MUNAKKA 250G                              
+SW-SW1584  MUNAKKA SP 100G                           
+SW-SW1587  MUNCH S LUNCH BOX                         
+SW-SW1588  munffli 250 gm                            
+SW-SW1589  MUNG DAL CHILKA 1KG                       
+SW-SW1590  MUNG DAL CHILKA LOOSE                     
+SW-SW1591  MUNG MOGAR DAL 1KG                        
+SW-SW1592  MUNG MOGAR DAL LOOSE                      
+SW-SW1593  MUNG PAPAD 200G                           
+SW-SW1594  MUNG PAPAD 200GM                          
+SW-SW1595  MUNG PAPAD VALLABH 200GM                  
+SW-SW1596  MUNG WHOLE BOLD 500GM                     
+SW-SW1597  MUNGFALI DANA 1KG                         
+SW-SW1598  MUNGFALI DANA 250G                        
+SW-SW1599  MUNGFALI DANA 500G                        
+SW-SW1600  MUNGFALI DANA LOOSE                       
+SW-SW1602  MUNIMJI DHANIYA POWDER 500G               
+SW-SW1604  MUNIX SCISSOR SL-1140                     
+SW-SW1606  MUNIX SCISSOR SL-1145                     
+SW-SW1607  MUNIX SCISSOR SL-1150                     
+SW-SW1608  MUNIX SCISSOR SL-1158                     
+SW-SW1610  MUNIX SCISSOR SL-1173                     
+SW-SW1612  MUNKKA DAHK250GM                          
+SW-SW1613  MY FITNESS BUTTER 227G                    
+SW-SW1614  MYPRO BOTTLE 500                          
+SW-SW1615  MYPRO BOTTLE 800                          
+SW-SW1617  NAIL CUTTER MRP100                        
+SW-SW1618  NAIL CUTTER MRP70                         
+SW-SW1623  NARIYIAL (COCONUT)                        
+SW-SW1624  NARUTO NOTE BOOK                          
+SW-SW1626  NAVCHETAN 500G                            
+SW-SW1628  NAVNEET A5 NOTEBOOK                       
+SW-SW1630  NAVRATNA HAIR OIL 90ML                    
+SW-SW1631  NAVRATNA TALC AD 100G                     
+SW-SW1632  NAVRATNA TALC FLORAL 100G                 
+SW-SW1634  NEACAFE CLASSIC 90GM                      
+SW-SW1639  NESCAFE CLASSIC MRP2                      
+SW-SW1640  NESCAFE CLASSIC RS2                       
+SW-SW1641  NESCAFE COLD COFFE 170ML                  
+SW-SW1644  NESCAFF SUNRISE RS10                      
+SW-SW1645  NESTLE MILK POWDER 200G                   
+SW-SW1646  NEXVDA BODY LOTION 100ML                  
+SW-SW1651  NICE TIME 59.3 G                          
+SW-SW1652  NICE TIME BISCUIT RS25                    
+SW-SW1654  NIHAR SHANTI AMLA 450ML                   
+SW-SW1656  NIHAR SHANTI AMLA HAIR OIL 30ML           
+SW-SW1664  NILON'S PIZZA PASTA SAUCE85GM             
+SW-SW1676  NILONs SWWAIYAN 90GM                      
+SW-SW1677  NIMBU PANI 2.50RS                         
+SW-SW1678  NIRANI SUGAR 25KG                         
+SW-SW1682  NIRMA SOAP RS10                           
+SW-SW1686  NISHA HENNA NATURAL BLACK MRP15           
+SW-SW1691  NIVEA LOTION ALOE 75ML                    
+SW-SW1694  NIVEA MEN COOL KICK DEO 50ML              
+SW-SW1696  NIVEA ROLLON 25ML                         
+SW-SW1701  NUTRI CHOICE ZERO 100GM                   
+SW-SW1709  OLAY CREAM 40G                            
+SW-SW1711  OM SHANTI KAPOOR RS50                     
+SW-SW1716  ORAL-B TB CC DEEP RS40                    
+SW-SW1718  ORAL-B TB SENSITIVE 2+2                   
+SW-SW1719  ORAL-B TB SENSITIVE RS30                  
+SW-SW1720  OREO BISCUIT CHOCO RS26                   
+SW-SW1722  OREO BISCUIT ORIGINAL RS20                
+SW-SW1723  OREO BISCUIT ORIGINAL RS26                
+SW-SW1724  OREO BISCUIT VANILLA RS10                 
+SW-SW1725  OXFORD S CAMPASS                          
+SW-SW1726  OXYLIFE BLEACH 9G                         
+SW-SW1729  PANI PURI KHAKRA                          
+SW-SW1731  PARACHHUT SHAMPOO MRP1                    
+SW-SW1739  PARACHUTE SHAMPOO HF 340ML                
+SW-SW1740  PARACHUTE SHAMPOO RS1                     
+SW-SW1745  PARCHUTE SHAMPOO US 340ML                 
+SW-SW1748  PARLE BISCUIT 250GM                       
+SW-SW1749  PARLE BISCUIT 800G                        
+SW-SW1751  PARLE CHOCO BISCUIT RS5                   
+SW-SW1755  PARLE HAPPY HAPPY RS10                    
+SW-SW1756  PARLE HAPPY HAPPY RS5                     
+SW-SW1760  PARLE LONDONDERRY RS47                    
+SW-SW1761  PARLE MANGO BITE RS50                     
+SW-SW1765  PARLE ORANGE CHOCO RS5                    
+SW-SW1768  PARLE ROYALE BISCUIT RS10                 
+SW-SW1770  PARLE-G BISCUIT RS5                       
+SW-SW1772  PARTH MOP 6""                             
+SW-SW1773  PARTH MOP 9""                             
+SW-SW1776  PASTA LOOSE                               
+SW-SW1777  pasta masala 7 gm                         
+SW-SW1778  PATANJALI CASHEW COOKIES                  
+SW-SW1779  PATANJALI COTTON WICKS 25GM               
+SW-SW1786  PATTHAR FUL LOOSE                         
+SW-SW1787  PEANUTS 250GM                             
+SW-SW1788  PEANUTS 500G                              
+SW-SW1789  PEARS PG SOAP 4+1                         
+SW-SW1792  PEN MRP10                                 
+SW-SW1793  PENASONIC AA BATTERY                      
+SW-SW1794  PENCIL BOX PLASTIC                        
+SW-SW1795  PENCIL COLOUR 12                          
+SW-SW1800  PERK RS5                                  
+SW-SW1801  PERMAL RICE                               
+SW-SW1802  PEXPO H&C BOTTLE                          
+SW-SW1803  PEXPO KIDS W BOTTLE                       
+SW-SW1805  PILI SARSO 100GM                          
+SW-SW1806  PILI SARSO 250G                           
+SW-SW1808  PINGALE                                   
+SW-SW1809  PINUT BOLD 250G                           
+SW-SW1810  PINUT BOLD 500G                           
+SW-SW1811  PISTA KTARAN                              
+SW-SW1812  PISTA LOOSE                               
+SW-SW1815  PIXEL 1000                                
+SW-SW1817  PLASTIC MUG RS10                          
+SW-SW1818  PLASTIC TEA STRANERS                      
+SW-SW1820  POHA LOOSE                                
+SW-SW1821  POND'S BODY LOTION  90ML                  
+SW-SW1822  PONDS BB CREAM SPF30 9G                   
+SW-SW1824  PONDS BODY LOTION 275ML                   
+SW-SW1826  PONDS BRIGHT CREAM 23G                    
+SW-SW1827  PONDS FW BRIGHT 12G                       
+SW-SW1831  PONDS MAGIC POWDER 400GM                  
+SW-SW1834  PONDS TALC ALOE COOL 80GM                 
+SW-SW1839  PONDS TALC MAGIC 50GM                     
+SW-SW1841  POOJAN SAMAGRI                            
+SW-SW1842  POPCORN 200GM                             
+SW-SW1843  POPCORN LOOSE                             
+SW-SW1846  prachute shampoo 1                        
+SW-SW1847  PRAKAR RS25                               
+SW-SW1853  PREMIUM -1100                             
+SW-SW1855  PROJECT PAPER RS2                         
+SW-SW1856  PROJECT PLAIN PAPER RS2                   
+SW-SW1857  PT. A4 NOTEBOOK RS70                      
+SW-SW1858  PT. A5 NOTE BOOK RS60                     
+SW-SW1867  PT. CASHEW COOKIES RS5                    
+SW-SW1871  PT. DANT KANTI 20MRP                      
+SW-SW1872  PT. DETERGENT LEMON 900GM                 
+SW-SW1873  PT. DETREGENT NEEM 900GM                  
+SW-SW1874  PT. DETRGENT SOAP RS10                    
+SW-SW1881  PT. FW NEEM & TULSI 60GM                  
+SW-SW1885  PT. GULAB JAL 120ML                       
+SW-SW1895  PT. MEHANDI D BROWN 20GM                  
+SW-SW1896  PT. MEHANDI N BLACK 20GM                  
+SW-SW1897  PT. MULTIGRAIN BISCUITS 10MRP             
+SW-SW1898  PT. MUSTARD OIL 850G                      
+SW-SW1899  PT. NAMKIN BISCUIT RS10                   
+SW-SW1901  PT. NOTE BOOK RS55                        
+SW-SW1902  PT. NOTE BOOK RS65                        
+SW-SW1903  PT. NOTE BOOK RS90                        
+SW-SW1907  PT. SOAP ALOE 75g                         
+SW-SW1909  PT. SOAP CHANDAN 150G*4                   
+SW-SW1911  PT. SPIRAL NOTE BOOK RS165                
+SW-SW1912  PT. SPIRAL NOTE BOOK RS185                
+SW-SW1915  PT. TOOTH BRUSH RS9                       
+SW-SW1916  PT.ALOEVERA SHAMPOO 450ML                 
+SW-SW1918  PUMPKIN SEED 100G                         
+SW-SW1941  PUSHP HALDI 500                           
+SW-SW1943  PUSHP HALDI POWDER 200G                   
+SW-SW1946  PUSHP HINA                                
+SW-SW1963  PUSHP MIRCH POWDER 500G                   
+SW-SW1966  PUSHP RAITA MASALA 50G                    
+SW-SW1970  RAI 250G                                  
+SW-SW1971  RAI DAL LOOSE                             
+SW-SW1972  RAI LOOSE                                 
+SW-SW1975  RAJGIRA AATA                              
+SW-SW1976  RAJMA LAL 250G                            
+SW-SW1977  RAJMA LAL 500G                            
+SW-SW1978  RAJMA LOOSE                               
+SW-SW1980  RAMDEV HING 50G                           
+SW-SW1984  RANI GROUNDNUT OIL 870GM                  
+SW-SW1989  REAL JUICE LITCHI 1LT.                    
+SW-SW1990  REAL JUICE MIXED FRUIT 1LT.               
+SW-SW1995  RED LABLE 100 GM                          
+SW-SW1996  RED LABLE 500 GM                          
+SW-SW1997  RED LABLE 500GM                           
+SW-SW2001  RICE 1 KG                                 
+SW-SW2002  RICE 1KG                                  
+SW-SW2003  RICE KINKI LOOSE                          
+SW-SW2004  RICE MOGRA LOOSE                          
+SW-SW2005  RICH VALLEEY CASHEW 250GM                 
+SW-SW2008  RICH VALLEY MUNAKKA 250G                  
+SW-SW2011  RICH VALLY ALMONDS 250GM                  
+SW-SW2013  RIN LQD 500ML                             
+SW-SW2021  ROYAL SHABU DANA 500 GM                   
+SW-SW2022  ROYAL SOAP CASE                           
+SW-SW2023  ROYAL SOAP CASE TRE                       
+SW-SW2024  ROYAL WASHING BRUSH                       
+SW-SW2025  RUI BATTI RS40                            
+SW-SW2027  S SHAHI PANEER MIX 25G                    
+SW-SW2031  S&J PASTA MASALA RS5                      
+SW-SW2032  S&J SHAHI PANEER MASALA RS10              
+SW-SW2033  S&J TOMETO KETCHUP 435G                   
+SW-SW2034  SABUDANA BADA 250GM                       
+SW-SW2035  SABUDANA PAPAD 80G                        
+SW-SW2036  SABUDANE BADE 100GM                       
+SW-SW2043  SAFED KALI MIRCH 100GM                    
+SW-SW2044  SAFED KALI MIRCH LOOSE                    
+SW-SW2048  SAFFOLA OATS CLASSIC 150G                 
+SW-SW2049  SAFFOLA OATS CLASSIC 38G                  
+SW-SW2051  SAFFOLA OATS TOMATO 38G                   
+SW-SW2053  SAFFOLA OATS VEGGIE 38G                   
+SW-SW2054  SAFFOLA OATS VEGGIE 500G                  
+SW-SW2056  SAJI FUL 250G                             
+SW-SW2058  SANCHI GHEE 200ML                         
+SW-SW2060  SANIDHYA AATA 10KG                        
+SW-SW2062  SANIDYA GOLD ATTA LOOSE                   
+SW-SW2064  SANTOOR HANDWASH 10MRP                    
+SW-SW2066  SANWALIYA TEA 250GM                       
+SW-SW2067  SANWALIYA TEA 500GM                       
+SW-SW2071  SARASWATI KAPOOR 15GM                     
+SW-SW2078  SARSO DAL 500G                            
+SW-SW2079  SARSO DAL LOOSE                           
+SW-SW2082  SCALE RS10                                
+SW-SW2083  SCALE RS5                                 
+SW-SW2084  SCHOOL BAG                                
+SW-SW2085  SCHOOL NOTEBOOK STICER RS10               
+SW-SW2086  SCHOOL SCISSOR RS70                       
+SW-SW2094  SEWAIYAN DIYA GOLD 1KG                    
+SW-SW2096  SHALMAR DRY FRUIT 250GM                   
+SW-SW2105  SKORE N.THING CHOCOLATE 10N               
+SW-SW2106  SKORE N.THING CLIMAX DELAY 10N            
+SW-SW2109  SKORE ORANGE 3N                           
+SW-SW2112  SKORE STRAWBERRY 3 N                      
+SW-SW2122  SOAP TRY                                  
+SW-SW2123  SOFTOUCH FABRIC CONDITIONER 210ML         
+SW-SW2126  SOFY AB PAD XXL 6 PAD                     
+SW-SW2133  SONA SINGADA AATA 200GM                   
+SW-SW2136  SONPARI BHAGAR MORDHAN 500GM              
+SW-SW2138  SOPH 250G                                 
+SW-SW2139  SOPH BADWANI LOOSE                        
+SW-SW2141  SOPH BARIK 250G                           
+SW-SW2142  SOPH MITHI                                
+SW-SW2143  SOPH MITHI 100G                           
+SW-SW2144  SOPH MITHI 50GM                           
+SW-SW2145  SOTH 100G                                 
+SW-SW2150  SOYA BADI LOOSE                           
+SW-SW2151  SOYA SAUCE 705 GM                         
+SW-SW2152  SPIC TOILET CLEANER 500ML                 
+SW-SW2165  STAPLE PIN RS10                           
+SW-SW2166  STAPLE RS75                               
+SW-SW2167  STAYFREE PAD XL 18                        
+SW-SW2170  STEEL ALEXA LUCH BOX                      
+SW-SW2171  STEEL CLIP SET                            
+SW-SW2172  STEEL STAINER BIG                         
+SW-SW2173  STEEL STRAINER                            
+SW-SW2174  STEEL WORLD LUNCH BOX S                   
+SW-SW2175  STICKOBAND                                
+SW-SW2176  STREAX COLOUR SHAMPOO RS15                
+SW-SW2183  STRIPLE FILE RS10                         
+SW-SW2184  SUGAR 250 GM                              
+SW-SW2185  SUGAR 500GM                               
+SW-SW2186  SUGAR BURU 1KG                            
+SW-SW2187  SUGAR LOOSE                               
+SW-SW2188  SUGER BURU 500G                           
+SW-SW2197  SUNFEAST DARK FANTASY 230 GM              
+SW-SW2204  SUNFEAST MM BISCUIT MRP 10                
+SW-SW2205  SUNFEAST MM CASHEW RS40                   
+SW-SW2208  SUNFEAST MOM'S MAGIC 544 GM               
+SW-SW2209  SUNFEST DATK FANTASY 69 GM                
+SW-SW2213  SUNNY FLOOR CLEANER 200ML                 
+SW-SW2216  SUNRISE COFFE POUCH                       
+SW-SW2219  SUNSILK SHAMPOO MRP1                      
+SW-SW2220  SUNSILK SHAMPOO RS1                       
+SW-SW2221  SUPARI 25GM                               
+SW-SW2222  SUPARI ROASTED 25G                        
+SW-SW2224  SURF EXCEL EASY WASH 1KG                  
+SW-SW2228  SURF EXCEL LIQUID TL RS10                 
+SW-SW2229  SURF EXCEL LQUID FL 1LT.                  
+SW-SW2231  SURF EXCEL SOAP 200G*4                    
+SW-SW2232  SURF EXCEL SOAP RS10                      
+SW-SW2234  SWAGAT MOONG PAPAD 200G                   
+SW-SW2237  T CLEANER BOTTLE 1L                       
+SW-SW2238  T. DRINKING CHOCOLATE 100G                
+SW-SW2243  TAAZA TEA 500G                            
+SW-SW2246  TALATI MEETA SODA 100GM                   
+SW-SW2247  TALATI RAI DAL 200GM                      
+SW-SW2249  TALATI ROCK SALT 500GM                    
+SW-SW2250  TALATI SARSO DAL 200GM                    
+SW-SW2251  TANG LEMON 500G                           
+SW-SW2254  TANG MANGO 75G                            
+SW-SW2255  TANG ORANGE 75GM                          
+SW-SW2257  TARBUJ MAGAJ LOOSE                        
+SW-SW2258  TATA AGNI 90G                             
+SW-SW2259  TATA AGNI TEA 500G                        
+SW-SW2260  TATA ALL-IN-1 COFFEE RS10                 
+SW-SW2262  TATA COFFEE 2 MRP                         
+SW-SW2263  TATA COFFEE 200G*5N                       
+SW-SW2265  TATA MASALA OATS                          
+SW-SW2266  TATA OATS MASALA 18MRP                    
+SW-SW2267  TATA ROCK SALT 1KG                        
+SW-SW2274  TEA STRAINER BIG PLASTIC                  
+SW-SW2277  TEJ PATTA LOOSE                           
+SW-SW2278  TEJ PTTA 25GM                             
+SW-SW2285  THUMS UP                                  
+SW-SW2289  THUNDER 1000                              
+SW-SW2298  TIL WHITE 250GM                           
+SW-SW2299  TILL LOOSE                                
+SW-SW2300  TILLI DHULI                               
+SW-SW2301  TONGUE CLEANER RS5                        
+SW-SW2303  TRESEMME COND. HF RS4                     
+SW-SW2304  TRESEMME COND. S&S RS4                    
+SW-SW2307  TRESEMME SHAMPOO HF RS2                   
+SW-SW2308  TRESEMME SHAMPOO KS RS2                   
+SW-SW2309  TRUPTI RUSK ATTA 400G                     
+SW-SW2317  TUVER DAL 1KG                             
+SW-SW2318  TUVER DAL 500G                            
+SW-SW2319  TUVER DAL LOOSE                           
+SW-SW2320  TUVER DAL TEEN EKKA 1KG                   
+SW-SW2322  TUVER DAL TEEN EKKA LOOSE                 
+SW-SW2323  TWINGLE TUMES MINI 22GM                   
+SW-SW2324  UDAD DAL 1KG                              
+SW-SW2325  UDAD DAL 500GM                            
+SW-SW2326  UDAD DAL CHILKA 1KG                       
+SW-SW2327  UDAD DAL CHILKA 500GM                     
+SW-SW2328  UDAD KHADA 250GM                          
+SW-SW2338  URAD DAL LOOSE                            
+SW-SW2339  URF EXCEL EASY WASH 500GM                 
+SW-SW2343  UTSAV MOONG BADI 200G                     
+SW-SW2344  V WASH 20ML                               
+SW-SW2345  VACUMM SS BOTTLE                          
+SW-SW2350  VARLAXMI SABUDANA 500 GM                  
+SW-SW2351  VASELINE GLUTA-HYA 70ML                   
+SW-SW2353  VASHMOL HAIR OIL 100ML                    
+SW-SW2355  VATIKA SHAMPOO RS1                        
+SW-SW2356  VEET HR DRY SKIN 30G                      
+SW-SW2358  VENTO BOTTLE                              
+SW-SW2360  VENUS WIPER                               
+SW-SW2362  VERMICELLI LOOSE                          
+SW-SW2363  VESELINE LOTION DEEP 85ML                 
+SW-SW2364  VI JOHN PREMIUM SC RS99                   
+SW-SW2372  VICCO WSO T CREAM 30G                     
+SW-SW2373  VICKS INHALER RS64                        
+SW-SW2376  VICO SAUNF PASTE 160GM                    
+SW-SW2383  VIM DROP 750ML                            
+SW-SW2387  VINEGER 700ML                             
+SW-SW2388  VINNIE PISTA ROASTED 250G                 
+SW-SW2389  VINUS CREME SOAP 400                      
+SW-SW2393  VPOSH SPORTS BOTTLE                       
+SW-SW2399  WALNUT LOOSE                              
+SW-SW2400  WATER BOTTLE CAPY BARA                    
+SW-SW2401  WATER BOTTLE KIDS                         
+SW-SW2402  WATER BOTTLE KIDS MEDIUM                  
+SW-SW2407  WF COCA POWDER 25 GM                      
+SW-SW2410  WHEEL SOAP RS10                           
+SW-SW2422  WHITE TIL 250GM                           
+SW-SW2424  WHITE TONE FACE POWDER 55GM               
+SW-SW2426  WHITE TONE POWDER 35G                     
+SW-SW2432  WOODEN BUDS 100N                          
+SW-SW2435  XPERT DISHWASH BAR 540GM                  
+SW-SW2439  YARDLEY DEO ROLLON RS125                  

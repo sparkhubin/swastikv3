@@ -1,0 +1,35 @@
+================================================
+R2 ↔ PRODUCT IMAGE AUDIT
+================================================
+
+DATABASE
+------------------------------------------------
+Total products                  : 3731
+Products is_image = 1           : 1866
+Products is_image != 1          : 1865
+
+Unique product codes             : 3731
+Duplicate DB codes               : 0
+
+R2
+------------------------------------------------
+Total R2 objects                 : 1901
+R2 image objects                 : 1900
+
+MATCH ANALYSIS
+------------------------------------------------
+Exact DB → R2 matches            : 1866
+DB product → R2 missing         : 1864
+
+is_image=1 but R2 missing       : 0
+is_image=0 but R2 exists        : 0
+
+Case mismatch                   : 0
+Extension mismatch              : 1
+
+R2 images without DB product    : 31
+Duplicate R2 filenames           : 0
+
+================================================
+NO DATABASE CHANGES WERE MADE
+================================================
